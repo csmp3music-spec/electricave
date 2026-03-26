@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="BuildingDatabase" load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://scripts/sim/town/BuildingDatabase.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/ResidentialLow.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/ResidentialMedium.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/CommercialHigh.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/CommercialLow.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/Farm.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/TransitStop.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/BostonPostOffice1872.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/HistoricVictorianHouse.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/HistoricVictorianHouseTall.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/HistoricCommercialBlock.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/HistoricCommercialBlockTall.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/HistoricDanaTownHall.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/BostonTripleDecker.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/Route9ShopBlock.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/FraminghamMillBlock.tscn" id="16"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/CentreTownHall.tscn" id="17"]
+[ext_resource type="PackedScene" path="res://scenes/town/prefabs/WorcesterUnionStationBlock.tscn" id="18"]
+
+[resource]
+script = ExtResource("1")
+residential_low = Array[PackedScene]([ExtResource("2"), ExtResource("9")])
+residential_medium = Array[PackedScene]([ExtResource("3"), ExtResource("10"), ExtResource("14")])
+residential_high = Array[PackedScene]([ExtResource("10"), ExtResource("14")])
+commercial_high = Array[PackedScene]([ExtResource("4"), ExtResource("11"), ExtResource("12"), ExtResource("15")])
+commercial_low = Array[PackedScene]([ExtResource("5"), ExtResource("11"), ExtResource("15")])
+industrial = Array[PackedScene]([ExtResource("16")])
+farms = Array[PackedScene]([ExtResource("6")])
+transit = Array[PackedScene]([ExtResource("7")])
+civic = Array[PackedScene]([ExtResource("8"), ExtResource("13"), ExtResource("17"), ExtResource("18")])

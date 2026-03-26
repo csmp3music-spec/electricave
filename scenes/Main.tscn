@@ -1,0 +1,149 @@
+[gd_scene load_steps=26 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/SeamlessCamera.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/builders/TrackBuilder.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/sim/VehicleSim.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/sim/PassengerSim.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/sim/Economy.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/sim/HistoricalEvents.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/viewers/StreetLevelViewer.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/ui/OverlayLayer.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/geo/GISImporter.gd" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="10"]
+[ext_resource type="Script" path="res://scripts/sim/town/TownGrowthManager.gd" id="11"]
+[ext_resource type="Script" path="res://scripts/ui/StopPlacer.gd" id="12"]
+[ext_resource type="Resource" path="res://data/buildings/default_building_db.tres" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/town/props/StopMarker.tscn" id="14"]
+[ext_resource type="Shader" path="res://shaders/GroundGrid.gdshader" id="15"]
+[ext_resource type="Script" path="res://scripts/sim/transit/CorridorSeed.gd" id="16"]
+[ext_resource type="Script" path="res://scripts/sim/world/Route9Backdrop.gd" id="17"]
+[ext_resource type="Script" path="res://scripts/sim/world/TimeOfDayController.gd" id="18"]
+[ext_resource type="Script" path="res://scripts/sim/world/TerrainMaterialController.gd" id="19"]
+[ext_resource type="Script" path="res://scripts/sim/world/RegionalScenery.gd" id="20"]
+[ext_resource type="Script" path="res://scripts/sim/world/WeatherController.gd" id="21"]
+[ext_resource type="Script" path="res://scripts/sim/world/PhotorealSkyController.gd" id="22"]
+
+[sub_resource type="PlaneMesh" id="1"]
+size = Vector2(350000, 240000)
+subdivide_width = 260
+subdivide_depth = 180
+
+[sub_resource type="ShaderMaterial" id="2"]
+shader = ExtResource("15")
+
+[sub_resource type="Environment" id="3"]
+background_mode = 1
+background_color = Color(0.68, 0.77, 0.88, 1)
+
+[node name="Main" type="Node"]
+
+[node name="WorldRoot" type="Node3D" parent="."]
+
+[node name="Terrain" type="Node3D" parent="WorldRoot"]
+
+[node name="Route9Backdrop" type="Node3D" parent="WorldRoot/Terrain"]
+script = ExtResource("17")
+
+[node name="Ground" type="MeshInstance3D" parent="WorldRoot/Terrain"]
+position = Vector3(0, -2.8, 0)
+mesh = SubResource("1")
+material_override = SubResource("2")
+script = ExtResource("19")
+
+[node name="RegionalScenery" type="Node3D" parent="WorldRoot/Terrain"]
+script = ExtResource("20")
+route9_backdrop_path = NodePath("../Route9Backdrop")
+town_manager_path = NodePath("../../TownGrowthManager")
+corridor_path = NodePath("../../CorridorSeed")
+
+[node name="Sun" type="DirectionalLight3D" parent="WorldRoot"]
+rotation = Vector3(-0.85, 0.78, 0.08)
+light_energy = 1.9
+light_color = Color(1, 0.96, 0.9, 1)
+shadow_enabled = true
+
+[node name="TimeOfDay" type="Node" parent="WorldRoot"]
+script = ExtResource("18")
+sun_path = NodePath("../Sun")
+environment_path = NodePath("../../WorldEnvironment")
+economy_path = NodePath("../Economy")
+historical_events_path = NodePath("../HistoricalEvents")
+
+[node name="Weather" type="Node" parent="WorldRoot"]
+script = ExtResource("21")
+time_controller_path = NodePath("../TimeOfDay")
+environment_path = NodePath("../../WorldEnvironment")
+
+[node name="SkyController" type="Node" parent="WorldRoot"]
+script = ExtResource("22")
+environment_path = NodePath("../../WorldEnvironment")
+weather_path = NodePath("../Weather")
+
+[node name="TrackNetwork" type="Node3D" parent="WorldRoot"]
+script = ExtResource("2")
+render_segments = true
+track_width = 4.2
+track_height = 0.32
+track_color = Color(0.24, 0.24, 0.23, 1)
+
+[node name="VehicleManager" type="Node3D" parent="WorldRoot"]
+script = ExtResource("3")
+
+[node name="PassengerManager" type="Node" parent="WorldRoot"]
+script = ExtResource("4")
+town_manager_path = NodePath("../TownGrowthManager")
+corridor_path = NodePath("../CorridorSeed")
+
+[node name="Economy" type="Node" parent="WorldRoot"]
+script = ExtResource("5")
+
+[node name="HistoricalEvents" type="Node" parent="WorldRoot"]
+script = ExtResource("6")
+
+[node name="StreetLevelViewer" type="Node3D" parent="WorldRoot"]
+script = ExtResource("7")
+
+[node name="TownGrowthManager" type="Node3D" parent="WorldRoot"]
+script = ExtResource("11")
+track_builder_path = NodePath("../TrackNetwork")
+world_root_path = NodePath("..")
+building_db = ExtResource("13")
+stop_marker_scene = ExtResource("14")
+
+[node name="CorridorSeed" type="Node" parent="WorldRoot"]
+script = ExtResource("16")
+town_manager_path = NodePath("../TownGrowthManager")
+track_builder_path = NodePath("../TrackNetwork")
+auto_seed = true
+main_camera_path = NodePath("../CameraRig/Camera3D")
+
+[node name="CameraRig" type="Node3D" parent="WorldRoot"]
+script = ExtResource("1")
+
+[node name="StopPlacer" type="Node" parent="WorldRoot"]
+script = ExtResource("12")
+town_manager_path = NodePath("../TownGrowthManager")
+track_builder_path = NodePath("../TrackNetwork")
+
+[node name="Camera3D" type="Camera3D" parent="WorldRoot/CameraRig"]
+current = true
+
+[node name="OverlayCanvas" type="CanvasLayer" parent="."]
+
+[node name="HistoricOverlay" type="Sprite2D" parent="OverlayCanvas"]
+script = ExtResource("8")
+overlay_enabled = true
+overlay_path = "res://assets/maps/bw_airline_1908.jpg"
+overlay_opacity = 0.42
+overlay_visible = false
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("3")
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="HUD" parent="UILayer" instance=ExtResource("10")]
+
+[node name="GISImporter" type="Node" parent="."]
+script = ExtResource("9")

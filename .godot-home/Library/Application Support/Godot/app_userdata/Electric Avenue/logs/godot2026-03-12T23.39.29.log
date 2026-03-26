@@ -1,0 +1,92 @@
+Godot Engine v4.6.stable.official.89cea1439 - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1014)
+SCRIPT ERROR: Cannot call method 'get_node_or_null' on a null value.
+   at: HUD.@implicit_ready (res://scripts/ui/HUD.gd:79)
+   GDScript backtrace (most recent call first):
+       [0] @implicit_ready (res://scripts/ui/HUD.gd:79)
+WORLD NODE HistoricalEvents :: Node
+WORLD MESH @MeshInstance3D@4379 :: ():<BoxMesh#-9223371775113414577>
+WORLD MESH @MeshInstance3D@4380 :: ():<BoxMesh#-9223371775063082926>
+WORLD MESH @MeshInstance3D@4381 :: ():<BoxMesh#-9223371775012751275>
+WORLD MESH @MeshInstance3D@4382 :: ():<BoxMesh#-9223371774962419624>
+WORLD MESH @MeshInstance3D@4383 :: ():<BoxMesh#-9223371774912087973>
+WORLD MESH @MeshInstance3D@4384 :: ():<BoxMesh#-9223371774861756322>
+WORLD MESH @MeshInstance3D@4385 :: ():<BoxMesh#-9223371774811424671>
+WORLD MESH @MeshInstance3D@4386 :: ():<BoxMesh#-9223371774761093020>
+WORLD MESH @MeshInstance3D@4387 :: ():<BoxMesh#-9223371774710761369>
+WORLD MESH @MeshInstance3D@4388 :: ():<BoxMesh#-9223371774660429718>
+WORLD MESH @MeshInstance3D@4389 :: ():<BoxMesh#-9223371774610098067>
+WORLD MESH @MeshInstance3D@4390 :: ():<BoxMesh#-9223371774559766416>
+WORLD MESH @MeshInstance3D@4391 :: ():<BoxMesh#-9223371774509434765>
+WORLD MESH @MeshInstance3D@4392 :: ():<BoxMesh#-9223371774459103114>
+WORLD MESH @MeshInstance3D@4393 :: ():<BoxMesh#-9223371774408771463>
+WORLD MESH @MeshInstance3D@4394 :: ():<BoxMesh#-9223371774358439812>
+WORLD MESH @MeshInstance3D@4395 :: ():<BoxMesh#-9223371774308108161>
+WORLD MESH @MeshInstance3D@4396 :: ():<BoxMesh#-9223371774257776510>
+WORLD MESH @MeshInstance3D@4397 :: ():<BoxMesh#-9223371774207444859>
+WORLD MESH @MeshInstance3D@4398 :: ():<BoxMesh#-9223371774157113208>
+WORLD MESH @MeshInstance3D@4399 :: ():<BoxMesh#-9223371774106781557>
+WORLD MESH @MeshInstance3D@4400 :: ():<BoxMesh#-9223371774056449906>
+WORLD MESH @MeshInstance3D@4401 :: ():<BoxMesh#-9223371774006118255>
+WORLD MESH @MeshInstance3D@4402 :: ():<BoxMesh#-9223371773955786604>
+WORLD MESH @MeshInstance3D@4403 :: ():<BoxMesh#-9223371773905454953>
+WORLD MESH @MeshInstance3D@4404 :: ():<BoxMesh#-9223371773855123302>
+WORLD MESH @MeshInstance3D@4405 :: ():<BoxMesh#-9223371773804791651>
+WORLD MESH @MeshInstance3D@4406 :: ():<BoxMesh#-9223371773754460000>
+WORLD MESH @MeshInstance3D@4407 :: ():<BoxMesh#-9223371773704128349>
+WORLD MESH @MeshInstance3D@4408 :: ():<BoxMesh#-9223371773653796698>
+WORLD MESH @MeshInstance3D@4409 :: ():<BoxMesh#-9223371773603465047>
+WORLD MESH @MeshInstance3D@4410 :: ():<BoxMesh#-9223371773553133396>
+WORLD MESH @MeshInstance3D@4411 :: ():<BoxMesh#-9223371773502801745>
+WORLD MESH @MeshInstance3D@4412 :: ():<BoxMesh#-9223371773452470094>
+WORLD MESH @MeshInstance3D@4413 :: ():<BoxMesh#-9223371773402138443>
+WORLD MESH @MeshInstance3D@4414 :: ():<BoxMesh#-9223371773351806792>
+WORLD MESH @MeshInstance3D@4415 :: ():<BoxMesh#-9223371773301475141>
+WORLD MESH @MeshInstance3D@4416 :: ():<BoxMesh#-9223371773251143490>
+WORLD MESH @MeshInstance3D@4417 :: ():<BoxMesh#-9223371773200811839>
+WORLD MESH @MeshInstance3D@4418 :: ():<BoxMesh#-9223371773150480188>
+WORLD MESH @MeshInstance3D@4419 :: ():<BoxMesh#-9223371773100148537>
+WORLD MESH @MeshInstance3D@4420 :: ():<BoxMesh#-9223371773049816886>
+WORLD MESH @MeshInstance3D@4421 :: ():<BoxMesh#-9223371772999485235>
+WORLD MESH @MeshInstance3D@4422 :: ():<BoxMesh#-9223371772949153584>
+WORLD MESH @MeshInstance3D@4423 :: ():<BoxMesh#-9223371772898821933>
+WORLD MESH @MeshInstance3D@4424 :: ():<BoxMesh#-9223371772848490282>
+WORLD MESH @MeshInstance3D@4425 :: ():<BoxMesh#-9223371772798158631>
+WORLD MESH @MeshInstance3D@4426 :: ():<BoxMesh#-9223371772747826980>
+WORLD MESH @MeshInstance3D@4427 :: ():<BoxMesh#-9223371772697495329>
+WORLD MESH @MeshInstance3D@4428 :: ():<BoxMesh#-9223371772647163678>
+WORLD MESH @MeshInstance3D@4429 :: ():<BoxMesh#-9223371772596832027>
+WORLD MESH @MeshInstance3D@4430 :: ():<BoxMesh#-9223371772546500376>
+WORLD MESH @MeshInstance3D@4431 :: ():<BoxMesh#-9223371772496168725>
+WORLD MESH @MeshInstance3D@4432 :: ():<BoxMesh#-9223371772445837074>
+WORLD MESH @MeshInstance3D@4433 :: ():<BoxMesh#-9223371772395505423>
+WORLD MESH @MeshInstance3D@4434 :: ():<BoxMesh#-9223371772345173772>
+WORLD MESH @MeshInstance3D@4435 :: ():<BoxMesh#-9223371772294842121>
+WORLD MESH @MeshInstance3D@4436 :: ():<BoxMesh#-9223371772244510470>
+WORLD MESH @MeshInstance3D@4437 :: ():<BoxMesh#-9223371772194178819>
+WORLD MESH @MeshInstance3D@4438 :: ():<BoxMesh#-9223371772143847168>
+WORLD MESH @MeshInstance3D@4439 :: ():<BoxMesh#-9223371772093515517>
+WORLD MESH @MeshInstance3D@4440 :: ():<BoxMesh#-9223371772043183866>
+WORLD MESH @MeshInstance3D@4441 :: ():<BoxMesh#-9223371771992852215>
+WORLD MESH @MeshInstance3D@4442 :: ():<BoxMesh#-9223371771942520564>
+WORLD MESH @MeshInstance3D@4443 :: ():<BoxMesh#-9223371771892188913>
+WORLD MESH @MeshInstance3D@4444 :: ():<BoxMesh#-9223371771841857262>
+WORLD MESH @MeshInstance3D@4445 :: ():<BoxMesh#-9223371771791525611>
+WORLD MESH @MeshInstance3D@4446 :: ():<BoxMesh#-9223371771741193960>
+WORLD MESH @MeshInstance3D@4447 :: ():<BoxMesh#-9223371771690862309>
+WORLD MESH @MeshInstance3D@4448 :: ():<BoxMesh#-9223371771640530658>
+WORLD MESH @MeshInstance3D@4449 :: ():<BoxMesh#-9223371771590199007>
+WORLD MESH @MeshInstance3D@4450 :: ():<BoxMesh#-9223371771539867356>
+WORLD MESH @MeshInstance3D@4451 :: ():<BoxMesh#-9223371771489535705>
+WORLD MESH @MeshInstance3D@4452 :: ():<BoxMesh#-9223371771439204054>
+WORLD MESH @MeshInstance3D@4453 :: ():<BoxMesh#-9223371771388872403>
+WORLD MESH @MeshInstance3D@4454 :: ():<BoxMesh#-9223371771338540752>
+WORLD MESH @MeshInstance3D@4455 :: ():<BoxMesh#-9223371771288209101>
+WORLD MESH @MeshInstance3D@4456 :: ():<BoxMesh#-9223371771237877450>
+WORLD MESH @MeshInstance3D@4457 :: ():<BoxMesh#-9223371771187545799>
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:810)

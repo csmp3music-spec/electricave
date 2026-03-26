@@ -1,0 +1,53 @@
+[gd_scene load_steps=8 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(20, 12, 14)
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(7.2, 6.5, 5.8)
+
+[sub_resource type="BoxMesh" id="3"]
+size = Vector3(22.4, 1.0, 15.6)
+
+[sub_resource type="BoxMesh" id="4"]
+size = Vector3(4.2, 8.5, 4.2)
+
+[sub_resource type="CylinderMesh" id="5"]
+top_radius = 1.4
+bottom_radius = 1.7
+height = 2.8
+
+[sub_resource type="StandardMaterial3D" id="6"]
+albedo_color = Color(0.668, 0.595, 0.462, 1)
+roughness = 0.88
+
+[sub_resource type="StandardMaterial3D" id="7"]
+albedo_color = Color(0.252, 0.203, 0.168, 1)
+roughness = 0.66
+
+[node name="CentreTownHall" type="Node3D"]
+
+[node name="MainBlock" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("6")
+position = Vector3(0, 6, 0)
+
+[node name="EntryPortico" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("6")
+position = Vector3(0, 3.25, -9.6)
+
+[node name="Roof" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("7")
+position = Vector3(0, 12.7, 0)
+
+[node name="Cupola" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("6")
+position = Vector3(0, 17.25, 0)
+
+[node name="CupolaRoof" type="MeshInstance3D" parent="."]
+mesh = SubResource("5")
+material_override = SubResource("7")
+position = Vector3(0, 22.1, 0)

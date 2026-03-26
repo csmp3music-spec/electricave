@@ -1,0 +1,57 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(28, 6, 8)
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(6, 18, 6)
+
+[sub_resource type="CylinderMesh" id="3"]
+height = 18.0
+top_radius = 6.0
+bottom_radius = 8.0
+
+[sub_resource type="BoxMesh" id="4"]
+size = Vector3(42, 0.4, 24)
+
+[sub_resource type="StandardMaterial3D" id="5"]
+albedo_color = Color(0.839216, 0.796078, 0.65098, 1)
+
+[sub_resource type="StandardMaterial3D" id="6"]
+albedo_color = Color(0.482353, 0.309804, 0.184314, 1)
+
+[node name="WhiteCityPark" type="Node3D"]
+
+[node name="Promenade" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("5")
+position = Vector3(0, 0.2, 0)
+
+[node name="Gate" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("5")
+position = Vector3(0, 3, -8)
+
+[node name="GateTowerLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("6")
+position = Vector3(-11, 9, -8)
+
+[node name="GateTowerRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("6")
+position = Vector3(11, 9, -8)
+
+[node name="MidwayTower" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("5")
+position = Vector3(0, 9, 8)
+
+[node name="Label" type="Label3D" parent="."]
+text = "White City"
+billboard = 1
+font_size = 24
+outline_size = 4
+outline_modulate = Color(0, 0, 0, 0.65)
+modulate = Color(1, 0.97, 0.88, 1)
+position = Vector3(0, 20, 8)

@@ -1,0 +1,95 @@
+[gd_scene load_steps=12 format=3]
+
+[sub_resource type="StandardMaterial3D" id="1"]
+albedo_color = Color(0.85, 0.55, 0.12, 1)
+metallic = 0.18
+roughness = 0.44
+
+[sub_resource type="StandardMaterial3D" id="2"]
+albedo_color = Color(0.22, 0.22, 0.24, 1)
+metallic = 0.55
+roughness = 0.26
+
+[sub_resource type="StandardMaterial3D" id="3"]
+albedo_color = Color(0.80, 0.87, 0.93, 0.34)
+transparency = 1
+roughness = 0.08
+metallic = 0.02
+cull_mode = 2
+
+[sub_resource type="BoxMesh" id="4"]
+size = Vector3(3.1, 2.6, 15.8)
+
+[sub_resource type="BoxMesh" id="5"]
+size = Vector3(2.94, 1.1, 13.6)
+
+[sub_resource type="BoxMesh" id="6"]
+size = Vector3(3.18, 0.24, 15.0)
+
+[sub_resource type="BoxMesh" id="7"]
+size = Vector3(3.22, 0.32, 14.8)
+
+[sub_resource type="CylinderMesh" id="8"]
+top_radius = 0.42
+bottom_radius = 0.42
+height = 0.34
+
+[sub_resource type="PrismMesh" id="9"]
+left_to_right = 3.4
+size = Vector3(3.4, 1.1, 2.6)
+
+[sub_resource type="BoxMesh" id="10"]
+size = Vector3(0.2, 2.2, 0.2)
+
+[sub_resource type="BoxMesh" id="11"]
+size = Vector3(0.3, 0.3, 0.3)
+
+[node name="SnowPlowCar" type="Node3D"]
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+surface_material_override/0 = SubResource("1")
+position = Vector3(0, 1.5, 0)
+
+[node name="Windows" type="MeshInstance3D" parent="."]
+mesh = SubResource("5")
+surface_material_override/0 = SubResource("3")
+position = Vector3(0, 1.92, -0.2)
+
+[node name="Roof" type="MeshInstance3D" parent="."]
+mesh = SubResource("6")
+surface_material_override/0 = SubResource("2")
+position = Vector3(0, 2.86, 0)
+
+[node name="Skirt" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+surface_material_override/0 = SubResource("2")
+position = Vector3(0, 0.48, 0)
+
+[node name="TruckA" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+surface_material_override/0 = SubResource("2")
+rotation_degrees = Vector3(90, 0, 0)
+position = Vector3(0, 0.42, -4.4)
+
+[node name="TruckB" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+surface_material_override/0 = SubResource("2")
+rotation_degrees = Vector3(90, 0, 0)
+position = Vector3(0, 0.42, 4.4)
+
+[node name="PlowBlade" type="MeshInstance3D" parent="."]
+mesh = SubResource("9")
+surface_material_override/0 = SubResource("2")
+rotation_degrees = Vector3(0, 180, 0)
+position = Vector3(0, 0.78, -8.1)
+
+[node name="BeaconPost" type="MeshInstance3D" parent="."]
+mesh = SubResource("10")
+surface_material_override/0 = SubResource("2")
+position = Vector3(0, 3.32, -4.8)
+
+[node name="Beacon" type="MeshInstance3D" parent="BeaconPost"]
+mesh = SubResource("11")
+surface_material_override/0 = SubResource("1")
+position = Vector3(0, 1.18, 0)

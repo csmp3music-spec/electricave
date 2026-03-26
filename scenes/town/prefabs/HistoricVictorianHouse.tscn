@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/buildings/historic/victorian_house_1_godot.glb" id="1"]
+
+[node name="HistoricVictorianHouse" type="Node3D"]
+
+[node name="Model" parent="." instance=ExtResource("1")]
+scale = Vector3(4.5, 4.5, 4.5)
+

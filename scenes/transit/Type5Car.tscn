@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/trolleys/type5_model_optimized_godot.glb" id="1"]
+
+[node name="Type5Car" type="Node3D"]
+
+[node name="Model" parent="." instance=ExtResource("1")]
+rotation_degrees = Vector3(0, 90, 0)
+scale = Vector3(7.2, 2.2, 3.7)
+position = Vector3(0, 1.7, 0)

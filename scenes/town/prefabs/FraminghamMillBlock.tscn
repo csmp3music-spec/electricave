@@ -1,0 +1,53 @@
+[gd_scene load_steps=8 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(30, 14, 16)
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(10, 16, 12)
+
+[sub_resource type="BoxMesh" id="3"]
+size = Vector3(32, 0.8, 18)
+
+[sub_resource type="CylinderMesh" id="4"]
+top_radius = 0.7
+bottom_radius = 0.9
+height = 18
+
+[sub_resource type="StandardMaterial3D" id="5"]
+albedo_color = Color(0.515, 0.274, 0.224, 1)
+roughness = 0.93
+
+[sub_resource type="StandardMaterial3D" id="6"]
+albedo_color = Color(0.204, 0.198, 0.192, 1)
+roughness = 0.72
+
+[sub_resource type="BoxMesh" id="7"]
+size = Vector3(7.2, 4.2, 2.4)
+
+[node name="FraminghamMillBlock" type="Node3D"]
+
+[node name="MillHall" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("5")
+position = Vector3(0, 7, 0)
+
+[node name="BoilerHouse" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("5")
+position = Vector3(-13.5, 8, 0)
+
+[node name="RoofCap" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("6")
+position = Vector3(0, 14.5, 0)
+
+[node name="Smokestack" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("6")
+position = Vector3(11.5, 16, -3.6)
+
+[node name="LoadingDock" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(8, 2.1, -9.2)

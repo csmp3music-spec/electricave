@@ -1,0 +1,16 @@
+Godot Engine v4.6.stable.official.89cea1439 - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1014)
+SCRIPT ERROR: Cannot call method 'get_node_or_null' on a null value.
+   at: HUD.@implicit_ready (res://scripts/ui/HUD.gd:79)
+   GDScript backtrace (most recent call first):
+       [0] @implicit_ready (res://scripts/ui/HUD.gd:79)
+WORLD NODE HistoricalEvents :: Node
+WORLD NODE HistoricCommercialBlockTall :: Node3D
+WORLD NODE TransitStop :: Node3D
+WORLD NODE HistoricVictorianHouse :: Node3D
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:810)

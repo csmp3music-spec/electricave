@@ -1,0 +1,54 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(26, 5, 16)
+
+[sub_resource type="CylinderMesh" id="2"]
+height = 12.0
+top_radius = 5.0
+bottom_radius = 5.0
+
+[sub_resource type="CylinderMesh" id="3"]
+height = 22.0
+top_radius = 2.4
+bottom_radius = 3.0
+
+[sub_resource type="BoxMesh" id="4"]
+size = Vector3(34, 0.4, 22)
+
+[sub_resource type="StandardMaterial3D" id="5"]
+albedo_color = Color(0.713726, 0.623529, 0.454902, 1)
+
+[sub_resource type="StandardMaterial3D" id="6"]
+albedo_color = Color(0.364706, 0.25098, 0.176471, 1)
+
+[node name="NorumbegaPark" type="Node3D"]
+
+[node name="Plaza" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("5")
+position = Vector3(0, 0.2, 0)
+
+[node name="Pavilion" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("5")
+position = Vector3(0, 2.5, 0)
+
+[node name="Carousel" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("6")
+position = Vector3(-10, 6, 5)
+
+[node name="ObservationTower" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("6")
+position = Vector3(11, 11, -3)
+
+[node name="Label" type="Label3D" parent="."]
+text = "Norumbega Park"
+billboard = 1
+font_size = 24
+outline_size = 4
+outline_modulate = Color(0, 0, 0, 0.65)
+modulate = Color(1, 0.97, 0.88, 1)
+position = Vector3(0, 16, 0)

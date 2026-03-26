@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/trolleys/pcc.glb" id="1"]
+
+[node name="PCCCar" type="Node3D"]
+
+[node name="Model" parent="." instance=ExtResource("1")]
+rotation_degrees = Vector3(-90, 180, 0)
+scale = Vector3(2.4, 0.56, 0.97)
+position = Vector3(0, 1.6, 0)

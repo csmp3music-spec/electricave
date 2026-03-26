@@ -1,0 +1,61 @@
+[gd_scene load_steps=8 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(28, 18, 20)
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(10, 14, 16)
+
+[sub_resource type="BoxMesh" id="3"]
+size = Vector3(30, 2.4, 22)
+
+[sub_resource type="BoxMesh" id="4"]
+size = Vector3(8, 20, 8)
+
+[sub_resource type="StandardMaterial3D" id="5"]
+albedo_color = Color(0.611765, 0.458824, 0.341176, 1)
+
+[sub_resource type="StandardMaterial3D" id="6"]
+albedo_color = Color(0.25098, 0.211765, 0.196078, 1)
+
+[node name="BostonPostOffice1872" type="Node3D"]
+
+[node name="MainBlock" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("5")
+position = Vector3(0, 9, 0)
+
+[node name="WestWing" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("5")
+position = Vector3(-18, 7, 0)
+
+[node name="EastWing" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("5")
+position = Vector3(18, 7, 0)
+
+[node name="Roof" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("6")
+position = Vector3(0, 19.2, 0)
+
+[node name="Tower" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("5")
+position = Vector3(0, 28, 0)
+
+[node name="TowerRoof" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("6")
+scale = Vector3(0.34, 0.55, 0.34)
+position = Vector3(0, 39.5, 0)
+
+[node name="Label" type="Label3D" parent="."]
+text = "Boston Post Office (1872)"
+billboard = 1
+font_size = 22
+outline_size = 4
+outline_modulate = Color(0, 0, 0, 0.65)
+modulate = Color(1, 0.95, 0.8, 1)
+position = Vector3(0, 44, 0)

@@ -1,0 +1,19 @@
+Godot Engine v4.6.stable.official.89cea1439 - https://godotengine.org
+
+residential_low -> (res://scenes/town/prefabs/HistoricVictorianHouse.tscn):<PackedScene#-9223372004961286632>
+residential_medium -> (res://scenes/town/prefabs/HistoricVictorianHouseTall.tscn):<PackedScene#-9223372004810291687>
+commercial_low -> (res://scenes/town/prefabs/HistoricCommercialBlock.tscn):<PackedScene#-9223372003652663775>
+commercial_high -> (res://scenes/town/prefabs/HistoricCommercialBlockTall.tscn):<PackedScene#-9223372003501668830>
+civic -> (res://scenes/town/prefabs/HistoricDanaTownHall.tscn):<PackedScene#-9223372002360818128>
+farms -> (res://scenes/town/prefabs/Farm.tscn):<PackedScene#-9223372006571899389>
+transit -> (res://scenes/town/prefabs/TransitStop.tscn):<PackedScene#-9223372006353795573>
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1014)
+ERROR: 6 RID allocations of type 'PN13RendererDummy14TextureStorage12DummyTextureE' were leaked at exit.
+ERROR: 12 RID allocations of type 'N13RendererDummy9DummyMeshE' were leaked at exit.
+ERROR: 3 RID allocations of type 'N13RendererDummy15MaterialStorage13DummyMaterialE' were leaked at exit.
+ERROR: 1 RID allocations of type 'N13RendererDummy15MaterialStorage11DummyShaderE' were leaked at exit.
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
+ERROR: 40 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:810)

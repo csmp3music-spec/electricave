@@ -1,0 +1,39 @@
+[gd_scene load_steps=6 format=3]
+
+[sub_resource type="CylinderMesh" id="1"]
+height = 3.0
+radius = 0.16
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(4.4, 0.2, 1.6)
+
+[sub_resource type="BoxMesh" id="3"]
+size = Vector3(4.0, 2.0, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="4"]
+albedo_color = Color(0.254902, 0.227451, 0.184314, 1)
+
+[sub_resource type="StandardMaterial3D" id="5"]
+albedo_color = Color(0.811765, 0.72549, 0.556863, 1)
+
+[node name="TransitStop" type="Node3D"]
+
+[node name="PoleLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("4")
+position = Vector3(-1.8, 1.5, 0)
+
+[node name="PoleRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("4")
+position = Vector3(1.8, 1.5, 0)
+
+[node name="Canopy" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("5")
+position = Vector3(0, 3.05, 0)
+
+[node name="Shelter" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("5")
+position = Vector3(0, 1.05, -0.3)

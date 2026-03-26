@@ -1,0 +1,5 @@
+.DS_Store
+.godot/
+build/
+node_modules/
+tools/gltfconv/node_modules/

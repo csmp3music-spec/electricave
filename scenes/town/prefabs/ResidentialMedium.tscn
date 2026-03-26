@@ -1,0 +1,33 @@
+[gd_scene load_steps=6 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(12, 10, 10)
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(13, 2.0, 11)
+
+[sub_resource type="BoxMesh" id="3"]
+size = Vector3(7, 5.6, 2.6)
+
+[sub_resource type="StandardMaterial3D" id="4"]
+albedo_color = Color(0.588235, 0.521569, 0.458824, 1)
+
+[sub_resource type="StandardMaterial3D" id="5"]
+albedo_color = Color(0.25098, 0.203922, 0.184314, 1)
+
+[node name="ResidentialMedium" type="Node3D"]
+
+[node name="MainBlock" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("4")
+position = Vector3(0, 5, 0)
+
+[node name="Roof" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("5")
+position = Vector3(0, 11, 0)
+
+[node name="FrontPorches" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("5")
+position = Vector3(0, 2.8, 5.5)
