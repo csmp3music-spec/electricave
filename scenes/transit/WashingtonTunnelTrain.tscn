@@ -1,12 +1,12 @@
 [gd_scene load_steps=13 format=3]
 
 [sub_resource type="StandardMaterial3D" id="1"]
-albedo_color = Color(0.72, 0.68, 0.57, 1)
+albedo_color = Color(0.92, 0.89, 0.82, 1)
 metallic = 0.08
 roughness = 0.6
 
 [sub_resource type="StandardMaterial3D" id="2"]
-albedo_color = Color(0.42, 0.25, 0.12, 1)
+albedo_color = Color(0.86, 0.46, 0.12, 1)
 metallic = 0.1
 roughness = 0.56
 
@@ -23,7 +23,7 @@ metallic = 0.32
 roughness = 0.48
 
 [sub_resource type="StandardMaterial3D" id="5"]
-albedo_color = Color(0.43, 0.4, 0.35, 1)
+albedo_color = Color(0.52, 0.49, 0.43, 1)
 metallic = 0.28
 roughness = 0.46
 

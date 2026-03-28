@@ -12,6 +12,11 @@ const BlueLineCarScenePath := "res://scenes/transit/BlueLineCar.tscn"
 const SnowPlowCarScenePath := "res://scenes/transit/SnowPlowCar.tscn"
 const TrackBlendShader := preload("res://shaders/TrackBlend.gdshader")
 const MainLineServiceId := "mainline"
+const GreenAServiceId := "green_a"
+const GreenBServiceId := "green_b"
+const GreenCServiceId := "green_c"
+const GreenDServiceId := "green_d"
+const GreenEServiceId := "green_e"
 const BlueServiceId := "blue"
 const AtlanticServiceId := "atlantic"
 const WashingtonServiceId := "washington"
@@ -382,11 +387,14 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var cambridge_service_car_count := 6
 @export var blue_service_car_count := 6
 @export var mattapan_service_car_count := 4
+@export var green_branch_service_car_count := 4
 @export var atlantic_service_headway_min := 4.0
 @export var washington_service_headway_min := 4.0
 @export var cambridge_service_headway_min := 5.0
 @export var blue_service_headway_min := 5.0
 @export var mattapan_service_headway_min := 6.0
+@export var green_branch_service_headway_min := 6.0
+@export var green_surface_track_height := 0.42
 @export var snow_plow_speed_mps := 7.0
 @export var snow_speed_limit_mps := 4.8
 @export var origin := Vector3(65005.4, 0.0, -43256.5) # Park St (42.3564, -71.0628) projected into world coords
@@ -601,7 +609,7 @@ func _seed_corridor() -> void:
 	_spawn_trolley_fleet(path)
 	_register_current_line(
 		MainLineServiceId,
-		line_name,
+		"Green Line F - %s" % line_name,
 		_corridor_theme("tremont").get("line_color", Color("2d8f45"))
 	)
 	_build_operational_historical_lines(track_builder, town_manager)
@@ -791,10 +799,28 @@ func _service_line_ids_sorted() -> Array[String]:
 	var ids: Array[String] = []
 	for line_id_variant in _service_lines.keys():
 		ids.append(String(line_id_variant))
+	var preferred_order := [
+		GreenAServiceId,
+		GreenBServiceId,
+		GreenCServiceId,
+		GreenDServiceId,
+		GreenEServiceId,
+		MainLineServiceId,
+		AtlanticServiceId,
+		WashingtonServiceId,
+		CambridgeServiceId,
+		BlueServiceId,
+		MattapanServiceId
+	]
+	var ordered: Array[String] = []
+	for preferred_id in preferred_order:
+		if ids.has(preferred_id):
+			ordered.append(preferred_id)
+			ids.erase(preferred_id)
 	ids.sort()
-	if ids.has(MainLineServiceId):
-		ids.erase(MainLineServiceId)
-		ids.push_front(MainLineServiceId)
+	for line_id in ids:
+		ordered.append(line_id)
+	ids = ordered
 	return ids
 
 func _activate_service_line(line_id: String) -> void:
@@ -848,6 +874,7 @@ func _line_fleet(line_id: String) -> Array:
 	return entry.get("fleet", [])
 
 func _build_operational_historical_lines(track_builder: Node, town_manager: Node) -> void:
+	_build_green_branch_services(track_builder, town_manager)
 	_build_operational_service_line(
 		BlueServiceId,
 		"Blue Line North Shore",
@@ -946,6 +973,12 @@ func _configure_service_line_fleet(line_id: String, fleet: Array[TrolleyMover]) 
 		"brake": 9.0
 	}
 	match line_id:
+		GreenAServiceId, GreenBServiceId, GreenCServiceId:
+			profile = {"cruise": 10.5, "max": 15.5, "accel": 4.2, "brake": 8.6}
+		GreenDServiceId:
+			profile = {"cruise": 12.5, "max": 18.5, "accel": 4.4, "brake": 8.8}
+		GreenEServiceId:
+			profile = {"cruise": 10.8, "max": 16.0, "accel": 4.2, "brake": 8.8}
 		AtlanticServiceId:
 			profile = {"cruise": 11.0, "max": 15.5, "accel": 4.4, "brake": 8.2}
 		WashingtonServiceId:
@@ -979,6 +1012,270 @@ func _build_historical_subway_service_points(geo_points: PackedVector2Array) -> 
 	for point in points:
 		tunnel_points.append(_subway_track_point(point))
 	return tunnel_points
+
+func _green_trunk_stop_names(shared_stop_count: int) -> PackedStringArray:
+	var names := PackedStringArray()
+	for i in range(min(shared_stop_count, mainline_towns.size())):
+		names.append(mainline_towns[i])
+	return names
+
+func _green_trunk_stop_positions(shared_stop_count: int) -> PackedVector3Array:
+	var positions := PackedVector3Array()
+	var stop_points := _mainline_stop_points()
+	for i in range(min(shared_stop_count, stop_points.size())):
+		var stop_pos := _subway_track_point(stop_points[i]) if i <= _last_subway_station_index() else stop_points[i]
+		positions.append(stop_pos)
+	return positions
+
+func _green_a_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1196, 42.3517),
+		Vector2(-71.1425, 42.3493),
+		Vector2(-71.1568, 42.3494),
+		Vector2(-71.1702, 42.3558),
+		Vector2(-71.1844, 42.3641)
+	])
+
+func _green_a_stop_names() -> PackedStringArray:
+	return PackedStringArray(["Packards Corner", "Brighton Center", "Oak Square", "Watertown"])
+
+func _green_a_stop_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1196, 42.3517),
+		Vector2(-71.1425, 42.3493),
+		Vector2(-71.1568, 42.3494),
+		Vector2(-71.1844, 42.3641)
+	])
+
+func _green_b_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1196, 42.3517),
+		Vector2(-71.1274, 42.3502),
+		Vector2(-71.1402, 42.3488),
+		Vector2(-71.1502, 42.3468),
+		Vector2(-71.1620, 42.3434),
+		Vector2(-71.1706, 42.3402)
+	])
+
+func _green_b_stop_names() -> PackedStringArray:
+	return PackedStringArray(["Packards Corner", "Harvard Avenue", "Warren Street", "Washington Street", "Boston College"])
+
+func _green_b_stop_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1196, 42.3517),
+		Vector2(-71.1274, 42.3502),
+		Vector2(-71.1402, 42.3488),
+		Vector2(-71.1502, 42.3468),
+		Vector2(-71.1706, 42.3402)
+	])
+
+func _green_c_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1078, 42.3457),
+		Vector2(-71.1219, 42.3420),
+		Vector2(-71.1359, 42.3396),
+		Vector2(-71.1488, 42.3360)
+	])
+
+func _green_c_stop_names() -> PackedStringArray:
+	return PackedStringArray(["Saint Mary's Street", "Coolidge Corner", "Washington Square", "Cleveland Circle"])
+
+func _green_c_stop_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1078, 42.3457),
+		Vector2(-71.1219, 42.3420),
+		Vector2(-71.1359, 42.3396),
+		Vector2(-71.1488, 42.3360)
+	])
+
+func _green_d_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1048, 42.3454),
+		Vector2(-71.1239, 42.3328),
+		Vector2(-71.1422, 42.3355),
+		Vector2(-71.1937, 42.3301),
+		Vector2(-71.2520, 42.3376)
+	])
+
+func _green_d_stop_names() -> PackedStringArray:
+	return PackedStringArray(["Fenway", "Brookline Village", "Reservoir", "Newton Centre", "Riverside"])
+
+func _green_d_stop_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.1048, 42.3454),
+		Vector2(-71.1239, 42.3328),
+		Vector2(-71.1422, 42.3355),
+		Vector2(-71.1937, 42.3301),
+		Vector2(-71.2520, 42.3376)
+	])
+
+func _green_e_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.0813, 42.3453),
+		Vector2(-71.0855, 42.3427),
+		Vector2(-71.0957, 42.3371),
+		Vector2(-71.1039, 42.3341),
+		Vector2(-71.1108, 42.3283),
+		Vector2(-71.1184, 42.3221),
+		Vector2(-71.1174, 42.3142),
+		Vector2(-71.1157, 42.3071),
+		Vector2(-71.1137, 42.3008)
+	])
+
+func _green_e_stop_names() -> PackedStringArray:
+	return PackedStringArray(["Prudential", "Symphony", "Museum of Fine Arts", "Brigham Circle", "Heath Street", "Jamaica Plain", "Arborway"])
+
+func _green_e_stop_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.0813, 42.3453),
+		Vector2(-71.0855, 42.3427),
+		Vector2(-71.0957, 42.3371),
+		Vector2(-71.1039, 42.3341),
+		Vector2(-71.1108, 42.3283),
+		Vector2(-71.1184, 42.3221),
+		Vector2(-71.1137, 42.3008)
+	])
+
+func _build_green_branch_services(track_builder: Node, town_manager: Node) -> void:
+	var green_color: Color = _corridor_theme("tremont").get("line_color", Color("2d8f45"))
+	_build_green_surface_branch_service(
+		GreenAServiceId,
+		"Green Line A - Watertown",
+		"GreenLineABranch",
+		6,
+		_green_a_route_geo(),
+		_green_a_stop_names(),
+		_green_a_stop_geo(),
+		Type5CarScenePath,
+		green_color,
+		track_builder,
+		town_manager
+	)
+	_build_green_surface_branch_service(
+		GreenBServiceId,
+		"Green Line B - Boston College",
+		"GreenLineBBranch",
+		6,
+		_green_b_route_geo(),
+		_green_b_stop_names(),
+		_green_b_stop_geo(),
+		Type5CarScenePath,
+		green_color,
+		track_builder,
+		town_manager
+	)
+	_build_green_surface_branch_service(
+		GreenCServiceId,
+		"Green Line C - Cleveland Circle",
+		"GreenLineCBranch",
+		6,
+		_green_c_route_geo(),
+		_green_c_stop_names(),
+		_green_c_stop_geo(),
+		Type5CarScenePath,
+		green_color,
+		track_builder,
+		town_manager
+	)
+	_build_green_surface_branch_service(
+		GreenDServiceId,
+		"Green Line D - Riverside",
+		"GreenLineDBranch",
+		6,
+		_green_d_route_geo(),
+		_green_d_stop_names(),
+		_green_d_stop_geo(),
+		Type5CarScenePath,
+		green_color,
+		track_builder,
+		town_manager
+	)
+	_build_green_surface_branch_service(
+		GreenEServiceId,
+		"Green Line E - Arborway",
+		"GreenLineEBranch",
+		4,
+		_green_e_route_geo(),
+		_green_e_stop_names(),
+		_green_e_stop_geo(),
+		PCCCarScenePath,
+		green_color,
+		track_builder,
+		town_manager
+	)
+
+func _build_green_surface_branch_service(line_id: String, display_name: String, root_name: String, shared_stop_count: int, branch_route_geo: PackedVector2Array, branch_stop_names: PackedStringArray, branch_stop_geo: PackedVector2Array, scene_path: String, line_color: Color, track_builder: Node, town_manager: Node) -> void:
+	if branch_route_geo.size() < 2 or branch_stop_names.is_empty() or branch_stop_names.size() != branch_stop_geo.size():
+		return
+	var trunk_stop_names := _green_trunk_stop_names(shared_stop_count)
+	var trunk_stop_positions := _green_trunk_stop_positions(shared_stop_count)
+	if trunk_stop_names.size() != trunk_stop_positions.size() or trunk_stop_names.is_empty():
+		return
+	var route_points := PackedVector3Array()
+	var stop_positions := PackedVector3Array()
+	var stop_names := PackedStringArray()
+	for i in range(trunk_stop_positions.size()):
+		route_points.append(trunk_stop_positions[i])
+		stop_positions.append(trunk_stop_positions[i])
+		stop_names.append(trunk_stop_names[i])
+	var branch_route_points := PackedVector3Array()
+	for point in _project_geo_points(branch_route_geo):
+		branch_route_points.append(Vector3(point.x, green_surface_track_height, point.z))
+	var branch_stop_points := PackedVector3Array()
+	for point in _project_geo_points(branch_stop_geo):
+		branch_stop_points.append(Vector3(point.x, green_surface_track_height, point.z))
+	var shared_point := trunk_stop_positions[trunk_stop_positions.size() - 1]
+	var first_branch_point := branch_route_points[0]
+	if shared_point.distance_to(first_branch_point) > 6.0:
+		route_points.append(shared_point.lerp(first_branch_point, 0.34))
+		route_points.append(shared_point.lerp(first_branch_point, 0.68))
+	for point in branch_route_points:
+		route_points.append(point)
+	for i in range(branch_stop_points.size()):
+		stop_positions.append(branch_stop_points[i])
+		stop_names.append(branch_stop_names[i])
+	_build_operational_service_line(
+		line_id,
+		display_name,
+		route_points,
+		stop_names,
+		green_branch_service_car_count,
+		scene_path,
+		green_branch_service_headway_min,
+		line_color,
+		track_builder,
+		town_manager,
+		stop_positions
+	)
+	_build_green_surface_branch_geometry(root_name, shared_point, branch_route_points, branch_stop_points, branch_stop_names, track_builder)
+
+func _build_green_surface_branch_geometry(root_name: String, shared_tunnel_point: Vector3, branch_route_points: PackedVector3Array, branch_stop_points: PackedVector3Array, branch_stop_names: PackedStringArray, track_builder: Node) -> void:
+	if branch_route_points.is_empty():
+		return
+	var parent := _get_path_parent(track_builder)
+	if parent == null:
+		return
+	var existing := parent.get_node_or_null(root_name)
+	if existing:
+		existing.queue_free()
+	var root := Node3D.new()
+	root.name = root_name
+	parent.add_child(root)
+	var portal_root := _make_subway_section(root, "Portal")
+	var segment_root := _make_subway_section(root, "Segments")
+	var station_root := _make_subway_section(root, "Stations")
+	_build_green_branch_portal(portal_root, shared_tunnel_point, branch_route_points[0])
+	for i in range(branch_route_points.size() - 1):
+		_add_surface_rapid_segment(segment_root, branch_route_points[i], branch_route_points[i + 1], "tremont")
+	for i in range(min(branch_stop_points.size(), branch_stop_names.size())):
+		_add_surface_rapid_station(station_root, branch_stop_points[i], _station_forward(branch_stop_points, i), branch_stop_names[i], "tremont")
+
+func _build_green_branch_portal(parent: Node3D, tunnel_point: Vector3, surface_point: Vector3) -> void:
+	var p1 := tunnel_point.lerp(surface_point, 0.34)
+	var p2 := tunnel_point.lerp(surface_point, 0.68)
+	_add_portal_section(parent, tunnel_point, p1, 13.0, 5.8, true)
+	_add_portal_section(parent, p1, p2, 13.8, 4.8, true)
+	_add_portal_section(parent, p2, surface_point, 14.6, 3.6, false)
 
 func _build_mattapan_service_points() -> PackedVector3Array:
 	var surface_points := _project_geo_points(mattapan_geo)
@@ -1369,6 +1666,8 @@ func _cycle_service_line() -> void:
 	var current_idx := maxi(ids.find(_driver_line_id), 0)
 	for step in range(1, ids.size() + 1):
 		var next_line_id := ids[(current_idx + step) % ids.size()]
+		if _try_driver_branch_switch(next_line_id):
+			return
 		var fleet: Array = _line_fleet(next_line_id)
 		if fleet.is_empty():
 			continue
@@ -1396,15 +1695,63 @@ func set_active_service_line(line_id: String) -> bool:
 	var entry := _service_line_entry(line_id)
 	if entry.is_empty():
 		return false
+	if _try_driver_branch_switch(line_id):
+		return true
 	var fleet: Array = entry.get("fleet", [])
 	for fleet_index in range(fleet.size()):
 		var trolley := fleet[fleet_index] as TrolleyMover
 		if trolley == null or not is_instance_valid(trolley):
 			continue
 		_activate_service_line(line_id)
-		_set_driver_trolley(trolley, fleet_index)
-		return true
+			_set_driver_trolley(trolley, fleet_index)
+			return true
 	return false
+
+func _route_stop_named(route_stops: Array, stop_name: String) -> Dictionary:
+	for stop_variant in route_stops:
+		var stop: Dictionary = stop_variant
+		if String(stop.get("name", "")) == stop_name:
+			return stop
+	return {}
+
+func _try_driver_branch_switch(target_line_id: String) -> bool:
+	if target_line_id == "" or target_line_id == _driver_line_id:
+		return false
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley):
+		return false
+	var current_stop := String(_driver_station_payload().get("current", ""))
+	if current_stop == "" or absf(_driver_trolley.speed_mps) > driver_service_stop_speed_threshold_mps + 0.35:
+		return false
+	var target_entry := _service_line_entry(target_line_id)
+	if target_entry.is_empty():
+		return false
+	var target_stop := _route_stop_named(target_entry.get("route_stops", []), current_stop)
+	if target_stop.is_empty():
+		return false
+	var target_path := target_entry.get("path", null) as Path3D
+	if target_path == null or target_path.curve == null:
+		return false
+	var current_entry := _service_line_entry(_driver_line_id)
+	var current_fleet: Array = current_entry.get("fleet", [])
+	current_fleet.erase(_driver_trolley)
+	current_entry["fleet"] = current_fleet
+	_service_lines[_driver_line_id] = current_entry
+	var parent := _driver_trolley.get_parent()
+	if parent != null:
+		parent.remove_child(_driver_trolley)
+	target_path.add_child(_driver_trolley)
+	_driver_trolley.progress = float(target_stop.get("offset", 0.0))
+	_driver_trolley.speed_mps = 0.0
+	_driver_trolley.target_speed_mps = 0.0
+	_driver_trolley.set_meta("service_line_id", target_line_id)
+	var target_fleet: Array = target_entry.get("fleet", [])
+	if not target_fleet.has(_driver_trolley):
+		target_fleet.append(_driver_trolley)
+	target_entry["fleet"] = target_fleet
+	_service_lines[target_line_id] = target_entry
+	_activate_service_line(target_line_id)
+	_set_driver_trolley(_driver_trolley, maxi(0, target_fleet.find(_driver_trolley)))
+	return true
 
 func set_driver_manual_control(enabled: bool) -> void:
 	_driver_manual_control_enabled = enabled
@@ -1856,9 +2203,36 @@ func _valid_trolley_scene_paths() -> Array[String]:
 			if not ResourceLoader.exists(scene_path):
 				continue
 			if scene_paths.has(scene_path):
-				continue
+			continue
 			scene_paths.append(scene_path)
 	return scene_paths
+
+func _is_green_service_line(line_id: String) -> bool:
+	return line_id in [
+		MainLineServiceId,
+		GreenAServiceId,
+		GreenBServiceId,
+		GreenCServiceId,
+		GreenDServiceId,
+		GreenEServiceId
+	]
+
+func _preferred_scene_path_for_line(line_id: String) -> String:
+	match line_id:
+		GreenAServiceId, GreenBServiceId, GreenCServiceId, GreenDServiceId, MainLineServiceId:
+			return Type5CarScenePath
+		GreenEServiceId, MattapanServiceId:
+			return PCCCarScenePath
+		AtlanticServiceId:
+			return AtlanticElCarScenePath
+		WashingtonServiceId:
+			return WashingtonTunnelTrainScenePath
+		CambridgeServiceId:
+			return CambridgeDorchesterCarScenePath
+		BlueServiceId:
+			return BlueLineCarScenePath
+		_:
+			return default_player_trolley_scene_path
 
 func _scene_path_for_trolley(trolley: Node3D, car_index: int) -> String:
 	var scene_paths := _valid_trolley_scene_paths()
@@ -1866,10 +2240,13 @@ func _scene_path_for_trolley(trolley: Node3D, car_index: int) -> String:
 		return ""
 	var override_path := String(trolley.get_meta("scene_path_override", ""))
 	var line_id := _line_id_for_trolley(trolley as TrolleyMover if trolley is TrolleyMover else null)
-	if trolley is TrolleyMover and (trolley as TrolleyMover).controlled and line_id == MainLineServiceId:
+	if trolley is TrolleyMover and (trolley as TrolleyMover).controlled and _is_green_service_line(line_id):
 		return scene_paths[clampi(_player_trolley_scene_index, 0, scene_paths.size() - 1)]
 	if override_path != "" and ResourceLoader.exists(override_path):
 		return override_path
+	var preferred_path := _preferred_scene_path_for_line(line_id)
+	if preferred_path != "" and ResourceLoader.exists(preferred_path):
+		return preferred_path
 	return scene_paths[car_index % scene_paths.size()]
 
 func _get_trolley_visual_root(trolley: Node3D) -> Node3D:
@@ -3136,14 +3513,14 @@ func _build_blue_phase_station(parent: Node3D, surface_parent: Node3D, points: P
 	var spec := _station_spec(station_name)
 	var forward := _station_forward(points, idx)
 	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
-	var width := float(spec.get("width", 24.0))
+	var width := _resolved_station_width(spec, float(spec.get("width", 24.0)), int(spec.get("tracks", 2)))
 	var length := float(spec.get("length", 118.0))
 	var platform_width := float(spec.get("platform_width", 6.0))
 	var center := track_points[idx]
 	var root := _make_subway_section(parent, _section_name(station_name))
 	_add_surface_alignment(surface_parent, points[maxi(0, idx - 1)], points[mini(points.size() - 1, idx + 1)], width * 0.44, Color("52453a"), "blue")
-	_add_station_shell(root, center, forward, right, width, length, "blue", station_name)
-	for offset in _track_offsets_for_spec(spec, 2):
+	_add_station_shell(root, center, forward, right, width, length, spec, int(spec.get("tracks", 2)), "blue", station_name)
+	for offset in _track_offsets_for_spec(spec, int(spec.get("tracks", 2))):
 		_add_track_surface_box(root, Vector3(2.0, subway_track_bed_height, length), center + right * offset + Vector3(0.0, -1.85, 0.0), forward)
 	_add_station_platforms(root, center, forward, right, width, length, platform_width, spec, String(spec.get("layout", "side")), "blue")
 	_add_station_mezzanines(root, center, forward, right, width, float(spec.get("mezzanine_length", length * 0.5)), spec)
@@ -3589,7 +3966,7 @@ func _build_named_subway_station(parent: Node3D, surface_parent: Node3D, points:
 	var station_root := _make_subway_section(parent, _section_name(station_name))
 	var center := points[idx] + Vector3(0.0, subway_depth, 0.0)
 	var surface_center := Vector3(points[idx].x, 0.08, points[idx].z)
-	var width: float = float(spec.get("width", 22.0))
+	var width: float = _resolved_station_width(spec, float(spec.get("width", 22.0)), int(spec.get("tracks", 2)))
 	var length: float = float(spec.get("length", 140.0))
 	var platform_width: float = float(spec.get("platform_width", 6.5))
 	var mezzanine_length: float = float(spec.get("mezzanine_length", length * 0.55))
@@ -3598,7 +3975,7 @@ func _build_named_subway_station(parent: Node3D, surface_parent: Node3D, points:
 
 	_add_surface_alignment(surface_parent, points[maxi(0, idx - 1)], points[mini(points.size() - 1, idx + 1)], width * 0.46, Color("544437"), style_id)
 	_add_surface_alignment(surface_parent, surface_center - forward * (length * 0.41), surface_center + forward * (length * 0.41), width * 0.62, Color("544437"), style_id)
-	_add_station_shell(station_root, center, forward, right, width, length, style_id, station_name)
+	_add_station_shell(station_root, center, forward, right, width, length, spec, tracks, style_id, station_name)
 	_add_station_mezzanines(station_root, center, forward, right, width, mezzanine_length, spec)
 
 	for offset in _track_offsets_for_spec(spec, tracks):
@@ -4548,6 +4925,56 @@ func _track_offsets_for_spec(spec: Dictionary, tracks: int) -> Array[float]:
 		return offsets
 	return _track_offsets(tracks)
 
+func _station_track_half_extent(spec: Dictionary, tracks: int) -> float:
+	var half_extent := 0.0
+	for offset in _track_offsets_for_spec(spec, tracks):
+		half_extent = maxf(half_extent, absf(offset) + 1.45)
+	return half_extent
+
+func _resolved_station_width(spec: Dictionary, requested_width: float, tracks: int) -> float:
+	var wall_clearance := 2.0
+	var required_half_width := _station_track_half_extent(spec, tracks) + wall_clearance + subway_wall_thickness
+	return maxf(requested_width, required_half_width * 2.0)
+
+func _station_portal_opening_width(width: float, spec: Dictionary, tracks: int) -> float:
+	var portal_clearance := 1.25
+	var minimum_opening := _station_track_half_extent(spec, tracks) * 2.0 + portal_clearance * 2.0
+	var maximum_opening := maxf(8.0, width - (subway_wall_thickness + 0.35) * 2.0)
+	return clampf(maxf(8.0, minimum_opening), 8.0, maximum_opening)
+
+func run_station_clearance_smoke_test() -> Dictionary:
+	var checked := 0
+	var failures: Array[String] = []
+	var seen: Dictionary = {}
+	var station_lists: Array = [
+		subway_station_names,
+		north_subway_station_names,
+		washington_street_station_names,
+		cambridge_dorchester_station_names,
+		blue_line_station_names
+	]
+	for list_variant in station_lists:
+		var station_list: PackedStringArray = list_variant
+		for station_name in station_list:
+			if seen.has(station_name):
+				continue
+			seen[station_name] = true
+			var spec := _station_spec(station_name)
+			var tracks := int(spec.get("tracks", 2))
+			var requested_width := float(spec.get("width", 22.0))
+			var resolved_width := _resolved_station_width(spec, requested_width, tracks)
+			var track_half_extent := _station_track_half_extent(spec, tracks)
+			var wall_clearance := resolved_width * 0.5 - subway_wall_thickness - track_half_extent
+			var portal_clearance := _station_portal_opening_width(resolved_width, spec, tracks) * 0.5 - track_half_extent
+			checked += 1
+			if wall_clearance < 2.0 or portal_clearance < 1.25:
+				failures.append("%s failed clearance smoke test (wall %.2fm, portal %.2fm)." % [station_name, wall_clearance, portal_clearance])
+	return {
+		"ok": failures.is_empty(),
+		"checked": checked,
+		"failures": failures
+	}
+
 func _add_station_platforms(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, platform_width: float, spec: Dictionary, layout: String, style_id: String = "tremont") -> void:
 	var theme := _corridor_theme(style_id)
 	var platform_material := _ensure_period_material(String(theme.get("platform_material", "tile")))
@@ -4826,7 +5253,7 @@ func _corridor_theme(style_id: String) -> Dictionary:
 			}
 		"cambridge":
 			return {
-				"line_color": Color("d04b41"),
+				"line_color": Color("b32033"),
 				"sign_bg": Color("f0e6d4"),
 				"sign_text": Color("281f19"),
 				"surface_material": "asphalt",
@@ -4868,17 +5295,17 @@ func _corridor_theme(style_id: String) -> Dictionary:
 			}
 		"atlantic_elevated":
 			return {
-				"line_color": Color("9c8a62"),
+				"line_color": Color("d96a16"),
 				"sign_bg": Color("1e1b18"),
-				"sign_text": Color("f5ecd8"),
+				"sign_text": Color("f0a44f"),
 				"surface_material": "timber",
 				"wall_material": "steel_dark",
 				"tile_material": "timber",
 				"platform_material": "timber",
 				"headhouse_material": "brick",
 				"roof_material": "steel_dark",
-				"trim_color": Color("8f7a54"),
-				"steel_color": Color("4e463f")
+				"trim_color": Color("d96a16"),
+				"steel_color": Color("1f1d1a")
 			}
 		_:
 			return {
