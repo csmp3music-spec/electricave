@@ -139,7 +139,6 @@ var _driver_dashboard: Control
 
 func _ready() -> void:
 	theme = ClassicThemeScript.build_theme()
-	_ensure_finance_graph_panel()
 	_ensure_timetable_window()
 	_ensure_line_selector_panel()
 	_ensure_driver_dashboard()
@@ -358,6 +357,7 @@ func _toggle_finance_window(force_state: Variant = null) -> void:
 	var target := finance_window.visible if force_state == null else bool(force_state)
 	finance_window.visible = (not target) if force_state == null else target
 	if finance_window.visible:
+		_ensure_finance_graph_panel()
 		_refresh_finance_window()
 
 func _ensure_finance_graph_panel() -> void:
@@ -798,6 +798,7 @@ func _finance_payload_for_tab(tab_name: String) -> Dictionary:
 
 func _refresh_finance_window() -> void:
 	_select_tab(_current_tab)
+	_ensure_finance_graph_panel()
 	if _economy != null and _economy.has_method("get_finance_history") and _finance_history_graph != null and _finance_history_graph.has_method("set_history"):
 		_finance_history_graph.call("set_history", _economy.call("get_finance_history"))
 
