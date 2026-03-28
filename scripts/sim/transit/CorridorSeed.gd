@@ -17,6 +17,7 @@ const GreenBServiceId := "green_b"
 const GreenCServiceId := "green_c"
 const GreenDServiceId := "green_d"
 const GreenEServiceId := "green_e"
+const OrangeServiceId := "orange"
 const BlueServiceId := "blue"
 const AtlanticServiceId := "atlantic"
 const WashingtonServiceId := "washington"
@@ -136,6 +137,35 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 	Vector2(-71.0518, 42.3557),
 	Vector2(-71.0549, 42.3522),
 	Vector2(-71.0569, 42.3497)
+])
+@export var build_orange_line_elevated := true
+@export var orange_line_root_name := "OrangeMainLineElevated"
+@export var orange_elevated_deck_height := 10.4
+@export var orange_north_station_names := PackedStringArray([
+	"Sullivan Square",
+	"City Square",
+	"North Station"
+])
+@export var orange_north_geo := PackedVector2Array([
+	Vector2(-71.0765, 42.3830),
+	Vector2(-71.0671, 42.3750),
+	Vector2(-71.0602, 42.3656)
+])
+@export var orange_south_station_names := PackedStringArray([
+	"Dover",
+	"Northampton",
+	"Dudley",
+	"Egleston",
+	"Green Street",
+	"Forest Hills"
+])
+@export var orange_south_geo := PackedVector2Array([
+	Vector2(-71.0637, 42.3497),
+	Vector2(-71.0784, 42.3384),
+	Vector2(-71.0837, 42.3287),
+	Vector2(-71.0955, 42.3151),
+	Vector2(-71.1073, 42.3100),
+	Vector2(-71.1138, 42.3007)
 ])
 @export var build_washington_street_tunnel := true
 @export var washington_street_root_name := "WashingtonStreetTunnel"
