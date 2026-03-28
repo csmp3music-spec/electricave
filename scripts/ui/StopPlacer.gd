@@ -1087,56 +1087,104 @@ func _build_depot_node(pos: Vector3, forward: Vector3) -> Node3D:
 
 	var apron := MeshInstance3D.new()
 	var apron_mesh := BoxMesh.new()
-	apron_mesh.size = Vector3(12.0, 0.55, 30.0)
+	apron_mesh.size = Vector3(16.0, 0.55, 34.0)
 	apron.mesh = apron_mesh
 	var apron_mat := StandardMaterial3D.new()
-	apron_mat.albedo_color = Color("6d6152")
+	apron_mat.albedo_color = Color("6b6258")
 	apron_mat.roughness = 0.96
 	apron.set_surface_override_material(0, apron_mat)
-	apron.position = Vector3(0.0, 0.28, 8.0)
+	apron.position = Vector3(0.0, 0.28, 9.0)
 	root.add_child(apron)
 
 	var body := MeshInstance3D.new()
 	var body_mesh := BoxMesh.new()
-	body_mesh.size = Vector3(20.0, 8.0, 14.0)
+	body_mesh.size = Vector3(22.0, 8.6, 16.0)
 	body.mesh = body_mesh
 	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = Color("8d7457")
+	body_mat.albedo_color = Color("7e4f3a")
 	body_mat.roughness = 0.92
 	body.set_surface_override_material(0, body_mat)
-	body.position = Vector3(0.0, 4.0, 0.0)
+	body.position = Vector3(0.0, 4.3, 0.0)
 	root.add_child(body)
 
 	var roof := MeshInstance3D.new()
 	var roof_mesh := BoxMesh.new()
-	roof_mesh.size = Vector3(22.0, 1.6, 16.0)
+	roof_mesh.size = Vector3(24.0, 0.9, 18.0)
 	roof.mesh = roof_mesh
 	var roof_mat := StandardMaterial3D.new()
-	roof_mat.albedo_color = Color("5e4b3a")
-	roof_mat.roughness = 0.74
+	roof_mat.albedo_color = Color("3c3732")
+	roof_mat.roughness = 0.48
+	roof_mat.metallic = 0.16
 	roof.set_surface_override_material(0, roof_mat)
-	roof.position = Vector3(0.0, 8.8, 0.0)
+	roof.position = Vector3(0.0, 8.95, 0.0)
 	root.add_child(roof)
+
+	var monitor := MeshInstance3D.new()
+	var monitor_mesh := BoxMesh.new()
+	monitor_mesh.size = Vector3(10.0, 2.2, 13.8)
+	monitor.mesh = monitor_mesh
+	var monitor_mat := StandardMaterial3D.new()
+	monitor_mat.albedo_color = Color("c8b79e")
+	monitor_mat.roughness = 0.88
+	monitor.set_surface_override_material(0, monitor_mat)
+	monitor.position = Vector3(0.0, 9.95, 0.0)
+	root.add_child(monitor)
+
+	var monitor_roof := MeshInstance3D.new()
+	var monitor_roof_mesh := BoxMesh.new()
+	monitor_roof_mesh.size = Vector3(11.0, 0.45, 14.8)
+	monitor_roof.mesh = monitor_roof_mesh
+	monitor_roof.set_surface_override_material(0, roof_mat)
+	monitor_roof.position = Vector3(0.0, 11.25, 0.0)
+	root.add_child(monitor_roof)
+
+	var office := MeshInstance3D.new()
+	var office_mesh := BoxMesh.new()
+	office_mesh.size = Vector3(8.6, 4.8, 9.6)
+	office.mesh = office_mesh
+	var office_mat := StandardMaterial3D.new()
+	office_mat.albedo_color = Color("cdb79b")
+	office_mat.roughness = 0.9
+	office.set_surface_override_material(0, office_mat)
+	office.position = Vector3(8.0, 2.4, -1.6)
+	root.add_child(office)
+
+	var office_roof := MeshInstance3D.new()
+	var office_roof_mesh := BoxMesh.new()
+	office_roof_mesh.size = Vector3(9.4, 0.42, 10.4)
+	office_roof.mesh = office_roof_mesh
+	office_roof.set_surface_override_material(0, roof_mat)
+	office_roof.position = Vector3(8.0, 4.95, -1.6)
+	root.add_child(office_roof)
+
+	var arch := MeshInstance3D.new()
+	var arch_mesh := BoxMesh.new()
+	arch_mesh.size = Vector3(10.6, 7.0, 1.0)
+	arch.mesh = arch_mesh
+	arch.set_surface_override_material(0, body_mat)
+	arch.position = Vector3(0.0, 3.6, 8.1)
+	root.add_child(arch)
 
 	var door := MeshInstance3D.new()
 	var door_mesh := BoxMesh.new()
-	door_mesh.size = Vector3(8.0, 5.5, 0.8)
+	door_mesh.size = Vector3(7.4, 5.9, 0.8)
 	door.mesh = door_mesh
 	var door_mat := StandardMaterial3D.new()
-	door_mat.albedo_color = Color("3b342c")
+	door_mat.albedo_color = Color("2e2924")
+	door_mat.roughness = 0.78
 	door.set_surface_override_material(0, door_mat)
-	door.position = Vector3(0.0, 2.8, 7.1)
+	door.position = Vector3(0.0, 2.9, 8.55)
 	root.add_child(door)
 
 	var lead := MeshInstance3D.new()
 	var lead_mesh := BoxMesh.new()
-	lead_mesh.size = Vector3(3.0, 0.18, 18.0)
+	lead_mesh.size = Vector3(3.0, 0.18, 22.0)
 	lead.mesh = lead_mesh
 	var lead_mat := StandardMaterial3D.new()
 	lead_mat.albedo_color = Color("5f584c")
 	lead_mat.roughness = 0.95
 	lead.set_surface_override_material(0, lead_mat)
-	lead.position = Vector3(0.0, 0.7, 15.5)
+	lead.position = Vector3(0.0, 0.7, 17.0)
 	root.add_child(lead)
 
 	var depot_sleeper_count := maxi(1, int(floor(18.0 / 1.4)))
@@ -1149,22 +1197,55 @@ func _build_depot_node(pos: Vector3, forward: Vector3) -> Node3D:
 		sleeper_mat.albedo_color = Color("7b6b58")
 		sleeper_mat.roughness = 0.94
 		sleeper.set_surface_override_material(0, sleeper_mat)
-		var sleeper_z := lerpf(7.2, 23.6, (float(sleeper_index) + 0.5) / float(depot_sleeper_count))
+		var sleeper_z := lerpf(8.0, 26.0, (float(sleeper_index) + 0.5) / float(depot_sleeper_count))
 		sleeper.position = Vector3(0.0, 0.82, sleeper_z)
 		root.add_child(sleeper)
 
 	for rail_side in [-1.0, 1.0]:
 		var rail := MeshInstance3D.new()
 		var rail_mesh := BoxMesh.new()
-		rail_mesh.size = Vector3(0.12, 0.22, 18.2)
+		rail_mesh.size = Vector3(0.12, 0.22, 22.2)
 		rail.mesh = rail_mesh
 		var rail_mat := StandardMaterial3D.new()
 		rail_mat.albedo_color = Color("b5aba0")
 		rail_mat.metallic = 0.78
 		rail_mat.roughness = 0.3
 		rail.set_surface_override_material(0, rail_mat)
-		rail.position = Vector3(rail_side * 0.78, 0.86, 15.5)
+		rail.position = Vector3(rail_side * 0.78, 0.86, 17.0)
 		root.add_child(rail)
+
+	for pilaster_side in [-1.0, 1.0]:
+		for z_pos in [-5.0, 0.0, 5.0]:
+			var pilaster := MeshInstance3D.new()
+			var pilaster_mesh := BoxMesh.new()
+			pilaster_mesh.size = Vector3(0.7, 7.8, 0.7)
+			pilaster.mesh = pilaster_mesh
+			pilaster.set_surface_override_material(0, body_mat)
+			pilaster.position = Vector3(pilaster_side * 10.4, 3.9, z_pos)
+			root.add_child(pilaster)
+
+	var fascia := MeshInstance3D.new()
+	var fascia_mesh := BoxMesh.new()
+	fascia_mesh.size = Vector3(22.8, 0.28, 1.0)
+	fascia.mesh = fascia_mesh
+	fascia.set_surface_override_material(0, office_mat)
+	fascia.position = Vector3(0.0, 6.4, 8.45)
+	root.add_child(fascia)
+
+	var sign := Label3D.new()
+	sign.text = "CARHOUSE"
+	sign.font_size = 26
+	sign.modulate = Color(0.96, 0.93, 0.87, 1.0)
+	sign.position = Vector3(0.0, 6.85, 8.8)
+	root.add_child(sign)
+
+	for lamp_side in [-1.0, 1.0]:
+		var lamp := OmniLight3D.new()
+		lamp.light_energy = 0.42
+		lamp.light_color = Color(1.0, 0.94, 0.84)
+		lamp.omni_range = 10.0
+		lamp.position = Vector3(lamp_side * 3.8, 5.1, 8.6)
+		root.add_child(lamp)
 	return root
 
 func _build_signal_node(pos: Vector3, forward: Vector3) -> Node3D:

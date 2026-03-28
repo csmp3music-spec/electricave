@@ -413,12 +413,14 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var timetable_outer_headway_min := 10.0
 @export var timetable_north_headway_min := 5.0
 @export var atlantic_service_car_count := 3
+@export var orange_service_car_count := 7
 @export var washington_service_car_count := 4
 @export var cambridge_service_car_count := 6
 @export var blue_service_car_count := 6
 @export var mattapan_service_car_count := 4
 @export var green_branch_service_car_count := 4
 @export var atlantic_service_headway_min := 4.0
+@export var orange_service_headway_min := 5.5
 @export var washington_service_headway_min := 4.0
 @export var cambridge_service_headway_min := 5.0
 @export var blue_service_headway_min := 5.0
@@ -629,6 +631,7 @@ func _seed_corridor() -> void:
 	_build_blue_line_phase(track_builder)
 	_build_elevated_layer(track_builder)
 	_build_atlantic_avenue_elevated(track_builder)
+	_build_orange_line_elevated(track_builder)
 	_build_washington_street_tunnel(track_builder)
 	_build_cambridge_dorchester_tunnel(track_builder)
 	_build_mattapan_extension(track_builder)
@@ -698,6 +701,7 @@ func _seed_corridor() -> void:
 		town_positions[to_name] = end_pos
 		town_manager.AddTransitStop(end_pos, frequency, to_name, "park")
 	_build_framingham_landmarks(town_positions, track_builder)
+	_build_historic_carhouse_landmarks(town_positions, track_builder)
 	_seeded = true
 
 func _build_mainline_path(points: PackedVector3Array, track_builder: Node) -> Path3D:
@@ -768,15 +772,100 @@ func _build_framingham_landmarks(town_positions: Dictionary, track_builder: Node
 	_add_landmark_label(root, "Framingham Junction", station_house + Vector3(0.0, 5.4, 0.0), -main_forward, 0.75)
 
 	var barn_anchor := junction.lerp(south_framingham, 0.36) + branch_right * 24.0 + Vector3(0.0, 0.2, 0.0)
-	_add_box_with_material(root, Vector3(46.0, 7.4, 19.0), barn_anchor + Vector3(0.0, 3.7, 0.0), branch_forward, brick)
-	_add_box_with_material(root, Vector3(48.5, 0.9, 21.5), barn_anchor + Vector3(0.0, 7.9, 0.0), branch_forward, steel)
-	_add_box_with_material(root, Vector3(44.0, 0.45, 18.5), barn_anchor + Vector3(0.0, 8.85, 0.0), branch_forward, timber)
-	for bay in [-12.0, 0.0, 12.0]:
-		_add_box_with_material(root, Vector3(0.35, 5.2, 4.4), barn_anchor - branch_forward * 9.0 + branch_right * bay + Vector3(0.0, 2.6, 0.0), branch_forward, timber)
-		_add_track_surface_box(root, Vector3(3.0, 0.18, 26.0), barn_anchor - branch_forward * 9.0 + branch_right * bay + Vector3(0.0, 0.12, 0.0), branch_forward)
-		_add_rail_box(root, Vector3(0.14, 0.14, 26.0), barn_anchor - branch_forward * 9.0 + branch_right * (bay - 0.72) + Vector3(0.0, 0.24, 0.0), branch_forward)
-		_add_rail_box(root, Vector3(0.14, 0.14, 26.0), barn_anchor - branch_forward * 9.0 + branch_right * (bay + 0.72) + Vector3(0.0, 0.24, 0.0), branch_forward)
-	_add_landmark_label(root, "Trolley Square Car Barn", barn_anchor + Vector3(0.0, 9.8, 0.0), -branch_forward, 0.95)
+	_add_historic_carhouse(root, "Trolley Square Car Barn", barn_anchor, branch_forward, "framingham")
+
+func _build_historic_carhouse_landmarks(town_positions: Dictionary, track_builder: Node) -> void:
+	var parent := _get_path_parent(track_builder)
+	if parent == null:
+		return
+	var existing := parent.get_node_or_null("HistoricCarhouses")
+	if existing:
+		existing.queue_free()
+	var root := Node3D.new()
+	root.name = "HistoricCarhouses"
+	parent.add_child(root)
+	var watertown_points := _project_geo_points(_green_a_route_geo())
+	if watertown_points.size() >= 2:
+		var watertown_anchor := watertown_points[watertown_points.size() - 1] + Vector3(0.0, 0.2, 0.0)
+		var watertown_forward := (watertown_points[watertown_points.size() - 1] - watertown_points[watertown_points.size() - 2]).normalized()
+		_add_historic_carhouse(root, "Watertown Carhouse", watertown_anchor, watertown_forward, "watertown")
+	var mattapan_points := _project_geo_points(mattapan_geo)
+	if mattapan_points.size() >= 2:
+		var mattapan_anchor := mattapan_points[mattapan_points.size() - 1] + Vector3(0.0, 0.2, 0.0)
+		var mattapan_forward := (mattapan_points[mattapan_points.size() - 1] - mattapan_points[mattapan_points.size() - 2]).normalized()
+		_add_historic_carhouse(root, "Mattapan Carhouse", mattapan_anchor, mattapan_forward, "mattapan")
+	if town_positions.has("Lincoln Square"):
+		var lincoln_square: Vector3 = town_positions.get("Lincoln Square", Vector3.ZERO)
+		var lincoln_forward := direction.normalized()
+		if town_positions.has("Wellesley Center"):
+			lincoln_forward = (lincoln_square - Vector3(town_positions.get("Wellesley Center", lincoln_square))).normalized()
+		_add_historic_carhouse(root, "Worcester Car Barn", lincoln_square + Vector3(0.0, 0.2, 0.0), lincoln_forward, "worcester")
+	var forest_hills_points := _project_geo_points(orange_south_geo)
+	if forest_hills_points.size() >= 2:
+		var forest_hills_anchor := forest_hills_points[forest_hills_points.size() - 1] + Vector3(0.0, 0.2, 0.0)
+		var forest_hills_forward := (forest_hills_points[forest_hills_points.size() - 1] - forest_hills_points[forest_hills_points.size() - 2]).normalized()
+		_add_historic_carhouse(root, "Forest Hills Carhouse", forest_hills_anchor, forest_hills_forward, "forest_hills")
+
+func _add_historic_carhouse(parent: Node3D, label: String, anchor: Vector3, forward: Vector3, style_id: String) -> void:
+	if parent == null:
+		return
+	var spec := _historic_carhouse_spec(style_id)
+	if spec.is_empty():
+		return
+	if forward.length() < 0.01:
+		forward = Vector3.FORWARD
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var brick_material := _ensure_period_material("brick")
+	var plaster_material := _ensure_period_material("plaster")
+	var steel_material := _ensure_period_material("steel_dark", Color(spec.get("steel_color", "645b52")))
+	var timber_material := _ensure_period_material("timber")
+	var hall_center := anchor + right * float(spec.get("side_offset", 18.0)) + forward * float(spec.get("forward_offset", 0.0))
+	var hall_size := Vector3(float(spec.get("hall_x", 48.0)), float(spec.get("hall_y", 8.2)), float(spec.get("hall_z", 22.0)))
+	_add_box_with_material(parent, hall_size, hall_center + Vector3(0.0, hall_size.y * 0.5, 0.0), forward, brick_material if not bool(spec.get("plaster_body", false)) else plaster_material)
+	_add_box_with_material(parent, Vector3(hall_size.x + 2.0, 0.78, hall_size.z + 2.6), hall_center + Vector3(0.0, hall_size.y + 0.44, 0.0), forward, steel_material)
+	_add_box_with_material(parent, Vector3(hall_size.x * 0.52, 0.42, hall_size.z * 0.82), hall_center + Vector3(0.0, hall_size.y + 1.22, 0.0), forward, timber_material)
+	if bool(spec.get("monitor", true)):
+		_add_box_with_material(parent, Vector3(hall_size.x * 0.36, 2.2, hall_size.z * 0.72), hall_center + Vector3(0.0, hall_size.y + 0.9, 0.0), forward, plaster_material)
+	var bay_count := int(spec.get("bay_count", 3))
+	var bay_span := 0.0 if bay_count <= 1 else hall_size.x * 0.64
+	for bay_index in range(bay_count):
+		var t := 0.5 if bay_count <= 1 else float(bay_index) / float(bay_count - 1)
+		var bay_offset := lerpf(-bay_span * 0.5, bay_span * 0.5, t)
+		var portal_center := hall_center - forward * (hall_size.z * 0.5 - 1.8) + right * bay_offset
+		_add_box_with_material(parent, Vector3(0.36, hall_size.y - 2.0, 3.8), portal_center + Vector3(0.0, (hall_size.y - 2.0) * 0.5 - 0.1, 0.0), forward, timber_material)
+		_add_track_surface_box(parent, Vector3(3.0, 0.18, float(spec.get("lead_length", 34.0))), portal_center + forward * 9.0 + Vector3(0.0, 0.12, 0.0), forward)
+		_add_rail_box(parent, Vector3(0.14, 0.14, float(spec.get("lead_length", 34.0))), portal_center + right * -0.72 + forward * 9.0 + Vector3(0.0, 0.24, 0.0), forward)
+		_add_rail_box(parent, Vector3(0.14, 0.14, float(spec.get("lead_length", 34.0))), portal_center + right * 0.72 + forward * 9.0 + Vector3(0.0, 0.24, 0.0), forward)
+	if bool(spec.get("front_office", true)):
+		var office_center := hall_center + right * float(spec.get("office_right", hall_size.x * 0.34)) - forward * float(spec.get("office_forward", hall_size.z * 0.18))
+		var office_size := Vector3(float(spec.get("office_x", 14.0)), float(spec.get("office_y", 5.2)), float(spec.get("office_z", 10.0)))
+		_add_box_with_material(parent, office_size, office_center + Vector3(0.0, office_size.y * 0.5, 0.0), forward, plaster_material if bool(spec.get("office_plaster", true)) else brick_material)
+		_add_box_with_material(parent, Vector3(office_size.x + 1.0, 0.46, office_size.z + 1.0), office_center + Vector3(0.0, office_size.y + 0.24, 0.0), forward, steel_material)
+	if bool(spec.get("roman_arch", false)):
+		_add_box_with_material(parent, Vector3(10.0, 10.8, 8.0), hall_center - forward * (hall_size.z * 0.5 - 4.0) + Vector3(0.0, 5.4, 0.0), forward, brick_material)
+		_add_box(parent, Vector3(6.2, 6.6, 4.2), hall_center - forward * (hall_size.z * 0.5 - 2.8) + Vector3(0.0, 3.0, 0.0), forward, Color("1a1816"))
+	if bool(spec.get("yard_fan", false)):
+		for yard_index in range(3):
+			var fan_t := float(yard_index) / 2.0
+			var fan_right := lerpf(-8.0, 8.0, fan_t)
+			var fan_forward := forward.rotated(Vector3.UP, deg_to_rad(lerpf(-8.0, 8.0, fan_t)))
+			_add_track_surface_box(parent, Vector3(3.0, 0.18, 42.0), hall_center + right * fan_right + forward * 22.0 + Vector3(0.0, 0.12, 0.0), fan_forward)
+	_add_landmark_label(parent, label, hall_center + Vector3(0.0, hall_size.y + 2.6, 0.0), -forward, float(spec.get("label_scale", 0.9)))
+
+func _historic_carhouse_spec(style_id: String) -> Dictionary:
+	match style_id:
+		"framingham":
+			return {"hall_x": 52.0, "hall_y": 8.0, "hall_z": 20.0, "bay_count": 3, "side_offset": 0.0, "lead_length": 28.0, "office_right": 17.0, "office_forward": 3.0, "label_scale": 0.95}
+		"watertown":
+			return {"hall_x": 58.0, "hall_y": 8.4, "hall_z": 24.0, "bay_count": 4, "side_offset": 22.0, "lead_length": 30.0, "office_right": 19.0, "office_forward": 4.0, "label_scale": 0.9}
+		"mattapan":
+			return {"hall_x": 42.0, "hall_y": 7.2, "hall_z": 18.0, "bay_count": 3, "side_offset": 16.0, "lead_length": 24.0, "office_right": 15.0, "office_forward": 2.6, "office_plaster": true, "plaster_body": true, "label_scale": 0.84}
+		"worcester":
+			return {"hall_x": 54.0, "hall_y": 8.8, "hall_z": 24.0, "bay_count": 4, "side_offset": 24.0, "lead_length": 34.0, "office_right": 18.0, "office_forward": 4.0, "roman_arch": true, "label_scale": 0.92}
+		"forest_hills":
+			return {"hall_x": 72.0, "hall_y": 9.2, "hall_z": 26.0, "bay_count": 5, "side_offset": 24.0, "lead_length": 38.0, "office_right": 24.0, "office_forward": 5.0, "yard_fan": true, "label_scale": 0.98}
+		_:
+			return {}
 
 func _add_landmark_label(parent: Node3D, text: String, position: Vector3, forward: Vector3, scale_factor: float = 1.0) -> void:
 	var label := Label3D.new()
@@ -836,6 +925,7 @@ func _service_line_ids_sorted() -> Array[String]:
 		GreenDServiceId,
 		GreenEServiceId,
 		MainLineServiceId,
+		OrangeServiceId,
 		AtlanticServiceId,
 		WashingtonServiceId,
 		CambridgeServiceId,
@@ -926,19 +1016,20 @@ func _build_operational_historical_lines(track_builder: Node, town_manager: Node
 		atlantic_service_car_count,
 		PCCCarScenePath,
 		atlantic_service_headway_min,
-		_corridor_theme("atlantic_elevated").get("line_color", Color("9c8a62")),
+		_corridor_theme("atlantic_elevated").get("line_color", Color("d96a16")),
 		track_builder,
 		town_manager
 	)
+	_build_orange_service_line(track_builder, town_manager)
 	_build_operational_service_line(
 		WashingtonServiceId,
 		"Washington Street Tunnel",
 		_build_historical_subway_service_points(washington_street_geo),
 		washington_street_station_names,
 		washington_service_car_count,
-		WashingtonTunnelTrainScenePath,
+		PCCCarScenePath,
 		washington_service_headway_min,
-		_corridor_theme("washington").get("line_color", Color("c86d2c")),
+		_corridor_theme("washington").get("line_color", Color("d9731f")),
 		track_builder,
 		town_manager
 	)
@@ -1009,6 +1100,8 @@ func _configure_service_line_fleet(line_id: String, fleet: Array[TrolleyMover]) 
 			profile = {"cruise": 12.5, "max": 18.5, "accel": 4.4, "brake": 8.8}
 		GreenEServiceId:
 			profile = {"cruise": 10.8, "max": 16.0, "accel": 4.2, "brake": 8.8}
+		OrangeServiceId:
+			profile = {"cruise": 13.8, "max": 18.8, "accel": 4.7, "brake": 9.0}
 		AtlanticServiceId:
 			profile = {"cruise": 11.0, "max": 15.5, "accel": 4.4, "brake": 8.2}
 		WashingtonServiceId:
@@ -1042,6 +1135,85 @@ func _build_historical_subway_service_points(geo_points: PackedVector2Array) -> 
 	for point in points:
 		tunnel_points.append(_subway_track_point(point))
 	return tunnel_points
+
+func _orange_north_surface_points() -> PackedVector3Array:
+	var points := _project_geo_points(orange_north_geo)
+	var elevated := PackedVector3Array()
+	for point in points:
+		elevated.append(point + Vector3(0.0, orange_elevated_deck_height, 0.0))
+	return elevated
+
+func _orange_south_surface_points() -> PackedVector3Array:
+	var points := _project_geo_points(orange_south_geo)
+	var elevated := PackedVector3Array()
+	for point in points:
+		elevated.append(point + Vector3(0.0, orange_elevated_deck_height, 0.0))
+	return elevated
+
+func _build_orange_service_stop_names() -> PackedStringArray:
+	var names := PackedStringArray()
+	for station_name in orange_north_station_names:
+		names.append(station_name)
+	for station_name in washington_street_station_names:
+		names.append(station_name)
+	for i in range(1, orange_south_station_names.size()):
+		names.append(orange_south_station_names[i])
+	return names
+
+func _build_orange_service_stop_positions() -> PackedVector3Array:
+	var positions := PackedVector3Array()
+	for point in _orange_north_surface_points():
+		positions.append(point)
+	for point in _build_historical_subway_service_points(washington_street_geo):
+		positions.append(point)
+	var south_points := _orange_south_surface_points()
+	for i in range(1, south_points.size()):
+		positions.append(south_points[i])
+	return positions
+
+func _build_orange_service_points() -> PackedVector3Array:
+	var route := PackedVector3Array()
+	var north_points := _orange_north_surface_points()
+	var tunnel_points := _build_historical_subway_service_points(washington_street_geo)
+	var south_points := _orange_south_surface_points()
+	if north_points.size() < 2 or tunnel_points.size() < 2 or south_points.size() < 2:
+		return route
+	for point in north_points:
+		route.append(point)
+	var north_portal_start := north_points[north_points.size() - 1]
+	var north_tunnel_start := tunnel_points[0]
+	route.append(north_portal_start.lerp(north_tunnel_start, 0.28))
+	route.append(north_portal_start.lerp(north_tunnel_start, 0.62))
+	for point in tunnel_points:
+		route.append(point)
+	var south_tunnel_end := tunnel_points[tunnel_points.size() - 1]
+	var south_portal_top := south_points[0]
+	route.append(south_tunnel_end.lerp(south_portal_top, 0.34))
+	route.append(south_tunnel_end.lerp(south_portal_top, 0.68))
+	route.append(south_portal_top)
+	for i in range(1, south_points.size()):
+		route.append(south_points[i])
+	return route
+
+func _build_orange_service_line(track_builder: Node, town_manager: Node) -> void:
+	if not build_orange_line_elevated:
+		return
+	var points := _build_orange_service_points()
+	var stop_names := _build_orange_service_stop_names()
+	var stop_positions := _build_orange_service_stop_positions()
+	_build_operational_service_line(
+		OrangeServiceId,
+		"Orange Line - Sullivan to Forest Hills",
+		points,
+		stop_names,
+		orange_service_car_count,
+		PCCCarScenePath,
+		orange_service_headway_min,
+		_corridor_theme("orange_elevated").get("line_color", Color("d9731f")),
+		track_builder,
+		town_manager,
+		stop_positions
+	)
 
 func _green_trunk_stop_names(shared_stop_count: int) -> PackedStringArray:
 	var names := PackedStringArray()
@@ -1597,6 +1769,7 @@ func _driver_start_point() -> Vector3:
 
 func _attach_trolley_body(trolley: Node3D, car_index: int = 0) -> void:
 	var mount := _get_trolley_visual_root(trolley)
+	var line_id := _line_id_for_trolley(trolley as TrolleyMover if trolley is TrolleyMover else null)
 	for child in mount.get_children():
 		child.queue_free()
 	var scene_path := _scene_path_for_trolley(trolley, car_index)
@@ -1605,6 +1778,7 @@ func _attach_trolley_body(trolley: Node3D, car_index: int = 0) -> void:
 		if scene != null:
 			var model := scene.instantiate()
 			mount.add_child(model)
+			_apply_line_specific_livery(model, line_id)
 			var headlight := OmniLight3D.new()
 			headlight.light_energy = 0.8
 			headlight.light_color = Color(1.0, 0.95, 0.82)
@@ -1680,6 +1854,62 @@ func _attach_trolley_body(trolley: Node3D, car_index: int = 0) -> void:
 	headlight.transform.origin = Vector3(0.0, 1.2, -7.2)
 	mount.add_child(headlight)
 
+func _apply_line_specific_livery(model: Node, line_id: String) -> void:
+	if model == null:
+		return
+	if line_id in [AtlanticServiceId, WashingtonServiceId, OrangeServiceId]:
+		_apply_pcc_line_livery(model, line_id)
+
+func _apply_pcc_line_livery(node: Node, line_id: String) -> void:
+	var palette := {
+		"top": Color("efe3d0"),
+		"accent": Color("d9731f"),
+		"roof": Color("2d2926"),
+		"steel": Color("64605a"),
+		"glass": Color(0.78, 0.87, 0.94, 0.28),
+		"chrome": Color("aaa7a1"),
+		"ad": Color("d7c1a2")
+	}
+	if line_id == AtlanticServiceId:
+		palette = {
+			"top": Color("181614"),
+			"accent": Color("d9731f"),
+			"roof": Color("0f0f0f"),
+			"steel": Color("53504b"),
+			"glass": Color(0.76, 0.84, 0.92, 0.24),
+			"chrome": Color("8d877f"),
+			"ad": Color("32261a")
+		}
+	for child in node.get_children():
+		_apply_pcc_line_livery(child, line_id)
+	if not (node is MeshInstance3D):
+		return
+	var mesh_instance := node as MeshInstance3D
+	if mesh_instance.mesh == null:
+		return
+	for surface_idx in range(mesh_instance.mesh.get_surface_count()):
+		var active_material := mesh_instance.get_active_material(surface_idx)
+		if not (active_material is BaseMaterial3D):
+			continue
+		var base_material := (active_material as BaseMaterial3D).duplicate() as BaseMaterial3D
+		var material_name := base_material.resource_name.to_lower()
+		match material_name:
+			"pcctop":
+				base_material.albedo_color = palette["top"]
+			"pccmid", "pccskirt":
+				base_material.albedo_color = palette["accent"]
+			"pccroof", "pccgray", "pccbumper", "under", "pccgasket", "pccsign":
+				base_material.albedo_color = palette["roof"] if material_name != "pccgray" else palette["steel"]
+			"pccchrome", "rim", "rim2", "pccspot", "pcchlight":
+				base_material.albedo_color = palette["chrome"]
+			"pccglass":
+				base_material.albedo_color = palette["glass"]
+				base_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				base_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			"pccad1", "pccad2", "pccad3", "pccad4":
+				base_material.albedo_color = palette["ad"]
+		mesh_instance.set_surface_override_material(surface_idx, base_material)
+
 func cycle_player_trolley_type() -> void:
 	var scene_paths := _valid_trolley_scene_paths()
 	if scene_paths.size() < 2:
@@ -1733,8 +1963,8 @@ func set_active_service_line(line_id: String) -> bool:
 		if trolley == null or not is_instance_valid(trolley):
 			continue
 		_activate_service_line(line_id)
-			_set_driver_trolley(trolley, fleet_index)
-			return true
+		_set_driver_trolley(trolley, fleet_index)
+		return true
 	return false
 
 func _route_stop_named(route_stops: Array, stop_name: String) -> Dictionary:
@@ -2233,7 +2463,7 @@ func _valid_trolley_scene_paths() -> Array[String]:
 			if not ResourceLoader.exists(scene_path):
 				continue
 			if scene_paths.has(scene_path):
-			continue
+				continue
 			scene_paths.append(scene_path)
 	return scene_paths
 
@@ -2251,12 +2481,8 @@ func _preferred_scene_path_for_line(line_id: String) -> String:
 	match line_id:
 		GreenAServiceId, GreenBServiceId, GreenCServiceId, GreenDServiceId, MainLineServiceId:
 			return Type5CarScenePath
-		GreenEServiceId, MattapanServiceId:
+		GreenEServiceId, MattapanServiceId, OrangeServiceId, AtlanticServiceId, WashingtonServiceId:
 			return PCCCarScenePath
-		AtlanticServiceId:
-			return AtlanticElCarScenePath
-		WashingtonServiceId:
-			return WashingtonTunnelTrainScenePath
 		CambridgeServiceId:
 			return CambridgeDorchesterCarScenePath
 		BlueServiceId:
@@ -2974,7 +3200,18 @@ func _update_line_snow_depth(delta: float) -> void:
 		_line_snow_depth[line_id] = clampf(depth, 0.0, 1.0)
 
 func _snow_exposed_line_ids() -> Array[String]:
-	return [MainLineServiceId, AtlanticServiceId, BlueServiceId, MattapanServiceId]
+	return [
+		MainLineServiceId,
+		GreenAServiceId,
+		GreenBServiceId,
+		GreenCServiceId,
+		GreenDServiceId,
+		GreenEServiceId,
+		OrangeServiceId,
+		AtlanticServiceId,
+		BlueServiceId,
+		MattapanServiceId
+	]
 
 func _is_line_weather_closed(line_id: String) -> bool:
 	if line_id == "" or _weather_controller == null or not is_instance_valid(_weather_controller):
@@ -3197,7 +3434,7 @@ func _check_driver_curve_derailment(delta: float) -> void:
 		return
 	var overspeed_mps := actual_speed_mps - safe_speed_mps
 	var overspeed_ratio := actual_speed_mps / maxf(1.0, safe_speed_mps)
-	var required_overspeed := maxf(derail_speed_margin_mps, derail_min_excess_mps, safe_speed_mps * 0.24)
+	var required_overspeed := maxf(maxf(derail_speed_margin_mps, derail_min_excess_mps), safe_speed_mps * 0.24)
 	if braking:
 		required_overspeed += 0.8
 	if overspeed_mps <= required_overspeed or overspeed_ratio <= derail_speed_ratio_threshold:
@@ -3747,6 +3984,63 @@ func _build_atlantic_avenue_elevated(track_builder: Node) -> void:
 	for i in range(min(points.size(), atlantic_elevated_station_names.size())):
 		_add_historical_elevated_station(station_root, points[i], _station_forward(points, i), atlantic_elevated_station_names[i], atlantic_elevated_deck_height, "atlantic_elevated")
 
+func _build_orange_line_elevated(track_builder: Node) -> void:
+	if not build_orange_line_elevated:
+		return
+	var parent := _get_path_parent(track_builder)
+	if parent == null:
+		return
+	var existing := parent.get_node_or_null(orange_line_root_name)
+	if existing:
+		existing.queue_free()
+	var north_surface_points := _project_geo_points(orange_north_geo)
+	var south_surface_points := _project_geo_points(orange_south_geo)
+	if north_surface_points.size() < 2 or south_surface_points.size() < 2:
+		return
+	var root := Node3D.new()
+	root.name = orange_line_root_name
+	parent.add_child(root)
+	var north_segment_root := _make_subway_section(root, "NorthSegments")
+	var south_segment_root := _make_subway_section(root, "SouthSegments")
+	var station_root := _make_subway_section(root, "Stations")
+	var connector_root := _make_subway_section(root, "Connectors")
+	for i in range(north_surface_points.size() - 1):
+		_add_historical_elevated_segment(north_segment_root, north_surface_points[i], north_surface_points[i + 1], orange_elevated_deck_height, "orange_elevated")
+	for i in range(south_surface_points.size() - 1):
+		_add_historical_elevated_segment(south_segment_root, south_surface_points[i], south_surface_points[i + 1], orange_elevated_deck_height, "orange_elevated")
+	for i in range(min(north_surface_points.size(), orange_north_station_names.size())):
+		_add_orange_elevated_station(station_root, north_surface_points[i], _station_forward(north_surface_points, i), orange_north_station_names[i])
+	for i in range(min(south_surface_points.size(), orange_south_station_names.size())):
+		_add_orange_elevated_station(station_root, south_surface_points[i], _station_forward(south_surface_points, i), orange_south_station_names[i])
+	var washington_points := _build_historical_subway_service_points(washington_street_geo)
+	if washington_points.size() >= 2:
+		_build_orange_tunnel_portal(connector_root, washington_points[0], north_surface_points[north_surface_points.size() - 1] + Vector3(0.0, orange_elevated_deck_height, 0.0))
+		_build_orange_tunnel_portal(connector_root, washington_points[washington_points.size() - 1], south_surface_points[0] + Vector3(0.0, orange_elevated_deck_height, 0.0))
+	var atlantic_points := _build_atlantic_service_points()
+	if atlantic_points.size() >= 2:
+		_build_orange_atlantic_connector(connector_root, atlantic_points[atlantic_points.size() - 1], south_surface_points[0] + Vector3(0.0, orange_elevated_deck_height, 0.0))
+
+func _build_orange_tunnel_portal(parent: Node3D, tunnel_point: Vector3, elevated_point: Vector3) -> void:
+	var p1 := tunnel_point.lerp(elevated_point, 0.28)
+	var p2 := tunnel_point.lerp(elevated_point, 0.62)
+	_add_portal_section(parent, tunnel_point, p1, 14.0, 5.6, true)
+	_add_portal_section(parent, p1, p2, 14.4, 4.7, true)
+	_add_portal_section(parent, p2, elevated_point, 15.0, 3.6, false)
+	var forward := (elevated_point - tunnel_point).normalized()
+	if forward.length() < 0.01:
+		return
+	_add_box(parent, Vector3(13.8, 5.2, 1.3), elevated_point - forward * 1.8 + Vector3(0.0, 1.6, 0.0), forward, Color("7f7467"))
+	_add_box(parent, Vector3(14.6, 0.62, 4.0), elevated_point - forward * 3.6 + Vector3(0.0, 4.1, 0.0), forward, Color("2d2823"))
+
+func _build_orange_atlantic_connector(parent: Node3D, atlantic_beach_point: Vector3, orange_dover_point: Vector3) -> void:
+	var chord := orange_dover_point - atlantic_beach_point
+	if chord.length() < 1.0:
+		return
+	var right := Vector3(-chord.z, 0.0, chord.x).normalized()
+	var mid := atlantic_beach_point.lerp(orange_dover_point, 0.5) + right * 8.0
+	_add_historical_elevated_segment(parent, atlantic_beach_point, mid, atlantic_elevated_deck_height, "atlantic_elevated")
+	_add_historical_elevated_segment(parent, mid, orange_dover_point, orange_elevated_deck_height, "orange_elevated")
+
 func _build_washington_street_tunnel(track_builder: Node) -> void:
 	_build_historical_subway_line(track_builder, washington_street_root_name, washington_street_geo, washington_street_station_names, "washington")
 
@@ -3877,6 +4171,47 @@ func _add_historical_elevated_station(parent: Node3D, point: Vector3, forward: V
 	label.modulate = sign_text_color
 	label.position = center + Vector3(0.0, 5.5, 0.0)
 	parent.add_child(label)
+
+func _add_orange_elevated_station(parent: Node3D, point: Vector3, forward: Vector3, station_name: String) -> void:
+	_add_historical_elevated_station(parent, point, forward, station_name, orange_elevated_deck_height, "orange_elevated")
+	if station_name == "Sullivan Square":
+		_add_sullivan_square_terminal(parent, point, forward)
+	elif station_name == "Forest Hills":
+		_add_forest_hills_terminal(parent, point, forward)
+
+func _add_sullivan_square_terminal(parent: Node3D, point: Vector3, forward: Vector3) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var center := point + Vector3(0.0, orange_elevated_deck_height, 0.0)
+	var steel_material := _ensure_period_material("steel_dark", Color("26211c"))
+	var brick_material := _ensure_period_material("brick")
+	var timber_material := _ensure_period_material("timber")
+	var glass_material := StandardMaterial3D.new()
+	glass_material.albedo_color = Color(0.84, 0.91, 0.94, 0.34)
+	glass_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass_material.roughness = 0.06
+	glass_material.metallic = 0.02
+	glass_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_add_box_with_material(parent, Vector3(26.0, 0.54, 50.0), center + Vector3(0.0, 0.26, 0.0), forward, steel_material)
+	_add_box_with_material(parent, Vector3(18.0, 7.4, 18.0), center + Vector3(0.0, 5.0, 0.0), forward, brick_material)
+	_add_box_with_material(parent, Vector3(24.0, 0.32, 34.0), center + Vector3(0.0, 8.6, 0.0), forward, steel_material)
+	_add_box_with_material(parent, Vector3(21.0, 4.8, 30.0), center + Vector3(0.0, 6.0, 0.0), forward, glass_material)
+	_add_box_with_material(parent, Vector3(10.0, 5.8, 10.0), center + right * 10.0 + forward * 11.0 + Vector3(0.0, 5.2, 0.0), forward.rotated(Vector3.UP, deg_to_rad(32.0)), brick_material)
+	_add_box_with_material(parent, Vector3(10.0, 5.8, 10.0), center - right * 10.0 + forward * 11.0 + Vector3(0.0, 5.2, 0.0), forward.rotated(Vector3.UP, deg_to_rad(-32.0)), brick_material)
+	_add_box_with_material(parent, Vector3(12.0, orange_elevated_deck_height, 6.0), point + right * 13.5 + forward * 4.0 + Vector3(0.0, orange_elevated_deck_height * 0.5, 0.0), forward, brick_material)
+	_add_box_with_material(parent, Vector3(12.0, orange_elevated_deck_height, 6.0), point - right * 13.5 + forward * 4.0 + Vector3(0.0, orange_elevated_deck_height * 0.5, 0.0), forward, brick_material)
+	for side in [-1.0, 1.0]:
+		_add_box_with_material(parent, Vector3(0.28, 7.2, 28.0), center + right * side * 10.2 + Vector3(0.0, 5.8, 0.0), forward, timber_material)
+
+func _add_forest_hills_terminal(parent: Node3D, point: Vector3, forward: Vector3) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var center := point + Vector3(0.0, orange_elevated_deck_height, 0.0)
+	var brick_material := _ensure_period_material("brick")
+	var steel_material := _ensure_period_material("steel_dark", Color("2b2520"))
+	var plaster_material := _ensure_period_material("plaster")
+	_add_box_with_material(parent, Vector3(14.0, 7.0, 18.0), center + right * 11.2 + Vector3(0.0, 4.4, 0.0), forward, brick_material)
+	_add_box_with_material(parent, Vector3(11.0, 0.48, 20.0), center + right * 11.2 + Vector3(0.0, 8.1, 0.0), forward, steel_material)
+	_add_box_with_material(parent, Vector3(8.4, 4.8, 9.2), center + right * 15.4 - forward * 9.0 + Vector3(0.0, 2.8, 0.0), forward, plaster_material)
+	_add_box_with_material(parent, Vector3(9.2, 0.42, 10.0), center + right * 15.4 - forward * 9.0 + Vector3(0.0, 5.4, 0.0), forward, steel_material)
 
 func _build_subway_design(stop_points: PackedVector3Array, _route_points: PackedVector3Array, track_builder: Node) -> void:
 	if not build_subway_design:
@@ -5269,8 +5604,8 @@ func _corridor_theme(style_id: String) -> Dictionary:
 	match style_id:
 		"washington":
 			return {
-				"line_color": Color("c86d2c"),
-				"sign_bg": Color("eee2c5"),
+				"line_color": Color("d9731f"),
+				"sign_bg": Color("f3e6cf"),
 				"sign_text": Color("30251d"),
 				"surface_material": "cobble",
 				"wall_material": "plaster",
@@ -5280,6 +5615,20 @@ func _corridor_theme(style_id: String) -> Dictionary:
 				"roof_material": "steel_dark",
 				"trim_color": Color("5c4838"),
 				"steel_color": Color("61574d")
+			}
+		"orange_elevated":
+			return {
+				"line_color": Color("d9731f"),
+				"sign_bg": Color("f2e5cf"),
+				"sign_text": Color("261910"),
+				"surface_material": "timber",
+				"wall_material": "plaster",
+				"tile_material": "tile",
+				"platform_material": "timber",
+				"headhouse_material": "brick",
+				"roof_material": "steel_dark",
+				"trim_color": Color("e28532"),
+				"steel_color": Color("27221d")
 			}
 		"cambridge":
 			return {
@@ -5455,7 +5804,7 @@ func _add_tunnel_shell(parent: Node3D, center: Vector3, forward: Vector3, right:
 		_add_box_with_material(parent, Vector3(0.14, clear_height - 0.6, length - 0.8), center + right * side * (width * 0.5 - subway_wall_thickness - 0.07) + Vector3(0.0, 0.1, 0.0), forward, wall_material)
 		_add_box(parent, Vector3(0.16, 0.14, length - 1.0), center + right * side * (width * 0.5 - subway_wall_thickness - 0.09) + Vector3(0.0, 1.26, 0.0), forward, trim_color)
 
-func _add_station_shell(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, style_id: String = "tremont", _station_name: String = "") -> void:
+func _add_station_shell(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, _spec: Dictionary = {}, _tracks: int = 2, style_id: String = "tremont", _station_name: String = "") -> void:
 	var clear_height := subway_tunnel_height + 1.0
 	var floor_y := center.y - 2.35
 	var roof_y := floor_y + clear_height
