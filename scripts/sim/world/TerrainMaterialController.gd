@@ -124,11 +124,11 @@ func _apply_weather_to_shader() -> void:
 		_shader_material = material_override as ShaderMaterial
 	if _shader_material == null:
 		return
-	var rain_wetness := 0.0
-	if bool(_weather_payload.get("rain_active", false)):
-		rain_wetness = float(_weather_payload.get("intensity", 0.0))
-	var snow_cover := 0.0
-	if bool(_weather_payload.get("snow_active", false)):
+	var rain_wetness := clampf(float(_weather_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
+	if rain_wetness <= 0.01 and bool(_weather_payload.get("rain_active", false)):
+		rain_wetness = clampf(float(_weather_payload.get("intensity", 0.0)), 0.0, 1.0)
+	var snow_cover := clampf(float(_weather_payload.get("snow_cover", 0.0)), 0.0, 1.0)
+	if snow_cover <= 0.01 and bool(_weather_payload.get("snow_active", false)):
 		snow_cover = clampf(float(_weather_payload.get("intensity", 0.0)) * 0.9, 0.0, 1.0)
 	_shader_material.set_shader_parameter("rain_wetness", rain_wetness)
 	_shader_material.set_shader_parameter("snow_cover", snow_cover)

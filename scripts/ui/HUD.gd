@@ -4,6 +4,7 @@ class_name HUD
 const ClassicThemeScript := preload("res://scripts/ui/ClassicTheme.gd")
 const FinanceHistoryGraphScript := preload("res://scripts/ui/FinanceHistoryGraph.gd")
 const SystemMapPanelScript := preload("res://scripts/ui/SystemMapPanel.gd")
+const AnalogCabDashboardScript := preload("res://scripts/ui/AnalogCabDashboard.gd")
 
 const TAB_DATA := {
 	"Overview": {
@@ -69,6 +70,15 @@ const TOOL_BUTTON_LABELS := [
 	"Growth", "Cam", "Map", "Speed", "Pause", "Help"
 ]
 
+func _resolve_main_scene() -> Node:
+	var current := get_tree().get_current_scene()
+	if current != null:
+		return current
+	var root := get_tree().root
+	if root != null and root.get_child_count() > 0:
+		return root.get_child(root.get_child_count() - 1)
+	return self
+
 @onready var finance_window: PanelContainer = $FinanceWindow
 @onready var finance_rows := $FinanceWindow/FinanceMargin/FinanceContent/TablePanel/TableMargin/TableContent/RowsScroll/Rows.get_children()
 @onready var finance_summary_rows := $FinanceWindow/FinanceMargin/FinanceContent/SummaryPanel/SummaryMargin/SummaryContent/SummaryRows.get_children()
@@ -96,14 +106,14 @@ const TOOL_BUTTON_LABELS := [
 @onready var signal_yellow_lamp: Panel = $BottomBar/BottomMargin/BottomContent/StatusPanel/StatusContent/SignalHead/YellowLamp
 @onready var signal_green_lamp: Panel = $BottomBar/BottomMargin/BottomContent/StatusPanel/StatusContent/SignalHead/GreenLamp
 @onready var signal_line_label: Label = $BottomBar/BottomMargin/BottomContent/StatusPanel/StatusContent/SignalLine
-@onready var _main_scene: Node = get_tree().get_current_scene()
-@onready var _camera_rig: Node = _main_scene.get_node_or_null("WorldRoot/CameraRig")
-@onready var _overlay: Node = _main_scene.get_node_or_null("OverlayCanvas/HistoricOverlay")
-@onready var _stop_placer: Node = _main_scene.get_node_or_null("WorldRoot/StopPlacer")
-@onready var _corridor: Node = _main_scene.get_node_or_null("WorldRoot/CorridorSeed")
-@onready var _towns: Node = _main_scene.get_node_or_null("WorldRoot/TownGrowthManager")
-@onready var _economy: Node = _main_scene.get_node_or_null("WorldRoot/Economy")
-@onready var _time_controller: Node = _main_scene.get_node_or_null("WorldRoot/TimeOfDay")
+@onready var _main_scene: Node = _resolve_main_scene()
+@onready var _camera_rig: Node = _main_scene.get_node_or_null("WorldRoot/CameraRig") if _main_scene != null else null
+@onready var _overlay: Node = _main_scene.get_node_or_null("OverlayCanvas/HistoricOverlay") if _main_scene != null else null
+@onready var _stop_placer: Node = _main_scene.get_node_or_null("WorldRoot/StopPlacer") if _main_scene != null else null
+@onready var _corridor: Node = _main_scene.get_node_or_null("WorldRoot/CorridorSeed") if _main_scene != null else null
+@onready var _towns: Node = _main_scene.get_node_or_null("WorldRoot/TownGrowthManager") if _main_scene != null else null
+@onready var _economy: Node = _main_scene.get_node_or_null("WorldRoot/Economy") if _main_scene != null else null
+@onready var _time_controller: Node = _main_scene.get_node_or_null("WorldRoot/TimeOfDay") if _main_scene != null else null
 var _current_tab := "Overview"
 var _system_map_panel: Control
 var _finance_graph_panel: PanelContainer
@@ -124,12 +134,15 @@ var _line_selector_option: OptionButton
 var _manual_control_toggle: CheckButton
 var _line_selector_ids: Array[String] = []
 var _line_selector_syncing := false
+var _driver_dashboard_panel: PanelContainer
+var _driver_dashboard: Control
 
 func _ready() -> void:
 	theme = ClassicThemeScript.build_theme()
 	_ensure_finance_graph_panel()
 	_ensure_timetable_window()
 	_ensure_line_selector_panel()
+	_ensure_driver_dashboard()
 	_style_controls()
 	_ensure_system_map_panel()
 	_bind_signals()
@@ -150,6 +163,7 @@ func _process(_delta: float) -> void:
 	_update_status_panel()
 	_update_build_panel()
 	_update_announcement_banner()
+	_update_driver_dashboard()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_routes"):
@@ -241,6 +255,8 @@ func _style_controls() -> void:
 		_apply_button_style(_line_selector_option, wood_dark, brass, wood_light)
 	if _manual_control_toggle != null:
 		_apply_button_style(_manual_control_toggle, wood_dark, brass, wood_light)
+	if _driver_dashboard_panel != null:
+		_driver_dashboard_panel.add_theme_stylebox_override("panel", wood_panel)
 
 func _make_panel(bg: Color, border: Color, border_w: int, radius: int, shadow: Color, shadow_size: int) -> StyleBoxFlat:
 	var panel := StyleBoxFlat.new()
@@ -563,6 +579,28 @@ func _refresh_line_selector_panel() -> void:
 		var manual_enabled := bool(_corridor.call("is_driver_manual_control_enabled"))
 		_manual_control_toggle.set_pressed_no_signal(manual_enabled)
 		_manual_control_toggle.text = "Manual" if manual_enabled else "Auto stops"
+
+func _ensure_driver_dashboard() -> void:
+	if _driver_dashboard_panel != null and is_instance_valid(_driver_dashboard_panel):
+		return
+	_driver_dashboard_panel = PanelContainer.new()
+	_driver_dashboard_panel.name = "DriverDashboardPanel"
+	_driver_dashboard_panel.visible = false
+	_driver_dashboard_panel.anchor_left = 0.018
+	_driver_dashboard_panel.anchor_top = 0.73
+	_driver_dashboard_panel.anchor_right = 0.38
+	_driver_dashboard_panel.anchor_bottom = 0.985
+	add_child(_driver_dashboard_panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	_driver_dashboard_panel.add_child(margin)
+	_driver_dashboard = AnalogCabDashboardScript.new()
+	_driver_dashboard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_driver_dashboard.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(_driver_dashboard)
 
 func _on_line_selector_selected(index: int) -> void:
 	if _line_selector_syncing:
@@ -1067,6 +1105,20 @@ func _update_status_panel() -> void:
 	_apply_signal_head(signal_aspect)
 	signal_line_label.text = signal_text
 	signal_line_label.modulate = signal_color
+
+func _update_driver_dashboard() -> void:
+	if _driver_dashboard_panel == null or _driver_dashboard == null:
+		return
+	if _corridor == null or not _corridor.has_method("get_driver_hud_status"):
+		_driver_dashboard_panel.visible = false
+		return
+	var payload: Dictionary = _corridor.call("get_driver_hud_status")
+	var active := bool(payload.get("active", false))
+	_driver_dashboard_panel.visible = active
+	if not active:
+		return
+	if _driver_dashboard.has_method("set_payload"):
+		_driver_dashboard.call("set_payload", payload)
 
 func _update_build_panel() -> void:
 	if build_mode_panel == null or build_info_label == null or build_hint_label == null:

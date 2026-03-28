@@ -319,8 +319,12 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var signal_caution_distance_m := 140.0
 @export var signal_stop_distance_m := 60.0
 @export var collision_distance_m := 9.0
-@export var derail_curve_radius_threshold_m := 110.0
-@export var derail_speed_margin_mps := 2.2
+@export var derail_curve_radius_threshold_m := 72.0
+@export var derail_speed_margin_mps := 4.8
+@export var derail_overspeed_hold_seconds := 1.25
+@export var derail_min_excess_mps := 2.4
+@export var derail_speed_ratio_threshold := 1.24
+@export var derail_min_speed_mps := 8.5
 @export var incident_service_penalty := 10.0
 @export var station_arrival_radius_m := 72.0
 @export var driver_service_stop_speed_threshold_mps := 2.2
@@ -501,6 +505,8 @@ var _driver_manual_control_enabled := true
 var _weather_payload := {}
 var _snow_plows := {}
 var _line_snow_cleared := {}
+var _line_snow_depth := {}
+var _driver_curve_overspeed_s := 0.0
 
 func _ready() -> void:
 	if main_camera_path != NodePath(""):
@@ -2183,6 +2189,115 @@ func get_driver_incident_status() -> Dictionary:
 		return _driver_trolley.call("get_failure_payload")
 	return {"active": false}
 
+func get_driver_hud_status() -> Dictionary:
+	var speed_mps := 0.0
+	var target_speed_mps := 0.0
+	if _driver_trolley != null and is_instance_valid(_driver_trolley):
+		speed_mps = absf(_driver_trolley.speed_mps)
+		target_speed_mps = absf(_driver_trolley.target_speed_mps)
+	var station_payload := get_driver_station_status()
+	var signal_payload := get_driver_signal_status()
+	var service_payload := get_driver_service_status()
+	var current_name := String(station_payload.get("current", ""))
+	var next_name := String(station_payload.get("next", ""))
+	var route_text := "Route settling"
+	if current_name != "" and next_name != "":
+		route_text = "%s to %s" % [current_name, next_name]
+	elif next_name != "":
+		route_text = "Approaching %s" % next_name
+	elif current_name != "":
+		route_text = "Standing at %s" % current_name
+	var speed_limit_mps := _line_speed_limit_mps(_driver_line_id)
+	if not is_finite(speed_limit_mps):
+		speed_limit_mps = maxf(trolley_max_speed_mps, 22.0)
+	var weather_text := String(_weather_payload.get("hud_text", "Weather: Clear"))
+	var drive_payload: Dictionary = service_payload.get("drive", {})
+	var curve_payload := _driver_curve_warning_payload()
+	var weather_lamp_payload := _driver_weather_lamp_payload()
+	var braking := bool(drive_payload.get("braking", false))
+	var stop_distance_m := float(station_payload.get("distance_m", -1.0))
+	var brake_ratio := 0.88 if braking else 0.18
+	var control_text := "%s | %s" % [
+		"Manual controller" if _driver_manual_control_enabled else "Automatic block control",
+		"Brake applied" if braking else _driver_dashboard_notch_text(drive_payload)
+	]
+	return {
+		"active": _driver_active,
+		"speed_mph": speed_mps * 2.23694,
+		"target_speed_mph": target_speed_mps * 2.23694,
+		"speed_limit_mph": speed_limit_mps * 2.23694,
+		"signal_aspect": String(signal_payload.get("aspect", "GREEN")),
+		"signal_text": "Signal %s" % String(signal_payload.get("message", "Proceed")),
+		"line_name": String(service_payload.get("line_name", line_name)),
+		"route_text": route_text,
+		"control_text": control_text,
+		"weather_text": weather_text,
+		"stop_distance_m": stop_distance_m,
+		"onboard": int(station_payload.get("onboard", _driver_onboard_passengers)),
+		"capacity": int(station_payload.get("capacity", driver_passenger_capacity)),
+		"manual_enabled": _driver_manual_control_enabled,
+		"power_notch": int(drive_payload.get("power_notch", 0)),
+		"controller_ratio": _driver_dashboard_controller_ratio(drive_payload),
+		"brake_ratio": brake_ratio,
+		"service_rating": _driver_service_rating,
+		"curve_lamp": String(curve_payload.get("lamp", "OFF")),
+		"curve_text": String(curve_payload.get("text", "Track steady")),
+		"curve_level": float(curve_payload.get("level", 0.0)),
+		"weather_lamp": String(weather_lamp_payload.get("lamp", "OFF")),
+		"weather_signal_text": String(weather_lamp_payload.get("text", weather_text))
+	}
+
+func _driver_dashboard_notch_text(drive_payload: Dictionary) -> String:
+	var power_notch := int(drive_payload.get("power_notch", 0))
+	if power_notch > 0:
+		return "Power notch %d" % power_notch
+	if power_notch < 0:
+		return "Reverse notch %d" % abs(power_notch)
+	return "Controller in coast"
+
+func _driver_dashboard_controller_ratio(drive_payload: Dictionary) -> float:
+	var power_notch := int(drive_payload.get("power_notch", 0))
+	if power_notch > 0:
+		var forward_notches := maxi(1, int(drive_payload.get("forward_notches", 1)))
+		return clampf(float(power_notch) / float(forward_notches), 0.0, 1.0)
+	if power_notch < 0:
+		var reverse_notches := maxi(1, int(drive_payload.get("reverse_notches", 1)))
+		return -clampf(float(abs(power_notch)) / float(reverse_notches), 0.0, 1.0)
+	return 0.0
+
+func _driver_curve_warning_payload() -> Dictionary:
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley) or not _driver_trolley.has_method("get_curve_dynamics"):
+		return {"lamp": "OFF", "text": "Track steady", "level": 0.0}
+	var payload: Dictionary = _driver_trolley.call("get_curve_dynamics")
+	var radius_m := float(payload.get("radius_m", INF))
+	var safe_speed_mps := float(payload.get("safe_speed_mps", trolley_max_speed_mps))
+	var turn_angle_deg := float(payload.get("turn_angle_deg", 0.0))
+	var actual_speed_mps := absf(_driver_trolley.speed_mps)
+	if not is_finite(radius_m) or radius_m > derail_curve_radius_threshold_m * 1.8 or turn_angle_deg < 4.5:
+		return {"lamp": "OFF", "text": "Track steady", "level": 0.0}
+	var overspeed_mps := actual_speed_mps - safe_speed_mps
+	var caution_speed_mps := maxf(0.0, safe_speed_mps - 0.9)
+	var level := clampf((actual_speed_mps - caution_speed_mps) / maxf(1.0, derail_speed_margin_mps + 1.6), 0.0, 1.0)
+	if overspeed_mps > maxf(derail_speed_margin_mps * 0.8, derail_min_excess_mps):
+		return {"lamp": "RED", "text": "Severe curve overspeed", "level": level}
+	if actual_speed_mps > caution_speed_mps:
+		return {"lamp": "YELLOW", "text": "Ease off for curve", "level": maxf(0.2, level)}
+	return {"lamp": "GREEN", "text": "Curve ahead", "level": level * 0.45}
+
+func _driver_weather_lamp_payload() -> Dictionary:
+	var storminess := float(_weather_payload.get("storminess", 0.0))
+	var wetness := float(_weather_payload.get("surface_wetness", 0.0))
+	var snow_cover := float(_weather_payload.get("snow_cover", 0.0))
+	var alert_names_variant: Variant = _weather_payload.get("alert_names", [])
+	var alert_names: Array = alert_names_variant if alert_names_variant is Array else []
+	if not alert_names.is_empty() or storminess >= 0.82:
+		return {"lamp": "RED", "text": "Storm order active"}
+	if snow_cover >= 0.18:
+		return {"lamp": "YELLOW", "text": "Snow on the rail"}
+	if wetness >= 0.45 or storminess >= 0.48:
+		return {"lamp": "YELLOW", "text": "Wet rail"}
+	return {"lamp": "OFF", "text": "Weather steady"}
+
 func get_weather_status() -> Dictionary:
 	if _weather_controller != null and is_instance_valid(_weather_controller) and _weather_controller.has_method("get_weather_payload"):
 		_weather_payload = _weather_controller.call("get_weather_payload")
@@ -2410,12 +2525,16 @@ func _update_weather_gameplay(delta: float) -> void:
 		_resolve_gameplay_dependencies()
 	if _weather_controller != null and _weather_controller.has_method("get_weather_payload"):
 		_weather_payload = _weather_controller.call("get_weather_payload")
-	if bool(_weather_payload.get("snow_active", false)):
+	var snow_present := bool(_weather_payload.get("snow_active", false)) or float(_weather_payload.get("snow_cover", 0.0)) > 0.02
+	if snow_present:
 		_prepare_snow_operations()
+		_update_line_snow_depth(delta)
 		_update_snow_plows(delta)
 	else:
 		_clear_snow_plows()
 		_line_snow_cleared.clear()
+		_line_snow_depth.clear()
+	_sync_track_weather_state()
 	if _driver_trolley != null and is_instance_valid(_driver_trolley):
 		if _is_line_weather_closed(_driver_line_id):
 			_driver_trolley.target_speed_mps = move_toward(_driver_trolley.target_speed_mps, 0.0, 18.0 * delta)
@@ -2426,9 +2545,26 @@ func _update_weather_gameplay(delta: float) -> void:
 				_enforce_trolley_speed_limit(_driver_trolley, speed_limit, delta)
 
 func _prepare_snow_operations() -> void:
+	var seed_depth := clampf(float(_weather_payload.get("snow_cover", 0.0)) * 0.82 + float(_weather_payload.get("intensity", 0.0)) * 0.22, 0.0, 1.0)
 	for line_id in _snow_exposed_line_ids():
 		if not _line_snow_cleared.has(line_id):
 			_line_snow_cleared[line_id] = false
+		if not _line_snow_depth.has(line_id):
+			_line_snow_depth[line_id] = seed_depth
+
+func _update_line_snow_depth(delta: float) -> void:
+	var snowing := bool(_weather_payload.get("snow_active", false))
+	var target_depth := clampf(float(_weather_payload.get("snow_cover", 0.0)) * 0.84 + float(_weather_payload.get("intensity", 0.0)) * 0.26, 0.0, 1.0)
+	for line_id in _snow_exposed_line_ids():
+		var depth := float(_line_snow_depth.get(line_id, 0.0))
+		if snowing:
+			depth = move_toward(depth, maxf(0.22, target_depth), delta * (0.05 + float(_weather_payload.get("intensity", 0.0)) * 0.11))
+			_line_snow_cleared[line_id] = false
+		elif bool(_line_snow_cleared.get(line_id, false)):
+			depth = move_toward(depth, 0.0, delta * 0.22)
+		else:
+			depth = move_toward(depth, target_depth * 0.35, delta * 0.08)
+		_line_snow_depth[line_id] = clampf(depth, 0.0, 1.0)
 
 func _snow_exposed_line_ids() -> Array[String]:
 	return [MainLineServiceId, AtlanticServiceId, BlueServiceId, MattapanServiceId]
@@ -2450,13 +2586,14 @@ func _line_weather_closure_reason(line_id: String) -> String:
 	return "%s closed by weather" % String(_service_line_entry(line_id).get("name", line_id))
 
 func _line_speed_limit_mps(line_id: String) -> float:
-	if not bool(_weather_payload.get("snow_active", false)):
+	if float(_line_snow_depth.get(line_id, 0.0)) <= 0.08:
 		return INF
 	if not _snow_exposed_line_ids().has(line_id):
 		return INF
 	if bool(_line_snow_cleared.get(line_id, false)):
 		return INF
-	return snow_speed_limit_mps
+	var snow_depth := float(_line_snow_depth.get(line_id, 0.0))
+	return lerpf(maxf(snow_speed_limit_mps, trolley_speed_mps * 0.7), snow_speed_limit_mps, clampf(snow_depth, 0.0, 1.0))
 
 func _enforce_trolley_speed_limit(trolley: TrolleyMover, speed_limit_mps: float, delta: float) -> void:
 	if trolley == null or not is_instance_valid(trolley) or speed_limit_mps >= INF:
@@ -2481,10 +2618,25 @@ func _update_snow_plows(delta: float) -> void:
 		if path == null or path.curve == null:
 			continue
 		var path_length := float(path.curve.get_baked_length())
+		var current_depth := float(_line_snow_depth.get(line_id, 0.0))
+		current_depth = maxf(0.0, current_depth - delta * 0.18)
+		_line_snow_depth[line_id] = current_depth
 		if path_length > 0.0 and plow.progress >= path_length - 12.0:
 			_line_snow_cleared[line_id] = true
+			_line_snow_depth[line_id] = minf(current_depth, 0.05)
 			plow.target_speed_mps = 0.0
 			plow.speed_mps = 0.0
+
+func _sync_track_weather_state() -> void:
+	var track_builder := _get_track_builder()
+	if track_builder == null or not track_builder.has_method("set_weather_surface_state"):
+		return
+	var visible_snow := 0.0
+	for line_id in _snow_exposed_line_ids():
+		if bool(_line_snow_cleared.get(line_id, false)):
+			continue
+		visible_snow = maxf(visible_snow, float(_line_snow_depth.get(line_id, 0.0)))
+	track_builder.call("set_weather_surface_state", visible_snow, float(_weather_payload.get("surface_wetness", 0.0)))
 
 func _ensure_snow_plow(line_id: String) -> TrolleyMover:
 	var existing := _snow_plows.get(line_id, null) as TrolleyMover
@@ -2607,28 +2759,47 @@ func _driver_motion_direction() -> float:
 
 func _update_driver_incident_gameplay() -> void:
 	if _driver_trolley == null or not is_instance_valid(_driver_trolley):
+		_driver_curve_overspeed_s = 0.0
 		return
 	if _driver_trolley.has_method("has_incident") and bool(_driver_trolley.call("has_incident")):
+		_driver_curve_overspeed_s = 0.0
 		return
-	_check_driver_curve_derailment()
+	_check_driver_curve_derailment(get_process_delta_time())
 	if _driver_trolley.has_method("has_incident") and bool(_driver_trolley.call("has_incident")):
 		return
 	_check_driver_collisions()
 
-func _check_driver_curve_derailment() -> void:
+func _check_driver_curve_derailment(delta: float) -> void:
 	if not _driver_trolley.has_method("get_curve_dynamics"):
+		_driver_curve_overspeed_s = 0.0
 		return
 	var payload: Dictionary = _driver_trolley.call("get_curve_dynamics")
 	var radius_m := float(payload.get("radius_m", INF))
 	var safe_speed_mps := float(payload.get("safe_speed_mps", trolley_max_speed_mps))
 	var turn_angle_deg := float(payload.get("turn_angle_deg", 0.0))
 	var actual_speed_mps := absf(_driver_trolley.speed_mps)
+	var braking := false
+	if _driver_trolley.has_method("get_manual_drive_status"):
+		var drive_payload: Dictionary = _driver_trolley.call("get_manual_drive_status")
+		braking = bool(drive_payload.get("braking", false))
 	if not is_finite(radius_m):
+		_driver_curve_overspeed_s = 0.0
 		return
-	if radius_m > derail_curve_radius_threshold_m or turn_angle_deg < 5.0:
+	if radius_m > derail_curve_radius_threshold_m or turn_angle_deg < 8.5 or actual_speed_mps < derail_min_speed_mps:
+		_driver_curve_overspeed_s = maxf(0.0, _driver_curve_overspeed_s - delta * 1.8)
 		return
-	if actual_speed_mps <= safe_speed_mps + derail_speed_margin_mps:
+	var overspeed_mps := actual_speed_mps - safe_speed_mps
+	var overspeed_ratio := actual_speed_mps / maxf(1.0, safe_speed_mps)
+	var required_overspeed := maxf(derail_speed_margin_mps, derail_min_excess_mps, safe_speed_mps * 0.24)
+	if braking:
+		required_overspeed += 0.8
+	if overspeed_mps <= required_overspeed or overspeed_ratio <= derail_speed_ratio_threshold:
+		_driver_curve_overspeed_s = maxf(0.0, _driver_curve_overspeed_s - delta * 2.2)
 		return
+	_driver_curve_overspeed_s += delta * (0.55 if braking else 1.0)
+	if _driver_curve_overspeed_s < derail_overspeed_hold_seconds:
+		return
+	_driver_curve_overspeed_s = 0.0
 	var mph := actual_speed_mps * 2.23694
 	var safe_mph := safe_speed_mps * 2.23694
 	_trigger_incident(_driver_trolley, "DERAILMENT", "Overspeed on a tight curve (%.0f mph in a %.0f mph curve)." % [mph, safe_mph], 14.0, 3.0)

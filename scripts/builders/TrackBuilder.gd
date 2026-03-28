@@ -12,6 +12,7 @@ const RailRoughnessPath := "res://assets/textures/track_materials/metal_plate_02
 signal segment_added(curve: Curve3D)
 signal segment_removed(curve: Curve3D)
 
+@export var weather_path: NodePath = NodePath("../Weather")
 @export var max_grade := 0.06
 @export var max_curve_deg := 25.0
 @export var snap_spacing := 5.0
@@ -39,6 +40,18 @@ var _roadbed_material: StandardMaterial3D
 var _ballast_material: StandardMaterial3D
 var _sleeper_material: StandardMaterial3D
 var _rail_material: StandardMaterial3D
+var _weather_controller: Node
+var _weather_payload := {}
+var _surface_snow_override := -1.0
+var _surface_wet_override := -1.0
+
+func _ready() -> void:
+	_weather_controller = _resolve_weather_controller()
+	if _weather_controller != null and _weather_controller.has_signal("weather_changed"):
+		_weather_controller.connect("weather_changed", Callable(self, "_on_weather_changed"))
+	if _weather_controller != null and _weather_controller.has_method("get_weather_payload"):
+		_weather_payload = _weather_controller.call("get_weather_payload")
+	_apply_weather_material_state()
 
 func can_place_segment(points: PackedVector3Array) -> bool:
 	if points.size() < 2:
@@ -235,6 +248,7 @@ func _ensure_roadbed_material() -> StandardMaterial3D:
 	_roadbed_material = StandardMaterial3D.new()
 	_roadbed_material.albedo_color = roadbed_color
 	_roadbed_material.roughness = 0.96
+	_apply_weather_material_state()
 	return _roadbed_material
 
 func _ensure_ballast_material() -> StandardMaterial3D:
@@ -247,6 +261,7 @@ func _ensure_ballast_material() -> StandardMaterial3D:
 	_ballast_material.roughness = 0.95
 	_ballast_material.uv1_triplanar = true
 	_ballast_material.uv1_scale = Vector3(2.1, 2.1, 2.1)
+	_apply_weather_material_state()
 	return _ballast_material
 
 func _ensure_sleeper_material() -> StandardMaterial3D:
@@ -259,6 +274,7 @@ func _ensure_sleeper_material() -> StandardMaterial3D:
 	_sleeper_material.roughness = 0.9
 	_sleeper_material.uv1_triplanar = true
 	_sleeper_material.uv1_scale = Vector3(1.1, 1.1, 1.1)
+	_apply_weather_material_state()
 	return _sleeper_material
 
 func _ensure_rail_material() -> StandardMaterial3D:
@@ -272,6 +288,7 @@ func _ensure_rail_material() -> StandardMaterial3D:
 	_rail_material.roughness = 0.28
 	_rail_material.uv1_triplanar = true
 	_rail_material.uv1_scale = Vector3(2.2, 2.2, 2.2)
+	_apply_weather_material_state()
 	return _rail_material
 
 func _segment_transform(a: Vector3, b: Vector3) -> Transform3D:
@@ -296,6 +313,40 @@ func _curve_tangent_at_offset(curve: Curve3D, offset: float) -> Vector3:
 	if tangent.length() <= 0.001:
 		return Vector3.FORWARD
 	return tangent
+
+func set_weather_surface_state(track_snow_amount: float, wetness: float) -> void:
+	_surface_snow_override = clampf(track_snow_amount, 0.0, 1.0)
+	_surface_wet_override = clampf(wetness, 0.0, 1.0)
+	_apply_weather_material_state()
+
+func _on_weather_changed(payload: Dictionary) -> void:
+	_weather_payload = payload.duplicate(true)
+	_apply_weather_material_state()
+
+func _apply_weather_material_state() -> void:
+	var snow_amount := clampf(maxf(_surface_snow_override, float(_weather_payload.get("snow_cover", 0.0)) * 0.55), 0.0, 1.0)
+	var wetness := clampf(maxf(_surface_wet_override, float(_weather_payload.get("surface_wetness", 0.0))), 0.0, 1.0)
+	if _roadbed_material != null:
+		var roadbed_base: Color = roadbed_color
+		_roadbed_material.albedo_color = roadbed_base.lerp(Color(0.88, 0.88, 0.86, 1.0), snow_amount).darkened(wetness * 0.22)
+		_roadbed_material.roughness = clampf(0.96 - wetness * 0.18 - snow_amount * 0.08, 0.18, 1.0)
+	if _ballast_material != null:
+		_ballast_material.albedo_color = Color(0.92, 0.9, 0.86, 1.0).lerp(Color(0.96, 0.96, 0.95, 1.0), snow_amount).darkened(wetness * 0.18)
+		_ballast_material.roughness = clampf(0.95 - wetness * 0.24 - snow_amount * 0.10, 0.16, 1.0)
+	if _sleeper_material != null:
+		_sleeper_material.albedo_color = Color(0.88, 0.84, 0.78, 1.0).lerp(Color(0.92, 0.91, 0.89, 1.0), snow_amount * 0.82).darkened(wetness * 0.16)
+		_sleeper_material.roughness = clampf(0.90 - wetness * 0.14, 0.20, 1.0)
+	if _rail_material != null:
+		_rail_material.albedo_color = Color(0.82, 0.81, 0.80, 1.0).lerp(Color(0.90, 0.90, 0.90, 1.0), snow_amount * 0.25).darkened(wetness * 0.08)
+		_rail_material.roughness = clampf(0.28 - wetness * 0.10 + snow_amount * 0.04, 0.08, 0.9)
+
+func _resolve_weather_controller() -> Node:
+	if weather_path != NodePath(""):
+		return get_node_or_null(weather_path)
+	var world_root := get_parent()
+	if world_root != null:
+		return world_root.get_node_or_null("Weather")
+	return null
 
 func _load_runtime_texture(resource_path: String) -> Texture2D:
 	if resource_path == "":
