@@ -13,6 +13,7 @@ class PassengerAgent:
 
 @export var town_manager_path: NodePath
 @export var corridor_path: NodePath
+@export var time_controller_path: NodePath
 @export var crowd_refresh_seconds := 1.2
 @export var crowd_regen_per_tick := 2
 @export var max_visuals_per_stop := 18
@@ -23,17 +24,38 @@ class PassengerAgent:
 @export var max_imported_visuals_per_stop := 1
 @export var imported_model_activation_radius_m := 450.0
 @export var max_active_imported_visuals := 4
+@export var overcrowding_threshold := 14
+@export var severe_overcrowding_threshold := 24
+@export var service_memory_seconds := 90.0
+@export var downtown_peak_bonus := 0.18
+@export var trolley_park_peak_bonus := 0.42
+@export var summer_park_bonus := 0.24
+@export var perceived_wait_weight := 0.72
+@export var station_amenity_rating_bonus := 10.0
+@export var uncertainty_rating_penalty := 16.0
+@export var lost_rider_pressure_threshold := 0.55
 
 var agents: Array[PassengerAgent] = []
 var _town_manager: Node
 var _corridor: Node
+var _time_controller: Node
 var _crowd_root: Node3D
 var _crowd_nodes := {}
 var _waiting_counts := {}
+var _last_service_age_s := {}
+var _stop_service_ratings := {}
+var _calendar_payload := {
+	"year": 1900,
+	"month": 5,
+	"day": 1,
+	"hour": 6,
+	"minute": 30
+}
 var _refresh_accum := 0.0
 
 func _ready() -> void:
 	_resolve_dependencies()
+	_connect_time_controller()
 	_ensure_crowd_root()
 	call_deferred("_refresh_station_crowds")
 
@@ -59,6 +81,81 @@ func get_waiting_count_for_stop(stop_name: String) -> int:
 		return int(_waiting_counts[stop_id])
 	return _target_waiting_count(stop)
 
+func get_stop_service_snapshot(stop_name: String) -> Dictionary:
+	var stop = _find_stop_by_name(stop_name)
+	return _build_stop_service_snapshot(stop)
+
+func get_network_gameplay_snapshot() -> Dictionary:
+	if _town_manager == null or not is_instance_valid(_town_manager):
+		_resolve_dependencies()
+	var stop_count := 0
+	var total_waiting := 0
+	var overcrowded_stop_count := 0
+	var severe_stop_count := 0
+	var rating_total := 0.0
+	var highest_pressure := 0.0
+	var worst_stop_name := ""
+	var worst_stop_waiting := 0
+	var perceived_wait_total := 0.0
+	var lost_riders_total := 0
+	for stop in _stop_list():
+		var snapshot: Dictionary = _build_stop_service_snapshot(stop)
+		if snapshot.is_empty():
+			continue
+		stop_count += 1
+		var waiting := int(snapshot.get("waiting", 0))
+		var pressure := float(snapshot.get("crowding_pressure", 0.0))
+		total_waiting += waiting
+		perceived_wait_total += float(snapshot.get("perceived_wait_min", 0.0))
+		lost_riders_total += int(snapshot.get("lost_riders", 0))
+		rating_total += float(snapshot.get("rating", 75.0))
+		if bool(snapshot.get("overcrowded", false)):
+			overcrowded_stop_count += 1
+		if bool(snapshot.get("severe_overcrowding", false)):
+			severe_stop_count += 1
+		if waiting > worst_stop_waiting:
+			worst_stop_waiting = waiting
+			worst_stop_name = String(snapshot.get("stop_name", ""))
+		highest_pressure = maxf(highest_pressure, pressure)
+	if stop_count <= 0:
+		return {
+			"stop_count": 0,
+			"total_waiting": 0,
+			"average_rating": 75.0,
+			"overcrowded_stop_count": 0,
+			"severe_stop_count": 0,
+			"worst_stop_name": "",
+			"worst_stop_waiting": 0,
+			"average_perceived_wait_min": 0.0,
+			"lost_riders": 0,
+			"highest_pressure": 0.0,
+			"advisory_text": ""
+		}
+	var average_rating := rating_total / float(stop_count)
+	var average_perceived_wait := perceived_wait_total / float(stop_count)
+	var advisory_text := ""
+	if severe_stop_count > 0 and worst_stop_name != "":
+		advisory_text = "Crowding alert: %s has %d waiting" % [worst_stop_name, worst_stop_waiting]
+	elif lost_riders_total > 0:
+		advisory_text = "Riders walking away: %d lost this cycle" % lost_riders_total
+	elif average_perceived_wait >= 7.5:
+		advisory_text = "Long perceived waits: %.1f min average" % average_perceived_wait
+	elif overcrowded_stop_count >= 3:
+		advisory_text = "System pressure rising: %d overcrowded stops" % overcrowded_stop_count
+	return {
+		"stop_count": stop_count,
+		"total_waiting": total_waiting,
+		"average_rating": average_rating,
+		"average_perceived_wait_min": average_perceived_wait,
+		"lost_riders": lost_riders_total,
+		"overcrowded_stop_count": overcrowded_stop_count,
+		"severe_stop_count": severe_stop_count,
+		"worst_stop_name": worst_stop_name,
+		"worst_stop_waiting": worst_stop_waiting,
+		"highest_pressure": highest_pressure,
+		"advisory_text": advisory_text
+	}
+
 func service_stop_by_name(stop_name: String, capacity_hint: int = 12) -> Dictionary:
 	var stop = _find_stop_by_name(stop_name)
 	if stop == null:
@@ -69,6 +166,8 @@ func service_stop_by_name(stop_name: String, capacity_hint: int = 12) -> Diction
 	if capacity_hint > 0:
 		boarded = mini(current_waiting, capacity_hint)
 	_waiting_counts[stop_id] = maxi(0, current_waiting - boarded)
+	_last_service_age_s[stop_id] = 0.0
+	_stop_service_ratings[stop_id] = _service_rating_for_stop(stop, int(_waiting_counts[stop_id]), 0.0)
 	_sync_stop_visuals(stop, int(_waiting_counts[stop_id]))
 	return {
 		"boarded": boarded,
@@ -88,13 +187,22 @@ func _refresh_station_crowds() -> void:
 			continue
 		var stop_id := String(stop.stop_id)
 		live_stop_ids[stop_id] = true
+		var service_age_s := minf(service_memory_seconds * 2.0, float(_last_service_age_s.get(stop_id, service_memory_seconds * 0.35)) + crowd_refresh_seconds)
+		_last_service_age_s[stop_id] = service_age_s
 		var target := _target_waiting_count(stop)
 		var current := int(_waiting_counts.get(stop_id, target))
 		if current < target:
 			current = mini(target, current + crowd_regen_per_tick)
 		elif current > target + 2:
 			current = maxi(target, current - 1)
+		var rating := _service_rating_for_stop(stop, current, service_age_s)
+		var perceived_wait := _perceived_wait_minutes(stop, current, service_age_s)
+		var lost_riders := _lost_riders_for_stop(stop, current, perceived_wait, rating)
+		if lost_riders > 0:
+			current = maxi(0, current - lost_riders)
+			rating = _service_rating_for_stop(stop, current, service_age_s)
 		_waiting_counts[stop_id] = current
+		_stop_service_ratings[stop_id] = rating
 		_sync_stop_visuals(stop, current, int(imported_budgets.get(stop_id, 0)))
 	_prune_missing_crowds(live_stop_ids)
 
@@ -107,6 +215,27 @@ func _resolve_dependencies() -> void:
 		_corridor = get_node_or_null(corridor_path)
 	if _corridor == null:
 		_corridor = get_parent().get_node_or_null("CorridorSeed")
+	if time_controller_path != NodePath(""):
+		_time_controller = get_node_or_null(time_controller_path)
+	if _time_controller == null:
+		_time_controller = get_parent().get_node_or_null("TimeOfDay")
+
+func _connect_time_controller() -> void:
+	if _time_controller == null or not is_instance_valid(_time_controller):
+		return
+	if _time_controller.has_method("get_time_payload"):
+		var payload: Dictionary = _time_controller.call("get_time_payload")
+		if not payload.is_empty():
+			_calendar_payload = payload.duplicate(true)
+	if _time_controller.has_signal("calendar_changed"):
+		var callback := Callable(self, "_on_calendar_changed")
+		if not _time_controller.is_connected("calendar_changed", callback):
+			_time_controller.connect("calendar_changed", callback)
+
+func _on_calendar_changed(payload: Dictionary) -> void:
+	if payload.is_empty():
+		return
+	_calendar_payload = payload.duplicate(true)
 
 func _ensure_crowd_root() -> void:
 	if _crowd_root != null and is_instance_valid(_crowd_root):
@@ -132,8 +261,34 @@ func _find_stop_by_name(stop_name: String):
 			return stop
 	return null
 
+func _build_stop_service_snapshot(stop) -> Dictionary:
+	if stop == null:
+		return {}
+	var stop_id := String(stop.stop_id)
+	var waiting_count := int(_waiting_counts.get(stop_id, _target_waiting_count(stop)))
+	var service_age_s := float(_last_service_age_s.get(stop_id, service_memory_seconds * 0.35))
+	var rating := float(_stop_service_ratings.get(stop_id, _service_rating_for_stop(stop, waiting_count, service_age_s)))
+	var crowding_pressure := _crowding_pressure(waiting_count)
+	var perceived_wait := _perceived_wait_minutes(stop, waiting_count, service_age_s)
+	var amenity_score := _amenity_score_for_stop(stop)
+	var lost_riders := _lost_riders_for_stop(stop, waiting_count, perceived_wait, rating)
+	return {
+		"stop_id": stop_id,
+		"stop_name": String(stop.town_name),
+		"waiting": waiting_count,
+		"rating": rating,
+		"crowding_pressure": crowding_pressure,
+		"overcrowded": waiting_count >= overcrowding_threshold,
+		"severe_overcrowding": waiting_count >= severe_overcrowding_threshold,
+		"service_age_s": service_age_s,
+		"perceived_wait_min": perceived_wait,
+		"amenity_score": amenity_score,
+		"lost_riders": lost_riders,
+		"demand_multiplier": _stop_demand_multiplier(stop)
+	}
+
 func _target_waiting_count(stop) -> int:
-	var demand := float(stop.ridership_demand)
+	var demand := float(stop.ridership_demand) * _stop_demand_multiplier(stop)
 	var frequency := maxf(1.0, float(stop.frequency))
 	var connectivity := float(stop.connectivity)
 	var waiting := int(round((demand / frequency) + connectivity * 0.55))
@@ -142,9 +297,123 @@ func _target_waiting_count(stop) -> int:
 	var name := String(stop.town_name)
 	if name in ["Park Street", "Boylston", "Arlington", "Copley", "Kenmore", "Brookline"]:
 		waiting += 3
+	if _is_downtown_stop(name) and _is_peak_commute_hour():
+		waiting += 2
 	if String(stop.stop_kind) == "park":
 		waiting += 2
+		if _stop_demand_multiplier(stop) > 1.22:
+			waiting += 2
 	return clampi(waiting, 0, max_visuals_per_stop * 2)
+
+func _service_rating_for_stop(stop, waiting_count: int, service_age_s: float) -> float:
+	var rating := 52.0
+	rating += clampf(float(stop.frequency) / 10.0, 0.0, 1.4) * 16.0
+	rating += clampf(float(stop.connectivity) / 6.0, 0.0, 1.0) * 12.0
+	var pickup_factor := 1.0 - clampf(service_age_s / maxf(service_memory_seconds, 1.0), 0.0, 1.0)
+	rating += lerpf(-18.0, 22.0, pickup_factor)
+	rating -= _crowding_pressure(waiting_count) * 36.0
+	rating -= _waiting_uncertainty(stop, service_age_s) * uncertainty_rating_penalty
+	rating -= clampf(_perceived_wait_minutes(stop, waiting_count, service_age_s) / 10.0, 0.0, 1.0) * 15.0 * perceived_wait_weight
+	rating += _amenity_score_for_stop(stop) * station_amenity_rating_bonus
+	if waiting_count <= minimum_visuals_for_busy_stop + 1:
+		rating += 6.0
+	if String(stop.stop_kind) == "park" and _stop_demand_multiplier(stop) > 1.25 and waiting_count < severe_overcrowding_threshold:
+		rating += 4.0
+	return clampf(rating, 5.0, 100.0)
+
+func _crowding_pressure(waiting_count: int) -> float:
+	return clampf(
+		(float(waiting_count) - float(overcrowding_threshold)) / maxf(1.0, float(severe_overcrowding_threshold - overcrowding_threshold)),
+		0.0,
+		1.0
+	)
+
+func _scheduled_headway_minutes(stop) -> float:
+	return 60.0 / maxf(1.0, float(stop.frequency))
+
+func _waiting_uncertainty(stop, service_age_s: float) -> float:
+	var headway := _scheduled_headway_minutes(stop)
+	var elapsed_min := service_age_s / 60.0
+	var over_headway := clampf((elapsed_min - headway * 0.55) / maxf(1.0, headway), 0.0, 1.0)
+	var low_frequency := 1.0 - clampf(float(stop.frequency) / 8.0, 0.0, 1.0)
+	return clampf(over_headway * 0.72 + low_frequency * 0.28, 0.0, 1.0)
+
+func _amenity_score_for_stop(stop) -> float:
+	var name := String(stop.town_name)
+	var score := 0.0
+	match String(stop.stop_kind):
+		"station":
+			score += 0.48
+		"park":
+			score += 0.22
+		"regular":
+			score += 0.08
+	if _is_downtown_stop(name):
+		score += 0.18
+	if float(stop.connectivity) >= 4.0:
+		score += 0.18
+	if name in ["South Station", "North Station", "Park Street", "Harvard", "Kendall/MIT"]:
+		score += 0.18
+	return clampf(score, 0.0, 1.0)
+
+func _perceived_wait_minutes(stop, waiting_count: int, service_age_s: float) -> float:
+	var actual_wait := minf(service_age_s / 60.0, service_memory_seconds / 30.0)
+	var headway_wait := _scheduled_headway_minutes(stop) * 0.52
+	var uncertainty := _waiting_uncertainty(stop, service_age_s)
+	var crowd_factor := _crowding_pressure(waiting_count) * 0.42
+	var weather_factor := 0.0
+	var amenity_relief := _amenity_score_for_stop(stop) * 0.30
+	var perceived := maxf(actual_wait, headway_wait)
+	perceived *= 1.0 + uncertainty * 0.48 + crowd_factor + weather_factor - amenity_relief
+	if _is_peak_commute_hour() and _is_downtown_stop(String(stop.town_name)):
+		perceived *= 1.12
+	return clampf(perceived, 0.3, 18.0)
+
+func _lost_riders_for_stop(stop, waiting_count: int, perceived_wait_min: float, rating: float) -> int:
+	var pressure := clampf((perceived_wait_min - 6.5) / 7.5, 0.0, 1.0)
+	pressure = maxf(pressure, _crowding_pressure(waiting_count) * 0.72)
+	pressure = maxf(pressure, clampf((58.0 - rating) / 42.0, 0.0, 1.0) * 0.65)
+	if pressure < lost_rider_pressure_threshold:
+		return 0
+	var demand := float(stop.ridership_demand) * _stop_demand_multiplier(stop)
+	return clampi(int(round(demand * pressure * 0.18)), 0, waiting_count)
+
+func _stop_demand_multiplier(stop) -> float:
+	var multiplier := 1.0
+	var month := int(_calendar_payload.get("month", 5))
+	var hour := int(_calendar_payload.get("hour", 12))
+	var name := String(stop.town_name)
+	if _is_downtown_stop(name):
+		if hour >= 7 and hour < 10:
+			multiplier += downtown_peak_bonus
+		elif hour >= 16 and hour < 19:
+			multiplier += downtown_peak_bonus * 1.15
+	if String(stop.stop_kind) == "park":
+		if month >= 5 and month <= 9:
+			multiplier += summer_park_bonus
+		if hour >= 11 and hour <= 21:
+			multiplier += trolley_park_peak_bonus
+		if month >= 7 and month <= 8:
+			multiplier += 0.08
+	elif name in ["South Station", "North Station", "Harvard", "Kendall/MIT"] and hour >= 16 and hour < 19:
+		multiplier += 0.08
+	return clampf(multiplier, 0.75, 1.85)
+
+func _is_peak_commute_hour() -> bool:
+	var hour := int(_calendar_payload.get("hour", 12))
+	return (hour >= 7 and hour < 10) or (hour >= 16 and hour < 19)
+
+func _is_downtown_stop(stop_name: String) -> bool:
+	return stop_name in [
+		"Park Street",
+		"Boylston",
+		"Arlington",
+		"Copley",
+		"Scollay Square",
+		"Haymarket",
+		"North Station",
+		"South Station"
+	]
 
 func _sync_stop_visuals(stop, waiting_count: int, imported_budget: int = 0) -> void:
 	if _crowd_root == null:
@@ -169,11 +438,12 @@ func _sync_stop_visuals(stop, waiting_count: int, imported_budget: int = 0) -> v
 		root.add_child(passenger)
 		_configure_passenger_visual(passenger, stop_id, index, imported_budget)
 	var child_count := root.get_child_count()
+	var wait_stress := clampf(_crowding_pressure(waiting_count) * 0.68 + _waiting_uncertainty(stop, float(_last_service_age_s.get(stop_id, 0.0))) * 0.32, 0.0, 1.0)
 	for i in range(child_count):
 		var passenger := root.get_child(i)
 		if passenger == null or not is_instance_valid(passenger):
 			continue
-		_configure_passenger_visual(passenger, stop_id, i, imported_budget, false)
+		_configure_passenger_visual(passenger, stop_id, i, imported_budget, false, wait_stress)
 	root.visible = target_visuals > 0
 
 func _crowd_seed(stop_id: String, index: int) -> int:
@@ -195,7 +465,7 @@ func _crowd_rotation_for(stop_id: String, index: int) -> float:
 	var seed := _crowd_seed(stop_id, index)
 	return deg_to_rad(float(seed % 120) - 60.0)
 
-func _configure_passenger_visual(passenger: Node, stop_id: String, index: int, imported_budget: int, force_reconfigure: bool = true) -> void:
+func _configure_passenger_visual(passenger: Node, stop_id: String, index: int, imported_budget: int, force_reconfigure: bool = true, wait_stress: float = 0.0) -> void:
 	if passenger == null:
 		return
 	var use_imported := use_imported_passenger_models and index < imported_budget
@@ -205,6 +475,8 @@ func _configure_passenger_visual(passenger: Node, stop_id: String, index: int, i
 		passenger.set("prefer_imported_models", use_imported)
 	if force_reconfigure:
 		passenger.call("configure", _crowd_seed(stop_id, index), index % 5 == 0)
+	if passenger.has_method("set_wait_stress"):
+		passenger.call("set_wait_stress", wait_stress)
 	passenger.position = _crowd_offset_for(stop_id, index)
 	passenger.rotation.y = _crowd_rotation_for(stop_id, index)
 
@@ -267,6 +539,16 @@ func _prune_missing_crowds(live_stop_ids: Dictionary) -> void:
 		if live_stop_ids.has(stop_id):
 			next_waiting[stop_id] = _waiting_counts[stop_id]
 	_waiting_counts = next_waiting
+	var next_service_ages := {}
+	for stop_id in _last_service_age_s.keys():
+		if live_stop_ids.has(stop_id):
+			next_service_ages[stop_id] = _last_service_age_s[stop_id]
+	_last_service_age_s = next_service_ages
+	var next_ratings := {}
+	for stop_id in _stop_service_ratings.keys():
+		if live_stop_ids.has(stop_id):
+			next_ratings[stop_id] = _stop_service_ratings[stop_id]
+	_stop_service_ratings = next_ratings
 	var next_nodes := {}
 	for stop_id in _crowd_nodes.keys():
 		if live_stop_ids.has(stop_id):

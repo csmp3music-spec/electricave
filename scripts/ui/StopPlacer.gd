@@ -162,6 +162,11 @@ func _is_pointer_over_blocking_ui() -> bool:
 		if (
 			node is BaseButton
 			or node is ScrollContainer
+			or name == "TopMenuBar"
+			or name == "LineSelectorPanel"
+			or name == "TimetableWindow"
+			or name == "HelpWindow"
+			or name == "AdvisorPanel"
 			or name == "BottomBar"
 			or name == "FinanceWindow"
 			or name == "BuildModePanel"
@@ -175,6 +180,7 @@ func set_active(value: bool) -> void:
 	active = value
 	if not active:
 		_anchor_point = null
+		_preview_target = null
 	_preview_cost = 0.0
 	_preview_valid = false
 	_preview_message = ""
@@ -207,6 +213,73 @@ func cycle_tool_mode() -> void:
 	var next_mode := (int(tool_mode) + 1) % ToolMode.size()
 	set_tool_mode(next_mode, active)
 
+func set_autorail_enabled(value: bool) -> void:
+	autorail_enabled = value
+	_update_preview()
+	_emit_tool_state()
+
+func toggle_autorail() -> bool:
+	set_autorail_enabled(not autorail_enabled)
+	return autorail_enabled
+
+func apply_build_preset(preset_name: String) -> Dictionary:
+	var normalized := preset_name.strip_edges().to_lower()
+	var mode_name := "station"
+	var label := "Streetcar stop"
+	match normalized:
+		"subway", "transfer", "subway_transfer":
+			label = "Subway transfer"
+			mode_name = "station"
+			frequency = 3.0
+			station_platform_length_tiles = 5
+			station_track_count = 2
+			signal_run_spacing_m = 42.0
+			autorail_enabled = true
+		"interurban", "rural":
+			label = "Interurban"
+			mode_name = "track"
+			frequency = 8.0
+			station_platform_length_tiles = 4
+			station_track_count = 2
+			signal_run_spacing_m = 120.0
+			autorail_enabled = true
+		"terminal", "city_terminal":
+			label = "Terminal"
+			mode_name = "station"
+			frequency = 4.0
+			station_platform_length_tiles = 6
+			station_track_count = 3
+			signal_run_spacing_m = 60.0
+			autorail_enabled = true
+		_:
+			label = "Streetcar stop"
+			mode_name = "station"
+			frequency = 5.0
+			station_platform_length_tiles = 2
+			station_track_count = 1
+			signal_run_spacing_m = 50.0
+			autorail_enabled = true
+	frequency = clampf(frequency, min_frequency, max_frequency)
+	station_platform_length_tiles = clampi(station_platform_length_tiles, 2, 8)
+	station_track_count = clampi(station_track_count, 1, 4)
+	signal_run_spacing_m = clampf(signal_run_spacing_m, 24.0, 160.0)
+	set_tool_mode_name(mode_name, true)
+	_update_preview()
+	_emit_tool_state()
+	return {
+		"ok": true,
+		"mode": mode_name,
+		"message": "%s preset: %.0f min headway, %d platform tile%s, %d track%s, %.0fm signals." % [
+			label,
+			frequency,
+			station_platform_length_tiles,
+			"" if station_platform_length_tiles == 1 else "s",
+			station_track_count,
+			"" if station_track_count == 1 else "s",
+			signal_run_spacing_m
+		]
+	}
+
 func get_tool_mode_name() -> String:
 	match tool_mode:
 		ToolMode.STATION:
@@ -234,6 +307,14 @@ func get_status_text() -> String:
 	return prefix
 
 func get_tycoon_build_state() -> Dictionary:
+	var focus_point := Vector3.ZERO
+	var has_focus := false
+	if active and _preview_target is Vector3:
+		focus_point = _preview_target
+		has_focus = true
+	elif active and _anchor_point is Vector3:
+		focus_point = _anchor_point
+		has_focus = true
 	return {
 		"active": active,
 		"mode": get_tool_mode_name(),
@@ -247,7 +328,9 @@ func get_tycoon_build_state() -> Dictionary:
 		"rotation_deg": asset_rotation_deg,
 		"station_length_tiles": station_platform_length_tiles,
 		"station_track_count": station_track_count,
-		"signal_run_spacing_m": signal_run_spacing_m
+		"signal_run_spacing_m": signal_run_spacing_m,
+		"has_camera_focus": has_focus,
+		"camera_focus_point": focus_point
 	}
 
 func _adjust_context_setting(direction: int) -> void:

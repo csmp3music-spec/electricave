@@ -1,0 +1,96 @@
+[gd_scene load_steps=14 format=3]
+
+[sub_resource type="BoxMesh" id="1"]
+size = Vector3(13, 5, 11)
+
+[sub_resource type="BoxMesh" id="2"]
+size = Vector3(13.8, 0.5, 11.8)
+
+[sub_resource type="BoxMesh" id="3"]
+size = Vector3(9, 26, 8.4)
+
+[sub_resource type="BoxMesh" id="4"]
+size = Vector3(1.2, 18, 2.6)
+
+[sub_resource type="BoxMesh" id="5"]
+size = Vector3(6.6, 8, 6.2)
+
+[sub_resource type="BoxMesh" id="6"]
+size = Vector3(7.8, 0.55, 7.4)
+
+[sub_resource type="BoxMesh" id="7"]
+size = Vector3(5.4, 1.6, 5.1)
+
+[sub_resource type="BoxMesh" id="8"]
+size = Vector3(2.2, 4.2, 2.2)
+
+[sub_resource type="BoxMesh" id="9"]
+size = Vector3(3.2, 0.42, 3.2)
+
+[sub_resource type="StandardMaterial3D" id="10"]
+albedo_color = Color(0.305882, 0.286275, 0.270588, 1)
+roughness = 0.96
+
+[sub_resource type="StandardMaterial3D" id="11"]
+albedo_color = Color(0.701961, 0.619608, 0.498039, 1)
+roughness = 0.94
+
+[sub_resource type="StandardMaterial3D" id="12"]
+albedo_color = Color(0.470588, 0.286275, 0.231373, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="13"]
+albedo_color = Color(0.301961, 0.427451, 0.372549, 1)
+roughness = 0.9
+
+[node name="HistoricMasonrySkyscraperA" type="Node3D"]
+
+[node name="Base" type="MeshInstance3D" parent="."]
+mesh = SubResource("1")
+material_override = SubResource("10")
+position = Vector3(0, 2.5, 0)
+
+[node name="Watertable" type="MeshInstance3D" parent="."]
+mesh = SubResource("2")
+material_override = SubResource("12")
+position = Vector3(0, 5.1, 0)
+
+[node name="Shaft" type="MeshInstance3D" parent="."]
+mesh = SubResource("3")
+material_override = SubResource("11")
+position = Vector3(0, 18, 0)
+
+[node name="OrielLeft" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("11")
+position = Vector3(-3.1, 17.5, -5)
+
+[node name="OrielRight" type="MeshInstance3D" parent="."]
+mesh = SubResource("4")
+material_override = SubResource("11")
+position = Vector3(3.1, 17.5, -5)
+
+[node name="UpperTower" type="MeshInstance3D" parent="."]
+mesh = SubResource("5")
+material_override = SubResource("11")
+position = Vector3(0, 35, 0)
+
+[node name="UpperCornice" type="MeshInstance3D" parent="."]
+mesh = SubResource("6")
+material_override = SubResource("12")
+position = Vector3(0, 39.3, 0)
+
+[node name="RoofHouse" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("13")
+position = Vector3(0, 40.45, 0)
+
+[node name="Lantern" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("10")
+position = Vector3(0, 43.35, 0)
+
+[node name="Cap" type="MeshInstance3D" parent="."]
+mesh = SubResource("9")
+material_override = SubResource("13")
+position = Vector3(0, 45.66, 0)

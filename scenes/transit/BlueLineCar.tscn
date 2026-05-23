@@ -1,125 +1,272 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=18 format=3]
 
 [sub_resource type="StandardMaterial3D" id="1"]
-albedo_color = Color(0.73, 0.76, 0.79, 1)
-metallic = 0.34
-roughness = 0.3
-
-[sub_resource type="StandardMaterial3D" id="2"]
-albedo_color = Color(0.12, 0.41, 0.72, 1)
-metallic = 0.26
+resource_name = "BlueLineBody"
+albedo_color = Color(0.76, 0.79, 0.82, 1)
+metallic = 0.4
 roughness = 0.28
 
+[sub_resource type="StandardMaterial3D" id="2"]
+resource_name = "BlueLineAccent"
+albedo_color = Color(0.16, 0.4, 0.76, 1)
+metallic = 0.14
+roughness = 0.34
+
 [sub_resource type="StandardMaterial3D" id="3"]
-albedo_color = Color(0.78, 0.86, 0.94, 0.32)
+resource_name = "BlueLineGlass"
+albedo_color = Color(0.78, 0.86, 0.94, 0.28)
 transparency = 1
 roughness = 0.06
 metallic = 0.02
 cull_mode = 2
 
 [sub_resource type="StandardMaterial3D" id="4"]
-albedo_color = Color(0.22, 0.25, 0.29, 1)
-metallic = 0.3
-roughness = 0.52
+resource_name = "BlueLineRoof"
+albedo_color = Color(0.2, 0.24, 0.31, 1)
+metallic = 0.28
+roughness = 0.5
 
 [sub_resource type="StandardMaterial3D" id="5"]
-albedo_color = Color(0.52, 0.55, 0.58, 1)
-metallic = 0.38
-roughness = 0.4
+resource_name = "BlueLineUnder"
+albedo_color = Color(0.33, 0.35, 0.39, 1)
+metallic = 0.34
+roughness = 0.46
 
-[sub_resource type="BoxMesh" id="6"]
-size = Vector3(3.0, 2.72, 8.6)
+[sub_resource type="StandardMaterial3D" id="6"]
+resource_name = "BlueLineDoor"
+albedo_color = Color(0.58, 0.61, 0.66, 1)
+metallic = 0.42
+roughness = 0.34
 
-[sub_resource type="BoxMesh" id="7"]
-size = Vector3(3.08, 0.22, 8.2)
+[sub_resource type="StandardMaterial3D" id="7"]
+resource_name = "BlueLinePower"
+albedo_color = Color(0.48, 0.5, 0.54, 1)
+metallic = 0.54
+roughness = 0.32
 
 [sub_resource type="BoxMesh" id="8"]
-size = Vector3(2.84, 1.1, 7.5)
+size = Vector3(3.02, 2.78, 8.45)
 
 [sub_resource type="BoxMesh" id="9"]
-size = Vector3(3.02, 0.22, 8.5)
+size = Vector3(2.86, 1.12, 7.6)
 
 [sub_resource type="BoxMesh" id="10"]
-size = Vector3(2.4, 0.18, 1.0)
+size = Vector3(3.04, 0.2, 8.1)
 
-[sub_resource type="CylinderMesh" id="11"]
+[sub_resource type="BoxMesh" id="11"]
+size = Vector3(3.08, 0.2, 8.0)
+
+[sub_resource type="BoxMesh" id="12"]
+size = Vector3(2.96, 0.26, 8.0)
+
+[sub_resource type="BoxMesh" id="13"]
+size = Vector3(0.08, 1.5, 0.88)
+
+[sub_resource type="BoxMesh" id="14"]
+size = Vector3(2.5, 1.95, 0.32)
+
+[sub_resource type="CylinderMesh" id="15"]
 top_radius = 0.42
 bottom_radius = 0.42
 height = 0.34
 
+[sub_resource type="BoxMesh" id="16"]
+size = Vector3(2.2, 0.18, 1.0)
+
+[sub_resource type="BoxMesh" id="17"]
+size = Vector3(1, 1, 1)
+
 [node name="BlueLineCar" type="Node3D"]
 
 [node name="CarA" type="Node3D" parent="."]
-position = Vector3(0, 0, -4.8)
+position = Vector3(0, 0, -4.9)
 
 [node name="Body" type="MeshInstance3D" parent="CarA"]
-mesh = SubResource("6")
+mesh = SubResource("8")
 surface_material_override/0 = SubResource("1")
-position = Vector3(0, 1.56, 0)
+position = Vector3(0, 1.58, 0)
 
 [node name="Stripe" type="MeshInstance3D" parent="CarA"]
-mesh = SubResource("9")
+mesh = SubResource("10")
 surface_material_override/0 = SubResource("2")
-position = Vector3(0, 1.24, 0)
+position = Vector3(0, 1.22, 0)
 
 [node name="Windows" type="MeshInstance3D" parent="CarA"]
-mesh = SubResource("8")
+mesh = SubResource("9")
 surface_material_override/0 = SubResource("3")
-position = Vector3(0, 1.94, 0)
+position = Vector3(0, 1.98, 0)
 
 [node name="Roof" type="MeshInstance3D" parent="CarA"]
-mesh = SubResource("7")
+mesh = SubResource("11")
 surface_material_override/0 = SubResource("4")
-position = Vector3(0, 2.94, 0)
+position = Vector3(0, 2.96, 0)
+
+[node name="Skirt" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 0.5, 0)
+
+[node name="EndFront" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.58, -4.08)
+
+[node name="EndRear" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.58, 4.08)
+
+[node name="DoorL1" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.51, 1.6, -2.15)
+
+[node name="DoorL2" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.51, 1.6, 2.15)
+
+[node name="DoorR1" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.51, 1.6, -2.15)
+
+[node name="DoorR2" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.51, 1.6, 2.15)
+
+[node name="PowerBase" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(0, 3.12, 0.1)
+scale = Vector3(0.9, 0.08, 1.3)
+
+[node name="PowerPostLeft" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(-0.28, 3.4, 0.1)
+scale = Vector3(0.08, 0.62, 0.08)
+
+[node name="PowerPostRight" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(0.28, 3.4, 0.1)
+scale = Vector3(0.08, 0.62, 0.08)
+
+[node name="PowerBar" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(0, 3.7, 0.1)
+scale = Vector3(0.82, 0.06, 0.12)
 
 [node name="TruckA" type="MeshInstance3D" parent="CarA"]
-mesh = SubResource("11")
+mesh = SubResource("15")
 surface_material_override/0 = SubResource("5")
 rotation_degrees = Vector3(90, 0, 0)
-position = Vector3(0, 0.42, -2.45)
+position = Vector3(0, 0.42, -2.4)
 
 [node name="TruckB" type="MeshInstance3D" parent="CarA"]
-mesh = SubResource("11")
+mesh = SubResource("15")
 surface_material_override/0 = SubResource("5")
 rotation_degrees = Vector3(90, 0, 0)
-position = Vector3(0, 0.42, 2.45)
+position = Vector3(0, 0.42, 2.4)
 
 [node name="CarB" type="Node3D" parent="."]
-position = Vector3(0, 0, 4.8)
+position = Vector3(0, 0, 4.9)
 
 [node name="Body" type="MeshInstance3D" parent="CarB"]
-mesh = SubResource("6")
+mesh = SubResource("8")
 surface_material_override/0 = SubResource("1")
-position = Vector3(0, 1.56, 0)
+position = Vector3(0, 1.58, 0)
 
 [node name="Stripe" type="MeshInstance3D" parent="CarB"]
-mesh = SubResource("9")
+mesh = SubResource("10")
 surface_material_override/0 = SubResource("2")
-position = Vector3(0, 1.24, 0)
+position = Vector3(0, 1.22, 0)
 
 [node name="Windows" type="MeshInstance3D" parent="CarB"]
-mesh = SubResource("8")
+mesh = SubResource("9")
 surface_material_override/0 = SubResource("3")
-position = Vector3(0, 1.94, 0)
+position = Vector3(0, 1.98, 0)
 
 [node name="Roof" type="MeshInstance3D" parent="CarB"]
-mesh = SubResource("7")
+mesh = SubResource("11")
 surface_material_override/0 = SubResource("4")
-position = Vector3(0, 2.94, 0)
+position = Vector3(0, 2.96, 0)
+
+[node name="Skirt" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 0.5, 0)
+
+[node name="EndFront" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.58, -4.08)
+
+[node name="EndRear" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.58, 4.08)
+
+[node name="DoorL1" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.51, 1.6, -2.15)
+
+[node name="DoorL2" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.51, 1.6, 2.15)
+
+[node name="DoorR1" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.51, 1.6, -2.15)
+
+[node name="DoorR2" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.51, 1.6, 2.15)
+
+[node name="PowerBase" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(0, 3.12, 0.1)
+scale = Vector3(0.9, 0.08, 1.3)
+
+[node name="PowerPostLeft" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(-0.28, 3.4, 0.1)
+scale = Vector3(0.08, 0.62, 0.08)
+
+[node name="PowerPostRight" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(0.28, 3.4, 0.1)
+scale = Vector3(0.08, 0.62, 0.08)
+
+[node name="PowerBar" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("17")
+surface_material_override/0 = SubResource("7")
+position = Vector3(0, 3.7, 0.1)
+scale = Vector3(0.82, 0.06, 0.12)
 
 [node name="TruckA" type="MeshInstance3D" parent="CarB"]
-mesh = SubResource("11")
+mesh = SubResource("15")
 surface_material_override/0 = SubResource("5")
 rotation_degrees = Vector3(90, 0, 0)
-position = Vector3(0, 0.42, -2.45)
+position = Vector3(0, 0.42, -2.4)
 
 [node name="TruckB" type="MeshInstance3D" parent="CarB"]
-mesh = SubResource("11")
+mesh = SubResource("15")
 surface_material_override/0 = SubResource("5")
 rotation_degrees = Vector3(90, 0, 0)
-position = Vector3(0, 0.42, 2.45)
+position = Vector3(0, 0.42, 2.4)
 
 [node name="Coupler" type="MeshInstance3D" parent="."]
-mesh = SubResource("10")
-surface_material_override/0 = SubResource("4")
+mesh = SubResource("16")
+surface_material_override/0 = SubResource("5")
 position = Vector3(0, 0.92, 0)

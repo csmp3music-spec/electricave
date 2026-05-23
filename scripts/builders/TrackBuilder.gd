@@ -4,10 +4,13 @@ class_name TrackBuilder
 const TrackBlendShader := preload("res://shaders/TrackBlend.gdshader")
 const BallastAlbedoPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_diff_1k.jpg"
 const BallastRoughnessPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_rough_1k.jpg"
+const BallastNormalPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_nor_gl_1k.jpg"
 const SleeperAlbedoPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_diff_1k.jpg"
 const SleeperRoughnessPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_rough_1k.jpg"
+const SleeperNormalPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_nor_gl_1k.jpg"
 const RailAlbedoPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_diff_1k.jpg"
 const RailRoughnessPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_rough_1k.jpg"
+const RailNormalPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_nor_gl_1k.jpg"
 
 signal segment_added(curve: Curve3D)
 signal segment_removed(curve: Curve3D)
@@ -207,16 +210,7 @@ func _render_curve(curve: Curve3D) -> void:
 		ballast_instance.position.y = roadbed_height - roadbed_embed_depth + ballast_height * 0.42
 		segment_root.add_child(ballast_instance)
 
-		var sleeper_count := maxi(1, int(floor(length / maxf(0.8, sleeper_spacing))))
-		for sleeper_index in range(sleeper_count):
-			var sleeper := MeshInstance3D.new()
-			var sleeper_mesh := BoxMesh.new()
-			sleeper_mesh.size = Vector3(sleeper_width, sleeper_height, sleeper_length)
-			sleeper.mesh = sleeper_mesh
-			sleeper.set_surface_override_material(0, _ensure_sleeper_material())
-			var sleeper_ratio := (float(sleeper_index) + 0.5) / float(sleeper_count)
-			sleeper.position = Vector3(0.0, roadbed_height - roadbed_embed_depth + ballast_height * 0.74, lerpf(-length * 0.5 + sleeper_length, length * 0.5 - sleeper_length, sleeper_ratio))
-			segment_root.add_child(sleeper)
+		_add_sleepers(segment_root, length)
 
 		for rail_side in [-1.0, 1.0]:
 			var rail_mesh := BoxMesh.new()
@@ -228,6 +222,26 @@ func _render_curve(curve: Curve3D) -> void:
 			segment_root.add_child(rail_instance)
 
 		_render_nodes.append(segment_root)
+
+func _add_sleepers(segment_root: Node3D, length: float) -> void:
+	if segment_root == null or length < 0.5:
+		return
+	var sleeper_count := maxi(1, int(floor(length / maxf(0.8, sleeper_spacing))))
+	var sleeper_mesh := BoxMesh.new()
+	sleeper_mesh.size = Vector3(sleeper_width, sleeper_height, sleeper_length)
+	sleeper_mesh.material = _ensure_sleeper_material()
+	var sleeper_multimesh := MultiMesh.new()
+	sleeper_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	sleeper_multimesh.mesh = sleeper_mesh
+	sleeper_multimesh.instance_count = sleeper_count
+	var sleeper_y := roadbed_height - roadbed_embed_depth + ballast_height * 0.74
+	for sleeper_index in range(sleeper_count):
+		var sleeper_ratio := (float(sleeper_index) + 0.5) / float(sleeper_count)
+		var sleeper_z := lerpf(-length * 0.5 + sleeper_length, length * 0.5 - sleeper_length, sleeper_ratio)
+		sleeper_multimesh.set_instance_transform(sleeper_index, Transform3D(Basis.IDENTITY, Vector3(0.0, sleeper_y, sleeper_z)))
+	var sleeper_instance := MultiMeshInstance3D.new()
+	sleeper_instance.multimesh = sleeper_multimesh
+	segment_root.add_child(sleeper_instance)
 
 func _clear_render_nodes() -> void:
 	for node in _render_nodes:
@@ -257,6 +271,9 @@ func _ensure_ballast_material() -> StandardMaterial3D:
 	_ballast_material = StandardMaterial3D.new()
 	_ballast_material.albedo_texture = _load_runtime_texture(BallastAlbedoPath)
 	_ballast_material.roughness_texture = _load_runtime_texture(BallastRoughnessPath)
+	_ballast_material.normal_enabled = true
+	_ballast_material.normal_texture = _load_runtime_texture(BallastNormalPath)
+	_ballast_material.normal_scale = 0.55
 	_ballast_material.albedo_color = Color(0.92, 0.9, 0.86, 1.0)
 	_ballast_material.roughness = 0.95
 	_ballast_material.uv1_triplanar = true
@@ -270,6 +287,9 @@ func _ensure_sleeper_material() -> StandardMaterial3D:
 	_sleeper_material = StandardMaterial3D.new()
 	_sleeper_material.albedo_texture = _load_runtime_texture(SleeperAlbedoPath)
 	_sleeper_material.roughness_texture = _load_runtime_texture(SleeperRoughnessPath)
+	_sleeper_material.normal_enabled = true
+	_sleeper_material.normal_texture = _load_runtime_texture(SleeperNormalPath)
+	_sleeper_material.normal_scale = 0.48
 	_sleeper_material.albedo_color = Color(0.88, 0.84, 0.78, 1.0)
 	_sleeper_material.roughness = 0.9
 	_sleeper_material.uv1_triplanar = true
@@ -283,6 +303,9 @@ func _ensure_rail_material() -> StandardMaterial3D:
 	_rail_material = StandardMaterial3D.new()
 	_rail_material.albedo_texture = _load_runtime_texture(RailAlbedoPath)
 	_rail_material.roughness_texture = _load_runtime_texture(RailRoughnessPath)
+	_rail_material.normal_enabled = true
+	_rail_material.normal_texture = _load_runtime_texture(RailNormalPath)
+	_rail_material.normal_scale = 0.42
 	_rail_material.albedo_color = Color(0.82, 0.81, 0.8, 1.0)
 	_rail_material.metallic = 0.74
 	_rail_material.roughness = 0.28
@@ -351,6 +374,10 @@ func _resolve_weather_controller() -> Node:
 func _load_runtime_texture(resource_path: String) -> Texture2D:
 	if resource_path == "":
 		return null
+	if ResourceLoader.exists(resource_path):
+		var imported := load(resource_path)
+		if imported is Texture2D:
+			return imported
 	var absolute_path := ProjectSettings.globalize_path(resource_path)
 	if not FileAccess.file_exists(absolute_path):
 		return null

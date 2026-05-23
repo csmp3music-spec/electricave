@@ -1,0 +1,250 @@
+[gd_scene load_steps=17 format=3]
+
+[sub_resource type="StandardMaterial3D" id="1"]
+resource_name = "OrangeBody"
+albedo_color = Color(0.74, 0.76, 0.78, 1)
+metallic = 0.42
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="2"]
+resource_name = "OrangeAccent"
+albedo_color = Color(0.86, 0.39, 0.12, 1)
+metallic = 0.12
+roughness = 0.42
+
+[sub_resource type="StandardMaterial3D" id="3"]
+resource_name = "OrangeGlass"
+albedo_color = Color(0.79, 0.86, 0.92, 0.28)
+transparency = 1
+roughness = 0.06
+metallic = 0.02
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="4"]
+resource_name = "OrangeRoof"
+albedo_color = Color(0.21, 0.21, 0.2, 1)
+metallic = 0.28
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="5"]
+resource_name = "OrangeUnder"
+albedo_color = Color(0.33, 0.34, 0.36, 1)
+metallic = 0.36
+roughness = 0.48
+
+[sub_resource type="StandardMaterial3D" id="6"]
+resource_name = "OrangeDoor"
+albedo_color = Color(0.58, 0.6, 0.62, 1)
+metallic = 0.44
+roughness = 0.34
+
+[sub_resource type="BoxMesh" id="7"]
+size = Vector3(3.16, 2.9, 9.0)
+
+[sub_resource type="BoxMesh" id="8"]
+size = Vector3(3.0, 1.14, 8.2)
+
+[sub_resource type="BoxMesh" id="9"]
+size = Vector3(3.12, 0.22, 8.7)
+
+[sub_resource type="BoxMesh" id="10"]
+size = Vector3(3.2, 0.22, 8.6)
+
+[sub_resource type="BoxMesh" id="11"]
+size = Vector3(3.04, 0.28, 8.5)
+
+[sub_resource type="BoxMesh" id="12"]
+size = Vector3(0.08, 1.62, 0.92)
+
+[sub_resource type="BoxMesh" id="13"]
+size = Vector3(2.7, 2.0, 0.34)
+
+[sub_resource type="CylinderMesh" id="14"]
+top_radius = 0.44
+bottom_radius = 0.44
+height = 0.36
+
+[sub_resource type="BoxMesh" id="15"]
+size = Vector3(2.4, 0.18, 1.0)
+
+[sub_resource type="BoxMesh" id="16"]
+size = Vector3(1, 1, 1)
+
+[node name="OrangeLineCar" type="Node3D"]
+
+[node name="CarA" type="Node3D" parent="."]
+position = Vector3(0, 0, -5.05)
+
+[node name="Body" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("7")
+surface_material_override/0 = SubResource("1")
+position = Vector3(0, 1.6, 0)
+
+[node name="WindowBand" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("8")
+surface_material_override/0 = SubResource("3")
+position = Vector3(0, 1.98, 0)
+
+[node name="Belt" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("9")
+surface_material_override/0 = SubResource("2")
+position = Vector3(0, 1.22, 0)
+
+[node name="Roof" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("10")
+surface_material_override/0 = SubResource("4")
+position = Vector3(0, 2.98, 0)
+
+[node name="Skirt" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("11")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 0.52, 0)
+
+[node name="EndFront" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.6, -4.48)
+
+[node name="EndRear" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.6, 4.48)
+
+[node name="DoorL1" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.58, 1.64, -2.75)
+
+[node name="DoorL2" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.58, 1.64, 0)
+
+[node name="DoorL3" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.58, 1.64, 2.75)
+
+[node name="DoorR1" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.58, 1.64, -2.75)
+
+[node name="DoorR2" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.58, 1.64, 0)
+
+[node name="DoorR3" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.58, 1.64, 2.75)
+
+[node name="RoofEquipment" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("16")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 3.16, 0.38)
+scale = Vector3(1.6, 0.14, 2.2)
+
+[node name="TruckA" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("5")
+rotation_degrees = Vector3(90, 0, 0)
+position = Vector3(0, 0.42, -2.7)
+
+[node name="TruckB" type="MeshInstance3D" parent="CarA"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("5")
+rotation_degrees = Vector3(90, 0, 0)
+position = Vector3(0, 0.42, 2.7)
+
+[node name="CarB" type="Node3D" parent="."]
+position = Vector3(0, 0, 5.05)
+
+[node name="Body" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("7")
+surface_material_override/0 = SubResource("1")
+position = Vector3(0, 1.6, 0)
+
+[node name="WindowBand" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("8")
+surface_material_override/0 = SubResource("3")
+position = Vector3(0, 1.98, 0)
+
+[node name="Belt" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("9")
+surface_material_override/0 = SubResource("2")
+position = Vector3(0, 1.22, 0)
+
+[node name="Roof" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("10")
+surface_material_override/0 = SubResource("4")
+position = Vector3(0, 2.98, 0)
+
+[node name="Skirt" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("11")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 0.52, 0)
+
+[node name="EndFront" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.6, -4.48)
+
+[node name="EndRear" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("13")
+surface_material_override/0 = SubResource("6")
+position = Vector3(0, 1.6, 4.48)
+
+[node name="DoorL1" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.58, 1.64, -2.75)
+
+[node name="DoorL2" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.58, 1.64, 0)
+
+[node name="DoorL3" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(1.58, 1.64, 2.75)
+
+[node name="DoorR1" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.58, 1.64, -2.75)
+
+[node name="DoorR2" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.58, 1.64, 0)
+
+[node name="DoorR3" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("12")
+surface_material_override/0 = SubResource("6")
+position = Vector3(-1.58, 1.64, 2.75)
+
+[node name="RoofEquipment" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("16")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 3.16, 0.38)
+scale = Vector3(1.6, 0.14, 2.2)
+
+[node name="TruckA" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("5")
+rotation_degrees = Vector3(90, 0, 0)
+position = Vector3(0, 0.42, -2.7)
+
+[node name="TruckB" type="MeshInstance3D" parent="CarB"]
+mesh = SubResource("14")
+surface_material_override/0 = SubResource("5")
+rotation_degrees = Vector3(90, 0, 0)
+position = Vector3(0, 0.42, 2.7)
+
+[node name="Coupler" type="MeshInstance3D" parent="."]
+mesh = SubResource("15")
+surface_material_override/0 = SubResource("5")
+position = Vector3(0, 0.96, 0)

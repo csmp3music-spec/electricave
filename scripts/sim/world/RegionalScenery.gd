@@ -19,6 +19,8 @@ const PineTwigRoughnessPath := "res://assets/textures/tree_materials/pine_tree_0
 @export var shoreline_tree_density := 0.007
 @export var stop_tree_count := 16
 @export var max_tree_instances := 1600
+@export var mixed_forest_ratio := 0.34
+@export var shoreline_broadleaf_bonus := 0.28
 
 var _route9_backdrop: Node
 var _town_manager: Node
@@ -26,7 +28,9 @@ var _corridor: Node
 var _rebuild_queued := false
 var _trunk_material_cache: StandardMaterial3D
 var _foliage_material_cache: StandardMaterial3D
+var _broadleaf_foliage_material_cache: StandardMaterial3D
 var _foliage_mesh_cache: Mesh
+var _broadleaf_foliage_mesh_cache: Mesh
 
 func _ready() -> void:
 	_resolve_dependencies()
@@ -111,6 +115,13 @@ func _scatter_hill_trees(hill_variant: Dictionary, accepted_positions: PackedVec
 		accepted_positions.append(_grounded(pos))
 
 func _scatter_shoreline_trees(water_variant: Dictionary, accepted_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var shape := String(water_variant.get("shape", "ellipse"))
+	if shape == "river":
+		_scatter_riverbank_trees(water_variant, accepted_positions, route_points, stop_positions)
+		return
+	if shape == "polygon":
+		_scatter_polygon_shoreline_trees(water_variant, accepted_positions, route_points, stop_positions)
+		return
 	var center := _hill_or_water_center(water_variant)
 	var rx := maxf(150.0, float(water_variant.get("radius_x_m", 400.0)))
 	var rz := maxf(150.0, float(water_variant.get("radius_z_m", 400.0)))
@@ -129,6 +140,68 @@ func _scatter_shoreline_trees(water_variant: Dictionary, accepted_positions: Pac
 			continue
 		accepted_positions.append(_grounded(pos))
 
+func _scatter_polygon_shoreline_trees(water_variant: Dictionary, accepted_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var polygon: PackedVector2Array = water_variant.get("world_polygon_xz", PackedVector2Array())
+	if polygon.size() < 3:
+		return
+	var perimeter := 0.0
+	for i in range(polygon.size()):
+		perimeter += polygon[i].distance_to(polygon[(i + 1) % polygon.size()])
+	var count := clampi(int(perimeter * shoreline_tree_density * 0.16), 14, 160)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = abs(String(water_variant.get("name", "polygon_water")).hash()) + 991
+	var placed := 0
+	var attempts := 0
+	while placed < count and attempts < count * 12:
+		attempts += 1
+		var seg_index := rng.randi_range(0, polygon.size() - 1)
+		var a := polygon[seg_index]
+		var b := polygon[(seg_index + 1) % polygon.size()]
+		var edge_point := a.lerp(b, rng.randf())
+		var tangent := (b - a).normalized()
+		if tangent.length() <= 0.001:
+			continue
+		var normal := Vector2(-tangent.y, tangent.x)
+		var side := -1.0 if rng.randf() < 0.5 else 1.0
+		var offset := rng.randf_range(28.0, 130.0)
+		var pos := Vector3(edge_point.x + normal.x * offset * side, 0.0, edge_point.y + normal.y * offset * side)
+		if _route9_backdrop.has_method("is_water_at") and bool(_route9_backdrop.call("is_water_at", pos)):
+			continue
+		if not _can_place_tree(pos, accepted_positions, route_points, stop_positions):
+			continue
+		accepted_positions.append(_grounded(pos))
+		placed += 1
+
+func _scatter_riverbank_trees(water_variant: Dictionary, accepted_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var path: PackedVector2Array = water_variant.get("world_points_xz", PackedVector2Array())
+	if path.size() < 2:
+		return
+	var width_m := maxf(40.0, float(water_variant.get("width_m", 160.0)))
+	var count := clampi(int(_polyline_length_2d(path) * shoreline_tree_density * 0.10), 12, 180)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = abs(String(water_variant.get("name", "river")).hash()) + 1771
+	var placed := 0
+	var attempts := 0
+	while placed < count and attempts < count * 14:
+		attempts += 1
+		var seg_index := rng.randi_range(0, path.size() - 2)
+		var a := path[seg_index]
+		var b := path[seg_index + 1]
+		var center := a.lerp(b, rng.randf())
+		var tangent := (b - a).normalized()
+		if tangent.length() <= 0.001:
+			continue
+		var normal := Vector2(-tangent.y, tangent.x)
+		var side := -1.0 if rng.randf() < 0.5 else 1.0
+		var offset := width_m * 0.5 + rng.randf_range(18.0, 95.0)
+		var pos := Vector3(center.x + normal.x * offset * side, 0.0, center.y + normal.y * offset * side)
+		if _route9_backdrop.has_method("is_water_at") and bool(_route9_backdrop.call("is_water_at", pos)):
+			continue
+		if not _can_place_tree(pos, accepted_positions, route_points, stop_positions):
+			continue
+		accepted_positions.append(_grounded(pos))
+		placed += 1
+
 func _scatter_stop_trees(stop_pos: Vector3, accepted_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(abs(stop_pos.x * 0.31 + stop_pos.z * 0.17))
@@ -145,14 +218,27 @@ func _scatter_stop_trees(stop_pos: Vector3, accepted_positions: PackedVector3Arr
 func _build_tree_multimeshes(positions: PackedVector3Array) -> void:
 	if positions.is_empty():
 		return
+	var conifer_positions := PackedVector3Array()
+	var broadleaf_positions := PackedVector3Array()
+	for pos in positions:
+		if _use_broadleaf_variant(pos):
+			broadleaf_positions.append(pos)
+		else:
+			conifer_positions.append(pos)
+	_build_tree_variant(conifer_positions, false)
+	_build_tree_variant(broadleaf_positions, true)
+
+func _build_tree_variant(positions: PackedVector3Array, broadleaf: bool) -> void:
+	if positions.is_empty():
+		return
 	var trunk_mesh := CylinderMesh.new()
 	trunk_mesh.top_radius = 0.16
 	trunk_mesh.bottom_radius = 0.28
 	trunk_mesh.height = 1.0
 	trunk_mesh.radial_segments = 10
-	var canopy_mesh := _build_foliage_card_mesh()
+	var canopy_mesh := _build_broadleaf_foliage_mesh() if broadleaf else _build_foliage_card_mesh()
 	var trunk_material := _tree_trunk_material()
-	var canopy_material := _tree_foliage_material()
+	var canopy_material := _tree_broadleaf_material() if broadleaf else _tree_foliage_material()
 	if trunk_material == null or canopy_material == null or canopy_mesh == null:
 		var fallback_canopy := SphereMesh.new()
 		fallback_canopy.radius = 0.5
@@ -175,26 +261,26 @@ func _build_tree_multimeshes(positions: PackedVector3Array) -> void:
 	trunk_mm.instance_count = positions.size()
 	canopy_mm.instance_count = positions.size()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 19260324
+	rng.seed = 19260324 + (791 if broadleaf else 0)
 	for i in range(positions.size()):
 		var pos := positions[i]
-		var trunk_height := rng.randf_range(4.8, 8.8)
-		var canopy_radius := rng.randf_range(2.3, 4.4)
-		var canopy_height := canopy_radius * rng.randf_range(1.9, 2.7)
+		var trunk_height := rng.randf_range(4.4, 7.2) if broadleaf else rng.randf_range(4.8, 8.8)
+		var canopy_radius := rng.randf_range(3.4, 5.6) if broadleaf else rng.randf_range(2.3, 4.4)
+		var canopy_height := canopy_radius * (rng.randf_range(1.15, 1.55) if broadleaf else rng.randf_range(1.9, 2.7))
 		var yaw := rng.randf_range(0.0, TAU)
 		var trunk_basis := Basis().rotated(Vector3.UP, yaw).scaled(Vector3(1.0, trunk_height, 1.0))
 		var canopy_basis := Basis().rotated(Vector3.UP, yaw).scaled(Vector3(canopy_radius * 2.0, canopy_height, canopy_radius * 2.0))
 		var trunk_xform := Transform3D(trunk_basis, pos + Vector3(0.0, trunk_height * 0.5, 0.0))
-		var canopy_xform := Transform3D(canopy_basis, pos + Vector3(0.0, trunk_height * 0.22, 0.0))
+		var canopy_xform := Transform3D(canopy_basis, pos + Vector3(0.0, trunk_height * (0.38 if broadleaf else 0.22), 0.0))
 		trunk_mm.set_instance_transform(i, trunk_xform)
 		canopy_mm.set_instance_transform(i, canopy_xform)
 	var trunk_instance := MultiMeshInstance3D.new()
-	trunk_instance.name = "TreeTrunks"
+	trunk_instance.name = "BroadleafTreeTrunks" if broadleaf else "TreeTrunks"
 	trunk_instance.multimesh = trunk_mm
 	trunk_instance.material_override = trunk_material
 	add_child(trunk_instance)
 	var canopy_instance := MultiMeshInstance3D.new()
-	canopy_instance.name = "TreeCanopies"
+	canopy_instance.name = "BroadleafTreeCanopies" if broadleaf else "TreeCanopies"
 	canopy_instance.multimesh = canopy_mm
 	canopy_instance.material_override = canopy_material
 	add_child(canopy_instance)
@@ -228,15 +314,31 @@ func _tree_foliage_material() -> StandardMaterial3D:
 	_foliage_material_cache.albedo_texture = albedo
 	_foliage_material_cache.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	_foliage_material_cache.alpha_scissor_threshold = 0.42
+	_foliage_material_cache.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+	_foliage_material_cache.alpha_antialiasing_edge = 0.65
 	_foliage_material_cache.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_foliage_material_cache.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
 	_foliage_material_cache.vertex_color_use_as_albedo = false
+	_foliage_material_cache.set_feature(BaseMaterial3D.FEATURE_BACKLIGHT, true)
+	_foliage_material_cache.backlight = Color(0.22, 0.31, 0.18, 1.0)
 	_foliage_material_cache.normal_enabled = normal != null
 	_foliage_material_cache.normal_texture = normal
 	_foliage_material_cache.roughness_texture = roughness
 	_foliage_material_cache.roughness = 0.92
 	_foliage_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return _foliage_material_cache
+
+func _tree_broadleaf_material() -> StandardMaterial3D:
+	if _broadleaf_foliage_material_cache != null:
+		return _broadleaf_foliage_material_cache
+	var base_material := _tree_foliage_material()
+	if base_material == null:
+		return null
+	_broadleaf_foliage_material_cache = base_material.duplicate()
+	_broadleaf_foliage_material_cache.albedo_color = Color(0.82, 0.92, 0.77, 1.0)
+	_broadleaf_foliage_material_cache.backlight = Color(0.29, 0.37, 0.22, 1.0)
+	_broadleaf_foliage_material_cache.roughness = 0.88
+	return _broadleaf_foliage_material_cache
 
 func _build_foliage_card_mesh() -> Mesh:
 	if _foliage_mesh_cache != null:
@@ -250,6 +352,20 @@ func _build_foliage_card_mesh() -> Mesh:
 	st.generate_normals()
 	_foliage_mesh_cache = st.commit()
 	return _foliage_mesh_cache
+
+func _build_broadleaf_foliage_mesh() -> Mesh:
+	if _broadleaf_foliage_mesh_cache != null:
+		return _broadleaf_foliage_mesh_cache
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_append_tree_card(st, 0.0, 0.68, 0.72, 0.10)
+	_append_tree_card(st, PI * 0.22, 0.74, 0.88, 0.18)
+	_append_tree_card(st, PI * 0.44, 0.72, 0.94, 0.22)
+	_append_tree_card(st, PI * 0.68, 0.64, 0.82, 0.34)
+	_append_tree_card(st, PI * 0.88, 0.56, 0.62, 0.56)
+	st.generate_normals()
+	_broadleaf_foliage_mesh_cache = st.commit()
+	return _broadleaf_foliage_mesh_cache
 
 func _append_tree_card(st: SurfaceTool, angle: float, width: float, height: float, y_offset: float) -> void:
 	var basis := Basis().rotated(Vector3.UP, angle)
@@ -326,6 +442,15 @@ func _can_place_tree(pos: Vector3, accepted_positions: PackedVector3Array, route
 			return false
 	return true
 
+func _use_broadleaf_variant(pos: Vector3) -> bool:
+	var probability := mixed_forest_ratio
+	if _route9_backdrop != null and _route9_backdrop.has_method("terrain_context_at"):
+		var context: Dictionary = _route9_backdrop.call("terrain_context_at", pos)
+		probability += float(context.get("shore_factor", 0.0)) * shoreline_broadleaf_bonus
+	var seed := int(absf(pos.x * 0.021 + pos.z * 0.037))
+	var roll := float(seed % 1000) / 1000.0
+	return roll < clampf(probability, 0.14, 0.78)
+
 func _grounded(pos: Vector3) -> Vector3:
 	var ground_y := 0.0
 	if _route9_backdrop != null and _route9_backdrop.has_method("ground_height_at"):
@@ -335,6 +460,8 @@ func _grounded(pos: Vector3) -> Vector3:
 func _hill_or_water_center(feature: Dictionary) -> Vector3:
 	if _route9_backdrop == null:
 		return Vector3.ZERO
+	if feature.has("world_pos"):
+		return feature.get("world_pos", Vector3.ZERO)
 	var lon := float(feature.get("lon", 0.0))
 	var lat := float(feature.get("lat", 0.0))
 	if _route9_backdrop.has_method("world_point_for_lon_lat"):
@@ -351,3 +478,9 @@ func _hill_or_water_center(feature: Dictionary) -> Vector3:
 	var x := lerpf(-world_size.x * 0.5, world_size.x * 0.5, inverse_lerp(float(bounds["min_lon"]), float(bounds["max_lon"]), lon))
 	var z := lerpf(world_size.y * 0.5, -world_size.y * 0.5, inverse_lerp(float(bounds["min_lat"]), float(bounds["max_lat"]), lat))
 	return Vector3(x, 0.0, z)
+
+func _polyline_length_2d(points: PackedVector2Array) -> float:
+	var length_m := 0.0
+	for i in range(points.size() - 1):
+		length_m += points[i].distance_to(points[i + 1])
+	return length_m

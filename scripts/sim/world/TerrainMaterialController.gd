@@ -20,6 +20,10 @@ const RockNormalPath := "res://assets/textures/terrain_materials/aerial_ground_r
 @export var micro_relief_m := 0.55
 @export var micro_relief_scale := 0.00032
 @export var terrain_texture_contrast := 1.08
+@export var terrain_height_range_m := Vector2(-2.5, 18.0)
+@export var detail_normal_strength := 0.16
+@export var leaf_litter_strength := 0.24
+@export var shoreline_grit_strength := 0.22
 
 var _route9_backdrop: Node
 var _weather: Node
@@ -54,13 +58,23 @@ func _apply_heightfield() -> void:
 		return
 	var normals := PackedVector3Array()
 	normals.resize(vertices.size())
+	var colors := PackedColorArray()
+	colors.resize(vertices.size())
 	var origin := global_transform.origin
 	for i in range(vertices.size()):
 		var vertex: Vector3 = vertices[i]
 		var world_sample := Vector3(origin.x + vertex.x, 0.0, origin.z + vertex.z)
 		var base_height := float(_route9_backdrop.call("ground_height_at", world_sample)) * backdrop_height_influence
+		var context := {}
+		if _route9_backdrop.has_method("terrain_context_at"):
+			context = _route9_backdrop.call("terrain_context_at", world_sample)
 		vertex.y = base_height - origin.y + _micro_relief(Vector2(world_sample.x, world_sample.z))
 		vertices[i] = vertex
+		var elevation_hint := clampf(inverse_lerp(terrain_height_range_m.x, terrain_height_range_m.y, base_height), 0.0, 1.0)
+		var shore_factor := clampf(float(context.get("shore_factor", 0.0)), 0.0, 1.0)
+		var river_factor := clampf(float(context.get("river_factor", 0.0)), 0.0, 1.0)
+		var coast_factor := clampf(float(context.get("coast_factor", 0.0)), 0.0, 1.0)
+		colors[i] = Color(elevation_hint, shore_factor, river_factor, coast_factor)
 	for i in range(0, indices.size(), 3):
 		var ia := indices[i]
 		var ib := indices[i + 1]
@@ -76,6 +90,7 @@ func _apply_heightfield() -> void:
 		normals[i] = normals[i].normalized()
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
 	var rebuilt_mesh := ArrayMesh.new()
 	rebuilt_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh = rebuilt_mesh
@@ -106,14 +121,23 @@ func _apply_textures() -> void:
 			continue
 		_shader_material.set_shader_parameter(key, texture)
 	_shader_material.set_shader_parameter("use_texture_layers", complete)
-	_shader_material.set_shader_parameter("height_scale", 0.55)
-	_shader_material.set_shader_parameter("ridge_strength", 0.14)
-	_shader_material.set_shader_parameter("grass_uv_scale", 0.072)
-	_shader_material.set_shader_parameter("soil_uv_scale", 0.062)
-	_shader_material.set_shader_parameter("mud_uv_scale", 0.086)
-	_shader_material.set_shader_parameter("rock_uv_scale", 0.052)
-	_shader_material.set_shader_parameter("normal_strength", 0.82)
-	_shader_material.set_shader_parameter("macro_albedo_strength", terrain_texture_contrast)
+	_shader_material.set_shader_parameter("height_scale", 0.82)
+	_shader_material.set_shader_parameter("ridge_strength", 0.12)
+	_shader_material.set_shader_parameter("grass_uv_scale", 0.069)
+	_shader_material.set_shader_parameter("soil_uv_scale", 0.059)
+	_shader_material.set_shader_parameter("mud_uv_scale", 0.083)
+	_shader_material.set_shader_parameter("rock_uv_scale", 0.049)
+	_shader_material.set_shader_parameter("rock_triplanar_sharpness", 7.5)
+	_shader_material.set_shader_parameter("rock_triplanar_blend_start", 0.18)
+	_shader_material.set_shader_parameter("rock_triplanar_blend_end", 0.48)
+	_shader_material.set_shader_parameter("normal_strength", 0.9)
+	_shader_material.set_shader_parameter("detail_normal_strength", detail_normal_strength)
+	_shader_material.set_shader_parameter("leaf_litter_strength", leaf_litter_strength)
+	_shader_material.set_shader_parameter("shoreline_grit_strength", shoreline_grit_strength)
+	_shader_material.set_shader_parameter("macro_albedo_strength", terrain_texture_contrast * 1.03)
+	_shader_material.set_shader_parameter("wet_clearcoat_strength", 0.82)
+	_shader_material.set_shader_parameter("terrain_low_hint", terrain_height_range_m.x)
+	_shader_material.set_shader_parameter("terrain_high_hint", terrain_height_range_m.y)
 
 func _on_weather_changed(payload: Dictionary) -> void:
 	_weather_payload = payload.duplicate(true)
@@ -142,6 +166,10 @@ func _micro_relief(world_xz: Vector2) -> float:
 func _load_runtime_texture(resource_path: String) -> Texture2D:
 	if resource_path == "":
 		return null
+	if ResourceLoader.exists(resource_path):
+		var imported := load(resource_path)
+		if imported is Texture2D:
+			return imported
 	var absolute_path := ProjectSettings.globalize_path(resource_path)
 	if not FileAccess.file_exists(absolute_path):
 		return null

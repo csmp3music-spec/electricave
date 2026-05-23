@@ -19,6 +19,7 @@ var _phase := 0.0
 var _anim_speed := 1.0
 var _base_yaw := 0.0
 var _walk_style := false
+var _wait_stress := 0.0
 var _motion_root: Node3D
 var _fallback: Node3D
 var _imported_root: Node3D
@@ -44,6 +45,11 @@ func set_prefer_imported_models(enabled: bool) -> void:
 	if is_inside_tree():
 		_swap_visual(_seed)
 
+func set_wait_stress(value: float) -> void:
+	_wait_stress = clampf(value, 0.0, 1.0)
+	if _fallback != null and is_instance_valid(_fallback) and _fallback.has_method("set_wait_stress"):
+		_fallback.call("set_wait_stress", _wait_stress)
+
 func _process(delta: float) -> void:
 	if _motion_root == null:
 		return
@@ -51,10 +57,10 @@ func _process(delta: float) -> void:
 		return
 	_phase += delta * (_anim_speed * (1.8 if _walk_style else 1.05))
 	var sway := sin(_phase)
-	var bob := sin(_phase * 2.0) * (0.03 if _walk_style else 0.012)
+	var bob := sin(_phase * 2.0) * ((0.03 if _walk_style else 0.012) + _wait_stress * 0.014)
 	_motion_root.position.y = bob
 	if not _has_imported_animation:
-		_motion_root.rotation.y = sway * (0.05 if _walk_style else 0.025)
+		_motion_root.rotation.y = sway * ((0.05 if _walk_style else 0.025) + _wait_stress * 0.025)
 
 func _swap_visual(seed: int) -> void:
 	_clear_visuals()
@@ -99,6 +105,8 @@ func _spawn_fallback(seed: int) -> void:
 	_fallback = FallbackPassengerScript.new()
 	_motion_root.add_child(_fallback)
 	_fallback.call("configure", seed, _walk_style)
+	if _fallback.has_method("set_wait_stress"):
+		_fallback.call("set_wait_stress", _wait_stress)
 
 func _load_imported_scene(seed: int) -> PackedScene:
 	var path := String(IMPORTED_SCENE_PATHS[seed % IMPORTED_SCENE_PATHS.size()])

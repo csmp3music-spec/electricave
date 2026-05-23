@@ -8,6 +8,27 @@ const ParcelGeneratorScript := preload("res://scripts/sim/town/ParcelGenerator.g
 const StreetGeneratorScript := preload("res://scripts/sim/streets/StreetGenerator.gd")
 const WhiteCityParkScene := preload("res://scenes/town/prefabs/WhiteCityPark.tscn")
 const NorumbegaParkScene := preload("res://scenes/town/prefabs/NorumbegaPark.tscn")
+const BrickAlbedoPath := "res://assets/textures/period_boston/castle_brick_02_red/castle_brick_02_red_diff_1k.jpg"
+const BrickRoughnessPath := "res://assets/textures/period_boston/castle_brick_02_red/castle_brick_02_red_rough_1k.jpg"
+const BrickNormalPath := "res://assets/textures/period_boston/castle_brick_02_red/castle_brick_02_red_nor_gl_1k.jpg"
+const PlasterAlbedoPath := "res://assets/textures/period_boston/worn_plaster_wall/worn_plaster_wall_diff_1k.jpg"
+const PlasterRoughnessPath := "res://assets/textures/period_boston/worn_plaster_wall/worn_plaster_wall_rough_1k.jpg"
+const PlasterNormalPath := "res://assets/textures/period_boston/worn_plaster_wall/worn_plaster_wall_nor_gl_1k.jpg"
+const TileAlbedoPath := "res://assets/textures/period_boston/worn_tile_floor/worn_tile_floor_diff_1k.jpg"
+const TileRoughnessPath := "res://assets/textures/period_boston/worn_tile_floor/worn_tile_floor_rough_1k.jpg"
+const TileNormalPath := "res://assets/textures/period_boston/worn_tile_floor/worn_tile_floor_nor_gl_1k.jpg"
+const CobbleAlbedoPath := "res://assets/textures/period_boston/cobblestone_floor_04/cobblestone_floor_04_diff_1k.jpg"
+const CobbleRoughnessPath := "res://assets/textures/period_boston/cobblestone_floor_04/cobblestone_floor_04_rough_1k.jpg"
+const CobbleNormalPath := "res://assets/textures/period_boston/cobblestone_floor_04/cobblestone_floor_04_nor_gl_1k.jpg"
+const AsphaltAlbedoPath := "res://assets/textures/period_boston/asphalt_02/asphalt_02_diff_1k.jpg"
+const AsphaltRoughnessPath := "res://assets/textures/period_boston/asphalt_02/asphalt_02_rough_1k.jpg"
+const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/asphalt_02_nor_gl_1k.jpg"
+const PlankAlbedoPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_diff_1k.jpg"
+const PlankRoughnessPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_rough_1k.jpg"
+const PlankNormalPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_nor_gl_1k.jpg"
+const SoilAlbedoPath := "res://assets/textures/terrain_materials/forest_ground_04/forest_ground_04_diff_1k.jpg"
+const SoilRoughnessPath := "res://assets/textures/terrain_materials/forest_ground_04/forest_ground_04_rough_1k.jpg"
+const SoilNormalPath := "res://assets/textures/terrain_materials/forest_ground_04/forest_ground_04_nor_gl_1k.jpg"
 const BOSTON_CORE_STOPS := [
 	"Park Street",
 	"Boylston",
@@ -60,6 +81,7 @@ signal town_updated(town)
 @export var building_db: Resource = null
 @export var track_builder_path: NodePath
 @export var world_root_path: NodePath
+@export var passenger_manager_path: NodePath
 @export var tick_seconds := 2.0
 @export var max_towns := 150
 @export var walk_radius := 600.0
@@ -88,9 +110,18 @@ signal town_updated(town)
 @export var enable_streets := true
 @export var street_width := 8.0
 @export var street_color := Color(0.32, 0.27, 0.22, 1)
+@export var road_center_width := 5.8
+@export var road_edge_width := 1.15
+@export var road_surface_height := 0.18
+@export var road_edge_height := 0.12
+@export var rural_wall_offset_m := 5.3
+@export var rural_wall_height_m := 0.86
+@export var rural_wall_width_m := 0.62
 @export var debug_spawn_on_ready := false
 @export var debug_stop_positions: Array[Vector3] = []
 @export var debug_stop_frequency := 6.0
+@export var service_quality_growth_weight := 0.16
+@export var crowding_growth_penalty := 0.22
 
 var towns: Array = []
 var stops: Array = []
@@ -102,6 +133,9 @@ var _pending_spawns: Array = []
 var _street_gen = StreetGeneratorScript.new()
 var _street_root: Node3D
 var _terrain_backdrop: Node
+var _passenger_manager: Node
+var _texture_cache: Dictionary = {}
+var _material_cache: Dictionary = {}
 
 @onready var _world_root: Node3D = _resolve_world_root()
 
@@ -116,6 +150,7 @@ func _ready() -> void:
 	_street_root.name = "StreetSegments"
 	add_child(_street_root)
 	_terrain_backdrop = _resolve_terrain_backdrop()
+	_resolve_gameplay_nodes()
 	if track_builder_path != NodePath(""):
 		var builder := get_node(track_builder_path)
 		if builder and builder.has_signal("segment_added"):
@@ -190,15 +225,28 @@ func SetEra(_era: String) -> void:
 func _simulate_growth_tick() -> void:
 	if stops.is_empty():
 		return
+	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
+		_resolve_gameplay_nodes()
 	_update_connectivity()
 	var spawns := 0
 	for stop in stops:
 		var town = _town_for_stop(stop.stop_id)
 		if town == null:
 			continue
-		var score: float = float(stop.transit_score())
-		town.growth_rate = _score_to_growth(score)
-		stop.ridership_demand = max(0.0, score) * 12.0
+		var base_score: float = float(stop.transit_score())
+		var service_snapshot: Dictionary = _service_snapshot_for_stop(stop)
+		var rating := float(service_snapshot.get("rating", 75.0))
+		var demand_multiplier := float(service_snapshot.get("demand_multiplier", 1.0))
+		var crowding_pressure := float(service_snapshot.get("crowding_pressure", 0.0))
+		var adjusted_score := base_score * lerpf(0.78, 1.22, clampf(rating / 100.0, 0.0, 1.0))
+		adjusted_score *= clampf(demand_multiplier, 0.8, 1.6)
+		adjusted_score -= crowding_pressure * 4.0
+		town.growth_rate = _score_to_growth(adjusted_score)
+		town.growth_rate += ((rating - 70.0) / 100.0) * service_quality_growth_weight
+		town.growth_rate -= crowding_pressure * crowding_growth_penalty
+		town.growth_rate = clampf(town.growth_rate, -0.45, 0.95)
+		stop.ridership_demand = max(0.0, adjusted_score) * 12.0
+		stop.land_value = clampf(1.0 + (rating - 55.0) / 120.0 - crowding_pressure * 0.22, 0.72, 1.65)
 		if town.growth_rate > 0.05:
 			spawns += _spawn_growth_ring(stop, false)
 		elif town.growth_rate < -0.1:
@@ -207,6 +255,19 @@ func _simulate_growth_tick() -> void:
 		if spawns >= max_spawns_per_tick:
 			break
 	_spawn_corridor_growth()
+
+func _resolve_gameplay_nodes() -> void:
+	if passenger_manager_path != NodePath(""):
+		_passenger_manager = get_node_or_null(passenger_manager_path)
+	if _passenger_manager == null:
+		_passenger_manager = get_parent().get_node_or_null("PassengerManager")
+
+func _service_snapshot_for_stop(stop) -> Dictionary:
+	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
+		return {}
+	if _passenger_manager.has_method("get_stop_service_snapshot"):
+		return _passenger_manager.call("get_stop_service_snapshot", String(stop.town_name))
+	return {}
 
 func _update_connectivity() -> void:
 	for stop in stops:
@@ -331,6 +392,7 @@ func _spawn_building_now(pos: Vector3, category: String, anchor: Vector3 = Vecto
 	_place_instance_on_ground(instance)
 	if instance is Node3D:
 		instance.rotation.y = _rotation_for(placed_pos, anchor)
+		_apply_spawned_materials(instance, category)
 	_register_occupied(placed_pos)
 
 func _scene_for_category(category: String) -> PackedScene:
@@ -368,8 +430,7 @@ func _placeholder_building(category: String) -> Node3D:
 	mesh.size = Vector3(12.0, 8.0, 12.0)
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = _color_for_category(category)
+	var mat := _material_for_style(_default_building_style_for_category(category))
 	mesh_instance.set_surface_override_material(0, mat)
 	return mesh_instance
 
@@ -396,6 +457,197 @@ func _color_for_category(category: String) -> Color:
 		"transit":
 			return Color("d0b78a")
 	return Color("8c8c8c")
+
+func _road_style_for_stop(stop) -> String:
+	var name := String(stop.town_name)
+	if name in BOSTON_CORE_STOPS or name in WESTERN_CENTERS or name in INDUSTRIAL_STOPS:
+		return "urban"
+	if name in STREETCAR_SUBURB_STOPS:
+		return "suburban"
+	return "rural"
+
+func _road_edge_width_for_style(style: String) -> float:
+	match style:
+		"urban":
+			return clampf(road_edge_width * 0.75, 0.7, 1.2)
+		"rural":
+			return clampf(road_edge_width * 1.25, 1.0, 1.8)
+		_:
+			return road_edge_width
+
+func _road_center_scale_for_style(style: String) -> float:
+	match style:
+		"urban":
+			return 1.08
+		"rural":
+			return 0.88
+		_:
+			return 1.0
+
+func _spawn_segment_box(center: Vector3, forward: Vector3, size: Vector3, material: Material) -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material
+	_street_root.add_child(mesh_instance)
+	mesh_instance.global_position = center
+	mesh_instance.look_at(mesh_instance.global_position + forward, Vector3.UP)
+	mesh_instance.rotate_y(PI)
+
+func _spawn_rural_stone_walls(a: Vector3, b: Vector3, forward: Vector3, side: Vector3, mid: Vector3, length: float, shoulder_offset: float) -> void:
+	if length < 18.0:
+		return
+	var seed := int(absf(a.x * 0.031 + a.z * 0.079 + b.x * 0.047 + b.z * 0.091))
+	if seed % 4 == 0:
+		return
+	var wall_length := length * 0.94
+	var wall_center_offset := shoulder_offset + rural_wall_offset_m
+	var wall_elevation := rural_wall_height_m * 0.5 + 0.03
+	var material := _material_for_style("stone_wall")
+	if seed % 2 == 0:
+		_spawn_segment_box(mid + side * wall_center_offset + Vector3(0.0, wall_elevation, 0.0), forward, Vector3(rural_wall_width_m, rural_wall_height_m, wall_length), material)
+	if seed % 3 != 1:
+		_spawn_segment_box(mid - side * wall_center_offset + Vector3(0.0, wall_elevation, 0.0), forward, Vector3(rural_wall_width_m, rural_wall_height_m, wall_length), material)
+
+func _apply_spawned_materials(instance: Node3D, category: String) -> void:
+	_apply_materials_recursive(instance, category)
+
+func _apply_materials_recursive(node: Node, category: String) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh is PrimitiveMesh:
+			var style := _mesh_style_for_node(mesh_instance.name, category)
+			if style != "":
+				mesh_instance.material_override = _material_for_style(style)
+	for child in node.get_children():
+		_apply_materials_recursive(child, category)
+
+func _mesh_style_for_node(node_name: String, category: String) -> String:
+	var lower := node_name.to_lower()
+	if category == "farms":
+		if "silo" in lower:
+			return "building_plaster_light"
+		if "roof" in lower:
+			return "building_farm_roof"
+		return "building_farm_barn"
+	if "roof" in lower or "cornice" in lower or "cap" in lower or "spire" in lower or "lantern" in lower:
+		return "building_roof_slate"
+	if "storefront" in lower or "entryarch" in lower or "entry" in lower or "portico" in lower or "concourse" in lower:
+		return "building_storefront"
+	if "porch" in lower or "awning" in lower or "dock" in lower or "post" in lower or "canopy" in lower:
+		return "building_wood_trim"
+	match category:
+		"commercial_high", "commercial_low":
+			return "building_commercial_masonry"
+		"industrial":
+			return "building_industrial_brick"
+		"civic", "transit":
+			return "building_civic_stone"
+		"residential_high", "residential_medium", "residential_low":
+			return "building_residential_wall"
+		_:
+			return _default_building_style_for_category(category)
+
+func _default_building_style_for_category(category: String) -> String:
+	match category:
+		"commercial_high", "commercial_low":
+			return "building_commercial_masonry"
+		"industrial":
+			return "building_industrial_brick"
+		"civic", "transit":
+			return "building_civic_stone"
+		"farms":
+			return "building_farm_barn"
+		_:
+			return "building_residential_wall"
+
+func _material_for_style(style: String) -> Material:
+	if _material_cache.has(style):
+		return _material_cache[style]
+	var material := StandardMaterial3D.new()
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.roughness = 0.92
+	material.metallic = 0.0
+	_set_material_property_if_available(material, "texture_repeat", 1)
+	_set_material_property_if_available(material, "uv1_triplanar", true)
+	_set_material_property_if_available(material, "uv1_world_triplanar", true)
+	_set_material_property_if_available(material, "uv1_triplanar_sharpness", 1.5)
+	match style:
+		"road_urban":
+			_configure_pbr_material(material, AsphaltAlbedoPath, AsphaltRoughnessPath, AsphaltNormalPath, Color(0.68, 0.66, 0.62, 1.0), Vector3(0.22, 0.22, 0.22), 0.94, 0.72)
+		"road_suburban":
+			_configure_pbr_material(material, AsphaltAlbedoPath, AsphaltRoughnessPath, AsphaltNormalPath, Color(0.73, 0.71, 0.67, 1.0), Vector3(0.19, 0.19, 0.19), 0.92, 0.78)
+		"road_rural":
+			_configure_pbr_material(material, AsphaltAlbedoPath, AsphaltRoughnessPath, AsphaltNormalPath, Color(0.79, 0.76, 0.71, 1.0), Vector3(0.16, 0.16, 0.16), 0.89, 0.68)
+		"road_edge_urban":
+			_configure_pbr_material(material, CobbleAlbedoPath, CobbleRoughnessPath, CobbleNormalPath, Color(0.78, 0.75, 0.70, 1.0), Vector3(0.28, 0.28, 0.28), 0.97, 0.72)
+		"road_edge_suburban":
+			_configure_pbr_material(material, CobbleAlbedoPath, CobbleRoughnessPath, CobbleNormalPath, Color(0.83, 0.81, 0.76, 1.0), Vector3(0.24, 0.24, 0.24), 0.95, 0.70)
+		"road_edge_rural":
+			_configure_pbr_material(material, SoilAlbedoPath, SoilRoughnessPath, SoilNormalPath, Color(0.86, 0.83, 0.77, 1.0), Vector3(0.18, 0.18, 0.18), 0.98, 0.46)
+		"stone_wall":
+			_configure_pbr_material(material, CobbleAlbedoPath, CobbleRoughnessPath, CobbleNormalPath, Color(0.73, 0.71, 0.67, 1.0), Vector3(0.34, 0.34, 0.34), 0.98, 0.84)
+		"building_residential_wall":
+			_configure_pbr_material(material, PlasterAlbedoPath, PlasterRoughnessPath, PlasterNormalPath, Color(0.93, 0.90, 0.84, 1.0), Vector3(0.36, 0.36, 0.36), 0.97, 0.58)
+		"building_plaster_light":
+			_configure_pbr_material(material, PlasterAlbedoPath, PlasterRoughnessPath, PlasterNormalPath, Color(0.96, 0.94, 0.90, 1.0), Vector3(0.34, 0.34, 0.34), 0.95, 0.54)
+		"building_roof_slate":
+			_configure_pbr_material(material, TileAlbedoPath, TileRoughnessPath, TileNormalPath, Color(0.47, 0.43, 0.40, 1.0), Vector3(0.26, 0.26, 0.26), 0.89, 0.82)
+		"building_wood_trim":
+			_configure_pbr_material(material, PlankAlbedoPath, PlankRoughnessPath, PlankNormalPath, Color(0.70, 0.66, 0.58, 1.0), Vector3(0.32, 0.32, 0.32), 0.93, 0.64)
+		"building_commercial_masonry":
+			_configure_pbr_material(material, BrickAlbedoPath, BrickRoughnessPath, BrickNormalPath, Color(0.88, 0.82, 0.76, 1.0), Vector3(0.42, 0.42, 0.42), 0.95, 0.70)
+		"building_storefront":
+			_configure_pbr_material(material, CobbleAlbedoPath, CobbleRoughnessPath, CobbleNormalPath, Color(0.63, 0.59, 0.54, 1.0), Vector3(0.30, 0.30, 0.30), 0.88, 0.78)
+		"building_industrial_brick":
+			_configure_pbr_material(material, BrickAlbedoPath, BrickRoughnessPath, BrickNormalPath, Color(0.69, 0.60, 0.56, 1.0), Vector3(0.48, 0.48, 0.48), 0.98, 0.62)
+		"building_civic_stone":
+			_configure_pbr_material(material, PlasterAlbedoPath, PlasterRoughnessPath, PlasterNormalPath, Color(0.82, 0.79, 0.73, 1.0), Vector3(0.30, 0.30, 0.30), 0.94, 0.56)
+		"building_farm_barn":
+			_configure_pbr_material(material, PlankAlbedoPath, PlankRoughnessPath, PlankNormalPath, Color(0.93, 0.56, 0.40, 1.0), Vector3(0.34, 0.34, 0.34), 0.95, 0.62)
+		"building_farm_roof":
+			_configure_pbr_material(material, TileAlbedoPath, TileRoughnessPath, TileNormalPath, Color(0.36, 0.31, 0.27, 1.0), Vector3(0.28, 0.28, 0.28), 0.91, 0.76)
+		_:
+			material.albedo_color = _color_for_category(style)
+	_material_cache[style] = material
+	return material
+
+func _configure_pbr_material(material: StandardMaterial3D, albedo_path: String, roughness_path: String, normal_path: String, tint: Color, uv_scale: Vector3, base_roughness: float, normal_scale: float) -> void:
+	material.albedo_color = tint
+	material.albedo_texture = _load_runtime_texture(albedo_path)
+	material.roughness = base_roughness
+	material.roughness_texture = _load_runtime_texture(roughness_path)
+	var normal_texture := _load_runtime_texture(normal_path)
+	material.normal_enabled = normal_texture != null
+	material.normal_texture = normal_texture
+	material.normal_scale = normal_scale
+	material.uv1_scale = uv_scale
+
+func _load_runtime_texture(resource_path: String) -> Texture2D:
+	if resource_path == "":
+		return null
+	if _texture_cache.has(resource_path):
+		return _texture_cache[resource_path] as Texture2D
+	var absolute_path := ProjectSettings.globalize_path(resource_path)
+	if not FileAccess.file_exists(absolute_path):
+		return null
+	var image := Image.new()
+	if image.load(absolute_path) != OK:
+		return null
+	if image.get_width() > 2048:
+		var target_width := 2048
+		var target_height := int(round(float(image.get_height()) * (float(target_width) / float(image.get_width()))))
+		image.resize(target_width, max(1, target_height), Image.INTERPOLATE_LANCZOS)
+	var texture := ImageTexture.create_from_image(image)
+	_texture_cache[resource_path] = texture
+	return texture
+
+func _set_material_property_if_available(material: Object, property_name: String, value) -> void:
+	for property_variant in material.get_property_list():
+		if String(property_variant.get("name", "")) == property_name:
+			material.set(property_name, value)
+			return
 
 func _place_instance_on_ground(instance: Node3D) -> void:
 	var min_y := _min_global_mesh_y(instance)
@@ -452,7 +704,7 @@ func _on_track_segment_removed(curve: Curve3D) -> void:
 func _cache_streets_for_stop(stop) -> void:
 	var forward := _nearest_corridor_direction(stop.position)
 	var segments := _street_gen.generate_for_stop(stop.position, forward, stop.town_name)
-	_spawn_street_segments(segments)
+	_spawn_street_segments(segments, _road_style_for_stop(stop))
 
 func _nearest_street_direction(pos: Vector3) -> Vector3:
 	return _street_gen.nearest_street_direction(pos)
@@ -473,31 +725,33 @@ func _spawn_stop_marker(stop) -> void:
 		marker.set("stop_kind", stop.stop_kind)
 		marker.set_meta("stop_id", stop.stop_id)
 
-func _spawn_street_segments(segments: PackedVector3Array) -> void:
+func _spawn_street_segments(segments: PackedVector3Array, style: String = "suburban") -> void:
 	if not enable_streets:
 		return
 	if segments.size() < 2:
 		return
 	for i in range(0, segments.size(), 2):
-		_spawn_street_segment(segments[i], segments[i + 1])
+		_spawn_street_segment(segments[i], segments[i + 1], style)
 
-func _spawn_street_segment(a: Vector3, b: Vector3) -> void:
+func _spawn_street_segment(a: Vector3, b: Vector3, style: String = "suburban") -> void:
 	a = _with_ground_height(a, 0.04)
 	b = _with_ground_height(b, 0.04)
 	var length := a.distance_to(b)
 	if length < 1.0:
 		return
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(street_width, 0.4, length)
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = street_color
-	mesh_instance.set_surface_override_material(0, mat)
-	_street_root.add_child(mesh_instance)
-	mesh_instance.global_position = (a + b) * 0.5
-	mesh_instance.look_at(mesh_instance.global_position + (b - a).normalized(), Vector3.UP)
-	mesh_instance.rotate_y(PI)
+	var forward := (b - a).normalized()
+	var side := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var mid := (a + b) * 0.5
+	var edge_width := _road_edge_width_for_style(style)
+	var max_center_width := maxf(4.2, street_width - edge_width * 2.0)
+	var center_width := clampf(road_center_width * _road_center_scale_for_style(style), 4.2, max_center_width)
+	_spawn_segment_box(mid + Vector3(0.0, road_surface_height * 0.5, 0.0), forward, Vector3(center_width, road_surface_height, length), _material_for_style("road_%s" % style))
+	var shoulder_offset := center_width * 0.5 + edge_width * 0.5
+	var edge_material_key := "road_edge_%s" % style
+	_spawn_segment_box(mid + side * shoulder_offset + Vector3(0.0, road_edge_height * 0.5, 0.0), forward, Vector3(edge_width, road_edge_height, length), _material_for_style(edge_material_key))
+	_spawn_segment_box(mid - side * shoulder_offset + Vector3(0.0, road_edge_height * 0.5, 0.0), forward, Vector3(edge_width, road_edge_height, length), _material_for_style(edge_material_key))
+	if style == "rural":
+		_spawn_rural_stone_walls(a, b, forward, side, mid, length, shoulder_offset)
 
 func _register_occupied(pos: Vector3) -> void:
 	_occupied.append(pos)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=12 format=3]
 
 [sub_resource type="BoxMesh" id="1"]
 size = Vector3(28, 6, 8)
@@ -19,6 +19,25 @@ albedo_color = Color(0.839216, 0.796078, 0.65098, 1)
 
 [sub_resource type="StandardMaterial3D" id="6"]
 albedo_color = Color(0.482353, 0.309804, 0.184314, 1)
+
+[sub_resource type="BoxMesh" id="7"]
+size = Vector3(2, 0.45, 20)
+
+[sub_resource type="BoxMesh" id="8"]
+size = Vector3(0.55, 10, 0.55)
+
+[sub_resource type="CylinderMesh" id="9"]
+height = 1.2
+top_radius = 8.0
+bottom_radius = 8.0
+
+[sub_resource type="CylinderMesh" id="10"]
+height = 3.2
+top_radius = 1.0
+bottom_radius = 9.0
+
+[sub_resource type="BoxMesh" id="11"]
+size = Vector3(1.4, 0.8, 2.4)
 
 [node name="WhiteCityPark" type="Node3D"]
 
@@ -46,6 +65,66 @@ position = Vector3(11, 9, -8)
 mesh = SubResource("3")
 material_override = SubResource("5")
 position = Vector3(0, 9, 8)
+
+[node name="MerryGoRoundBase" type="MeshInstance3D" parent="."]
+mesh = SubResource("9")
+material_override = SubResource("5")
+position = Vector3(-13, 0.8, 8)
+
+[node name="MerryGoRoundCanopy" type="MeshInstance3D" parent="."]
+mesh = SubResource("10")
+material_override = SubResource("6")
+position = Vector3(-13, 5.6, 8)
+
+[node name="MerryGoRoundHorseA" type="MeshInstance3D" parent="."]
+mesh = SubResource("11")
+material_override = SubResource("5")
+position = Vector3(-8, 1.8, 8)
+
+[node name="MerryGoRoundHorseB" type="MeshInstance3D" parent="."]
+mesh = SubResource("11")
+material_override = SubResource("5")
+position = Vector3(-18, 1.8, 8)
+rotation = Vector3(0, 3.14159, 0)
+
+[node name="MerryGoRoundHorseC" type="MeshInstance3D" parent="."]
+mesh = SubResource("11")
+material_override = SubResource("5")
+position = Vector3(-13, 1.8, 13)
+rotation = Vector3(0, 1.5708, 0)
+
+[node name="ScenicRailwayTrackA" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(11, 9, 6)
+rotation = Vector3(-0.46, 0.62, 0)
+
+[node name="ScenicRailwayTrackB" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(17, 13, 10)
+rotation = Vector3(0.52, -0.58, 0)
+
+[node name="ScenicRailwayTrackC" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(7, 6, 15)
+rotation = Vector3(0.12, 1.38, 0)
+
+[node name="ScenicRailwaySupportA" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("6")
+position = Vector3(5, 5, 3)
+
+[node name="ScenicRailwaySupportB" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("6")
+position = Vector3(15, 5, 8)
+
+[node name="ScenicRailwaySupportC" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("6")
+position = Vector3(22, 5, 12)
 
 [node name="Label" type="Label3D" parent="."]
 text = "White City"

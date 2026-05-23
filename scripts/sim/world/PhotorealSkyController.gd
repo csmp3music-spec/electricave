@@ -65,8 +65,44 @@ func _setup_sky() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.sky = _sky
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_white = 7.1
+	env.tonemap_exposure = 1.02
 	env.adjustment_enabled = true
+	env.ssao_enabled = true
+	env.ssao_radius = 1.35
+	env.ssao_intensity = 1.18
+	env.ssao_power = 1.45
+	env.ssao_detail = 0.52
+	env.ssao_horizon = 0.08
+	env.ssao_sharpness = 0.72
+	env.ssao_light_affect = 0.18
+	env.ssao_ao_channel_affect = 0.0
+	_set_env_property(env, "ssil_enabled", true)
+	_set_env_property(env, "ssil_radius", 5.8)
+	_set_env_property(env, "ssil_intensity", 0.72)
+	_set_env_property(env, "ssil_sharpness", 0.68)
+	_set_env_property(env, "ssil_normal_rejection", 1.06)
+	env.ssr_enabled = true
+	env.ssr_max_steps = 40
+	env.ssr_fade_in = 0.14
+	env.ssr_fade_out = 2.1
+	env.ssr_depth_tolerance = 0.28
+	env.glow_enabled = true
+	env.set("glow_levels/1", true)
+	env.set("glow_levels/2", true)
+	env.set("glow_levels/3", false)
+	env.glow_normalized = true
+	env.glow_intensity = 0.04
+	env.glow_strength = 0.62
+	env.glow_mix = 0.08
+	env.glow_bloom = 0.06
+	env.glow_hdr_threshold = 1.18
+	env.glow_hdr_scale = 1.06
+	env.glow_hdr_luminance_cap = 10.0
+	env.volumetric_fog_enabled = true
+	env.volumetric_fog_temporal_reprojection_enabled = true
+	env.volumetric_fog_temporal_reprojection_amount = 0.86
 
 func _configure_noise() -> void:
 	_noise_primary.seed = cloud_seed
@@ -119,9 +155,15 @@ func _apply_sky() -> void:
 		clampf(0.10 + cloud_cover * 0.82 + storminess * 0.12, 0.0, 1.0)
 	)
 	var env := _world_environment.environment
-	env.adjustment_brightness = lerpf(0.68, 1.08, daylight) * lerpf(1.0, 0.88, storminess)
-	env.adjustment_contrast = lerpf(1.02, 1.14, daylight)
-	env.adjustment_saturation = lerpf(0.72, 1.02, daylight) * lerpf(1.0, 0.84, storminess)
+	var haze_mix := clampf(cloud_cover * 0.34 + storminess * 0.46 + wetness * 0.24, 0.0, 1.0)
+	var ambient_color := sky_horizon.lerp(Color(0.96, 0.95, 0.92, 1.0), daylight * 0.18)
+	env.ambient_light_color = ambient_color
+	env.ambient_light_energy = lerpf(0.18, 1.28, daylight) * lerpf(1.0, 0.86, haze_mix)
+	env.ambient_light_sky_contribution = lerpf(0.22, 0.68, daylight) * lerpf(1.0, 0.9, storminess)
+	env.tonemap_exposure = lerpf(0.88, 1.08, daylight) * lerpf(1.0, 0.94, haze_mix)
+	env.adjustment_brightness = lerpf(0.70, 1.06, daylight) * lerpf(1.0, 0.9, storminess)
+	env.adjustment_contrast = lerpf(1.0, 1.12, daylight) * lerpf(1.0, 0.96, haze_mix)
+	env.adjustment_saturation = lerpf(0.74, 1.0, daylight) * lerpf(1.0, 0.84, storminess + cloud_cover * 0.18)
 
 func _rebuild_cloud_texture() -> void:
 	if _sky_material == null:
@@ -149,3 +191,11 @@ func _resolve_node(path: NodePath) -> Node:
 	if path == NodePath(""):
 		return null
 	return get_node_or_null(path)
+
+func _set_env_property(env: Environment, prop_name: String, value) -> void:
+	if env == null:
+		return
+	for prop in env.get_property_list():
+		if String(prop.get("name", "")) == prop_name:
+			env.set(prop_name, value)
+			return

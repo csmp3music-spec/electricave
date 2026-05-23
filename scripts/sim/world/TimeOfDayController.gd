@@ -22,6 +22,16 @@ signal calendar_changed(payload: Dictionary)
 @export var dawn_sky := Color(0.80, 0.71, 0.58, 1.0)
 @export var noon_sky := Color(0.68, 0.77, 0.88, 1.0)
 @export var night_sky := Color(0.07, 0.10, 0.18, 1.0)
+@export var sun_angular_distance := 0.36
+@export var sun_shadow_max_distance := 2200.0
+@export var sun_shadow_fade_start := 0.92
+@export var sun_shadow_pancake_size := 24.0
+@export var sun_shadow_blur := 0.35
+@export var sun_shadow_bias := 0.025
+@export var sun_shadow_normal_bias := 1.4
+@export var sun_shadow_split_1 := 0.08
+@export var sun_shadow_split_2 := 0.24
+@export var sun_shadow_split_3 := 0.56
 
 var _current_year := 1900
 var _current_month := 1
@@ -42,6 +52,7 @@ func _ready() -> void:
 		_historical_events.set("current_year", _current_year)
 	if _economy != null and _economy.has_method("set_reporting_period"):
 		_economy.call("set_reporting_period", _current_year, _current_month)
+	_configure_sun_rendering()
 	_apply_lighting()
 	emit_signal("calendar_changed", get_time_payload())
 
@@ -123,6 +134,23 @@ func _apply_lighting() -> void:
 	env.fog_light_energy = lerpf(0.35, 0.0, daylight)
 	env.fog_light_color = night_color.lerp(dawn_color, daylight)
 
+func _configure_sun_rendering() -> void:
+	if _sun == null:
+		return
+	_set_property_if_available(_sun, "shadow_enabled", true)
+	_set_property_if_available(_sun, "light_angular_distance", sun_angular_distance)
+	_set_property_if_available(_sun, "directional_shadow_mode", DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS)
+	_set_property_if_available(_sun, "directional_shadow_blend_splits", true)
+	_set_property_if_available(_sun, "directional_shadow_max_distance", sun_shadow_max_distance)
+	_set_property_if_available(_sun, "directional_shadow_fade_start", sun_shadow_fade_start)
+	_set_property_if_available(_sun, "directional_shadow_pancake_size", sun_shadow_pancake_size)
+	_set_property_if_available(_sun, "directional_shadow_split_1", sun_shadow_split_1)
+	_set_property_if_available(_sun, "directional_shadow_split_2", sun_shadow_split_2)
+	_set_property_if_available(_sun, "directional_shadow_split_3", sun_shadow_split_3)
+	_set_property_if_available(_sun, "shadow_blur", sun_shadow_blur)
+	_set_property_if_available(_sun, "shadow_bias", sun_shadow_bias)
+	_set_property_if_available(_sun, "shadow_normal_bias", sun_shadow_normal_bias)
+
 func _resolve_node(path: NodePath) -> Node:
 	if path == NodePath(""):
 		return null
@@ -155,3 +183,8 @@ func _has_property(target: Object, prop_name: String) -> bool:
 		if String(prop.get("name", "")) == prop_name:
 			return true
 	return false
+
+func _set_property_if_available(target: Object, prop_name: String, value) -> void:
+	if not _has_property(target, prop_name):
+		return
+	target.set(prop_name, value)

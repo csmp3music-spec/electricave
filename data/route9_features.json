@@ -1,94 +1,389 @@
 {
+  "terrain_meta": {
+    "notes": "Reduced GIS terrain control mesh for the Boston-Worcester-Lowell-South Shore play area. Elevations are stored as real-world meters and compressed in-engine for playability."
+  },
   "water": [
     {
-      "name": "Charles River Basin",
-      "lon": -71.119,
-      "lat": 42.356,
-      "radius_x_m": 13500.0,
-      "radius_z_m": 2400.0,
-      "rotation_deg": 16.0
+      "name": "Boston Harbor Inner",
+      "shape": "polygon",
+      "type": "harbor",
+      "surface_elevation_m": 0.0,
+      "points": [
+        { "lon": -71.077, "lat": 42.372 },
+        { "lon": -71.043, "lat": 42.380 },
+        { "lon": -71.006, "lat": 42.368 },
+        { "lon": -70.992, "lat": 42.347 },
+        { "lon": -70.999, "lat": 42.326 },
+        { "lon": -71.028, "lat": 42.314 },
+        { "lon": -71.053, "lat": 42.318 },
+        { "lon": -71.075, "lat": 42.337 },
+        { "lon": -71.078, "lat": 42.357 }
+      ]
+    },
+    {
+      "name": "Quincy Bay",
+      "shape": "polygon",
+      "type": "bay",
+      "surface_elevation_m": 0.0,
+      "points": [
+        { "lon": -71.028, "lat": 42.312 },
+        { "lon": -70.992, "lat": 42.303 },
+        { "lon": -70.955, "lat": 42.286 },
+        { "lon": -70.948, "lat": 42.255 },
+        { "lon": -70.978, "lat": 42.238 },
+        { "lon": -71.012, "lat": 42.244 },
+        { "lon": -71.040, "lat": 42.264 },
+        { "lon": -71.049, "lat": 42.288 }
+      ]
+    },
+    {
+      "name": "Hingham Bay",
+      "shape": "polygon",
+      "type": "bay",
+      "surface_elevation_m": 0.0,
+      "points": [
+        { "lon": -70.986, "lat": 42.251 },
+        { "lon": -70.949, "lat": 42.247 },
+        { "lon": -70.913, "lat": 42.236 },
+        { "lon": -70.892, "lat": 42.221 },
+        { "lon": -70.892, "lat": 42.202 },
+        { "lon": -70.924, "lat": 42.197 },
+        { "lon": -70.959, "lat": 42.205 },
+        { "lon": -70.988, "lat": 42.219 }
+      ]
+    },
+    {
+      "name": "World's End Shore",
+      "shape": "ellipse",
+      "type": "coastal_inlet",
+      "surface_elevation_m": 0.0,
+      "lon": -70.882,
+      "lat": 42.250,
+      "radius_x_m": 2500.0,
+      "radius_z_m": 1200.0,
+      "rotation_deg": -20.0
     },
     {
       "name": "Chestnut Hill Reservoir",
+      "shape": "ellipse",
+      "type": "reservoir",
+      "surface_elevation_m": 47.0,
       "lon": -71.1515,
       "lat": 42.3357,
-      "radius_x_m": 1400.0,
-      "radius_z_m": 780.0,
+      "radius_x_m": 1450.0,
+      "radius_z_m": 800.0,
       "rotation_deg": 12.0
     },
     {
+      "name": "Spot Pond",
+      "shape": "ellipse",
+      "type": "reservoir",
+      "surface_elevation_m": 50.0,
+      "lon": -71.0954,
+      "lat": 42.4480,
+      "radius_x_m": 1500.0,
+      "radius_z_m": 760.0,
+      "rotation_deg": -8.0
+    },
+    {
+      "name": "Public Garden Lagoon",
+      "shape": "ellipse",
+      "type": "lagoon",
+      "surface_elevation_m": 2.0,
+      "lon": -71.0708,
+      "lat": 42.3530,
+      "radius_x_m": 190.0,
+      "radius_z_m": 120.0,
+      "rotation_deg": -18.0
+    },
+    {
       "name": "Lake Cochituate",
+      "shape": "ellipse",
+      "type": "lake",
+      "surface_elevation_m": 42.0,
       "lon": -71.3745,
       "lat": 42.3098,
-      "radius_x_m": 4200.0,
-      "radius_z_m": 1550.0,
+      "radius_x_m": 4400.0,
+      "radius_z_m": 1700.0,
       "rotation_deg": -18.0
     },
     {
       "name": "Sudbury Reservoir",
+      "shape": "ellipse",
+      "type": "reservoir",
+      "surface_elevation_m": 72.0,
       "lon": -71.4285,
       "lat": 42.3603,
-      "radius_x_m": 4200.0,
-      "radius_z_m": 2100.0,
+      "radius_x_m": 4300.0,
+      "radius_z_m": 2200.0,
       "rotation_deg": 8.0
     },
     {
       "name": "Lake Quinsigamond",
+      "shape": "ellipse",
+      "type": "lake",
+      "surface_elevation_m": 129.0,
       "lon": -71.7615,
       "lat": 42.2799,
-      "radius_x_m": 5200.0,
-      "radius_z_m": 820.0,
+      "radius_x_m": 5600.0,
+      "radius_z_m": 860.0,
       "rotation_deg": 10.0
+    },
+    {
+      "name": "Canobie Lake",
+      "shape": "ellipse",
+      "type": "lake",
+      "surface_elevation_m": 71.0,
+      "lon": -71.2060,
+      "lat": 42.8245,
+      "radius_x_m": 940.0,
+      "radius_z_m": 720.0,
+      "rotation_deg": 4.0
+    },
+    {
+      "name": "Whalom Lake",
+      "shape": "ellipse",
+      "type": "lake",
+      "surface_elevation_m": 88.0,
+      "lon": -71.7376,
+      "lat": 42.5848,
+      "radius_x_m": 850.0,
+      "radius_z_m": 650.0,
+      "rotation_deg": 18.0
+    }
+  ],
+  "rivers": [
+    {
+      "name": "Upper Charles River",
+      "shape": "river",
+      "type": "river",
+      "surface_elevation_m": 35.0,
+      "width_m": 220.0,
+      "bank_width_m": 850.0,
+      "points": [
+        { "lon": -71.463, "lat": 42.364 },
+        { "lon": -71.430, "lat": 42.360 },
+        { "lon": -71.394, "lat": 42.357 },
+        { "lon": -71.351, "lat": 42.354 },
+        { "lon": -71.309, "lat": 42.357 },
+        { "lon": -71.276, "lat": 42.366 },
+        { "lon": -71.248, "lat": 42.370 }
+      ]
+    },
+    {
+      "name": "Charles River Basin",
+      "shape": "river",
+      "type": "tidal_river",
+      "surface_elevation_m": 0.0,
+      "width_m": 720.0,
+      "bank_width_m": 1750.0,
+      "points": [
+        { "lon": -71.248, "lat": 42.370 },
+        { "lon": -71.221, "lat": 42.366 },
+        { "lon": -71.194, "lat": 42.360 },
+        { "lon": -71.170, "lat": 42.349 },
+        { "lon": -71.149, "lat": 42.341 },
+        { "lon": -71.135, "lat": 42.343 },
+        { "lon": -71.121, "lat": 42.350 },
+        { "lon": -71.108, "lat": 42.355 },
+        { "lon": -71.093, "lat": 42.357 },
+        { "lon": -71.078, "lat": 42.356 },
+        { "lon": -71.063, "lat": 42.360 }
+      ]
+    },
+    {
+      "name": "Mystic River",
+      "shape": "river",
+      "type": "tidal_river",
+      "surface_elevation_m": 0.0,
+      "width_m": 260.0,
+      "bank_width_m": 900.0,
+      "points": [
+        { "lon": -71.115, "lat": 42.425 },
+        { "lon": -71.104, "lat": 42.416 },
+        { "lon": -71.093, "lat": 42.406 },
+        { "lon": -71.083, "lat": 42.397 },
+        { "lon": -71.072, "lat": 42.388 },
+        { "lon": -71.061, "lat": 42.379 },
+        { "lon": -71.052, "lat": 42.371 }
+      ]
+    },
+    {
+      "name": "Neponset River",
+      "shape": "river",
+      "type": "tidal_river",
+      "surface_elevation_m": 0.0,
+      "width_m": 180.0,
+      "bank_width_m": 750.0,
+      "points": [
+        { "lon": -71.127, "lat": 42.279 },
+        { "lon": -71.110, "lat": 42.272 },
+        { "lon": -71.091, "lat": 42.267 },
+        { "lon": -71.072, "lat": 42.266 },
+        { "lon": -71.052, "lat": 42.271 },
+        { "lon": -71.032, "lat": 42.278 },
+        { "lon": -71.015, "lat": 42.284 }
+      ]
+    },
+    {
+      "name": "Sudbury River",
+      "shape": "river",
+      "type": "river",
+      "surface_elevation_m": 58.0,
+      "width_m": 95.0,
+      "bank_width_m": 420.0,
+      "points": [
+        { "lon": -71.501, "lat": 42.384 },
+        { "lon": -71.483, "lat": 42.374 },
+        { "lon": -71.462, "lat": 42.364 },
+        { "lon": -71.441, "lat": 42.352 },
+        { "lon": -71.425, "lat": 42.338 }
+      ]
+    },
+    {
+      "name": "Concord River",
+      "shape": "river",
+      "type": "river",
+      "surface_elevation_m": 37.0,
+      "width_m": 105.0,
+      "bank_width_m": 460.0,
+      "points": [
+        { "lon": -71.388, "lat": 42.472 },
+        { "lon": -71.379, "lat": 42.457 },
+        { "lon": -71.369, "lat": 42.443 },
+        { "lon": -71.359, "lat": 42.429 },
+        { "lon": -71.349, "lat": 42.416 }
+      ]
+    },
+    {
+      "name": "Merrimack River",
+      "shape": "river",
+      "type": "river",
+      "surface_elevation_m": 27.0,
+      "width_m": 360.0,
+      "bank_width_m": 1100.0,
+      "points": [
+        { "lon": -71.378, "lat": 42.653 },
+        { "lon": -71.346, "lat": 42.648 },
+        { "lon": -71.317, "lat": 42.642 },
+        { "lon": -71.287, "lat": 42.640 },
+        { "lon": -71.252, "lat": 42.640 },
+        { "lon": -71.219, "lat": 42.641 },
+        { "lon": -71.182, "lat": 42.645 }
+      ]
+    }
+  ],
+  "elevation_points": [
+    { "name": "Beacon Hill", "lon": -71.0678, "lat": 42.3588, "elevation_m": 24.0, "radius_m": 2600.0 },
+    { "name": "Bunker Hill", "lon": -71.0604, "lat": 42.3763, "elevation_m": 34.0, "radius_m": 3200.0 },
+    { "name": "Corey Hill", "lon": -71.1284, "lat": 42.3362, "elevation_m": 79.0, "radius_m": 5200.0 },
+    { "name": "Chestnut Hill", "lon": -71.1588, "lat": 42.3297, "elevation_m": 92.0, "radius_m": 7600.0 },
+    { "name": "Prospect Hill", "lon": -71.2542, "lat": 42.3929, "elevation_m": 149.0, "radius_m": 11000.0 },
+    { "name": "Great Blue Hill", "lon": -71.1138, "lat": 42.2126, "elevation_m": 194.0, "radius_m": 20000.0 },
+    { "name": "Middlesex Fells", "lon": -71.0917, "lat": 42.4471, "elevation_m": 96.0, "radius_m": 11000.0 },
+    { "name": "Nobscot Hill", "lon": -71.4264, "lat": 42.3431, "elevation_m": 184.0, "radius_m": 18000.0 },
+    { "name": "Newton Highlands", "lon": -71.2094, "lat": 42.3211, "elevation_m": 128.0, "radius_m": 9000.0 },
+    { "name": "Quincy Granite Hills", "lon": -71.0332, "lat": 42.2515, "elevation_m": 84.0, "radius_m": 9000.0 },
+    { "name": "Salem, NH Uplands", "lon": -71.2052, "lat": 42.7925, "elevation_m": 111.0, "radius_m": 12000.0 },
+    { "name": "Shrewsbury Ridge", "lon": -71.7260, "lat": 42.2965, "elevation_m": 173.0, "radius_m": 14000.0 },
+    { "name": "Worcester Heights", "lon": -71.8440, "lat": 42.2695, "elevation_m": 303.0, "radius_m": 19000.0 }
+  ],
+  "ridges": [
+    {
+      "name": "Blue Hills Chain",
+      "peak_elevation_m": 194.0,
+      "width_m": 10000.0,
+      "points": [
+        { "lon": -71.150, "lat": 42.232 },
+        { "lon": -71.127, "lat": 42.223 },
+        { "lon": -71.111, "lat": 42.214 },
+        { "lon": -71.088, "lat": 42.220 },
+        { "lon": -71.055, "lat": 42.232 }
+      ]
+    },
+    {
+      "name": "Middlesex Fells Ridge",
+      "peak_elevation_m": 98.0,
+      "width_m": 7600.0,
+      "points": [
+        { "lon": -71.112, "lat": 42.470 },
+        { "lon": -71.102, "lat": 42.457 },
+        { "lon": -71.093, "lat": 42.444 },
+        { "lon": -71.085, "lat": 42.430 }
+      ]
+    },
+    {
+      "name": "Newton-Brookline Highlands",
+      "peak_elevation_m": 122.0,
+      "width_m": 7800.0,
+      "points": [
+        { "lon": -71.155, "lat": 42.345 },
+        { "lon": -71.183, "lat": 42.336 },
+        { "lon": -71.212, "lat": 42.327 },
+        { "lon": -71.244, "lat": 42.319 }
+      ]
+    },
+    {
+      "name": "Weston-Wellesley Uplands",
+      "peak_elevation_m": 142.0,
+      "width_m": 11000.0,
+      "points": [
+        { "lon": -71.280, "lat": 42.333 },
+        { "lon": -71.332, "lat": 42.323 },
+        { "lon": -71.390, "lat": 42.326 },
+        { "lon": -71.444, "lat": 42.335 }
+      ]
+    },
+    {
+      "name": "Sudbury-Concord Uplands",
+      "peak_elevation_m": 126.0,
+      "width_m": 12000.0,
+      "points": [
+        { "lon": -71.401, "lat": 42.399 },
+        { "lon": -71.447, "lat": 42.414 },
+        { "lon": -71.498, "lat": 42.420 }
+      ]
+    },
+    {
+      "name": "Shrewsbury-Worcester Heights",
+      "peak_elevation_m": 214.0,
+      "width_m": 14500.0,
+      "points": [
+        { "lon": -71.704, "lat": 42.298 },
+        { "lon": -71.756, "lat": 42.286 },
+        { "lon": -71.817, "lat": 42.274 },
+        { "lon": -71.870, "lat": 42.262 }
+      ]
+    },
+    {
+      "name": "Salem-Methuen Uplands",
+      "peak_elevation_m": 108.0,
+      "width_m": 9800.0,
+      "points": [
+        { "lon": -71.248, "lat": 42.822 },
+        { "lon": -71.218, "lat": 42.804 },
+        { "lon": -71.182, "lat": 42.786 }
+      ]
     }
   ],
   "hills": [
-    {
-      "name": "Beacon Hill",
-      "lon": -71.0676,
-      "lat": 42.3588,
-      "radius_m": 1800.0,
-      "height_m": 9.0
-    },
-    {
-      "name": "Chestnut Hill",
-      "lon": -71.1588,
-      "lat": 42.3297,
-      "radius_m": 4200.0,
-      "height_m": 20.0
-    },
-    {
-      "name": "Wellesley Hills",
-      "lon": -71.2730,
-      "lat": 42.2992,
-      "radius_m": 6200.0,
-      "height_m": 18.0
-    },
-    {
-      "name": "Nobscot Hill",
-      "lon": -71.4264,
-      "lat": 42.3431,
-      "radius_m": 7600.0,
-      "height_m": 28.0
-    },
-    {
-      "name": "Shrewsbury Ridge",
-      "lon": -71.7260,
-      "lat": 42.2965,
-      "radius_m": 6800.0,
-      "height_m": 22.0
-    },
-    {
-      "name": "Worcester Heights",
-      "lon": -71.8090,
-      "lat": 42.2714,
-      "radius_m": 8400.0,
-      "height_m": 26.0
-    }
+    { "name": "Beacon Hill", "lon": -71.0678, "lat": 42.3588, "radius_m": 2200.0, "height_m": 4.0 },
+    { "name": "Bunker Hill", "lon": -71.0604, "lat": 42.3763, "radius_m": 2600.0, "height_m": 4.2 },
+    { "name": "Corey Hill", "lon": -71.1284, "lat": 42.3362, "radius_m": 3600.0, "height_m": 6.8 },
+    { "name": "Chestnut Hill", "lon": -71.1588, "lat": 42.3297, "radius_m": 4800.0, "height_m": 8.4 },
+    { "name": "Prospect Hill", "lon": -71.2542, "lat": 42.3929, "radius_m": 6400.0, "height_m": 10.8 },
+    { "name": "Great Blue Hill", "lon": -71.1138, "lat": 42.2126, "radius_m": 7600.0, "height_m": 13.6 },
+    { "name": "Middlesex Fells", "lon": -71.0917, "lat": 42.4471, "radius_m": 6800.0, "height_m": 7.4 },
+    { "name": "Nobscot Hill", "lon": -71.4264, "lat": 42.3431, "radius_m": 8400.0, "height_m": 12.0 },
+    { "name": "Salem Uplands", "lon": -71.2052, "lat": 42.7925, "radius_m": 5200.0, "height_m": 7.0 },
+    { "name": "Worcester Heights", "lon": -71.8440, "lat": 42.2695, "radius_m": 9200.0, "height_m": 15.2 }
   ],
   "towns": [
     { "name": "Boston", "lon": -71.0628, "lat": 42.3564, "class": "city" },
-    { "name": "Brookline", "lon": -71.1115, "lat": 42.3442, "class": "town" },
+    { "name": "Cambridge", "lon": -71.1054, "lat": 42.3736, "class": "city" },
+    { "name": "Brookline", "lon": -71.1212, "lat": 42.3318, "class": "town" },
     { "name": "Newton Centre", "lon": -71.1937, "lat": 42.3301, "class": "town" },
+    { "name": "Waltham", "lon": -71.2356, "lat": 42.3765, "class": "city" },
     { "name": "Wellesley", "lon": -71.2925, "lat": 42.2965, "class": "town" },
     { "name": "Natick", "lon": -71.3466, "lat": 42.2850, "class": "town" },
     { "name": "Framingham", "lon": -71.4162, "lat": 42.2793, "class": "city" },
@@ -96,6 +391,17 @@
     { "name": "Westborough", "lon": -71.6165, "lat": 42.2698, "class": "town" },
     { "name": "Grafton", "lon": -71.6847, "lat": 42.2060, "class": "town" },
     { "name": "Shrewsbury", "lon": -71.7140, "lat": 42.2950, "class": "town" },
-    { "name": "Worcester", "lon": -71.8015, "lat": 42.2746, "class": "city" }
+    { "name": "Worcester", "lon": -71.8015, "lat": 42.2746, "class": "city" },
+    { "name": "Medford", "lon": -71.1095, "lat": 42.4184, "class": "town" },
+    { "name": "Malden", "lon": -71.0745, "lat": 42.4251, "class": "town" },
+    { "name": "Lowell", "lon": -71.3162, "lat": 42.6334, "class": "city" },
+    { "name": "Lawrence", "lon": -71.1631, "lat": 42.7070, "class": "city" },
+    { "name": "Salem, NH", "lon": -71.2009, "lat": 42.7884, "class": "town" },
+    { "name": "Lunenburg", "lon": -71.7562, "lat": 42.5884, "class": "town" },
+    { "name": "Fitchburg", "lon": -71.8031, "lat": 42.5834, "class": "city" },
+    { "name": "Quincy", "lon": -71.0037, "lat": 42.2529, "class": "city" },
+    { "name": "Braintree", "lon": -71.0023, "lat": 42.2073, "class": "town" },
+    { "name": "Hingham", "lon": -70.8919, "lat": 42.2418, "class": "town" },
+    { "name": "Nantasket", "lon": -70.8791, "lat": 42.2733, "class": "town" }
   ]
 }

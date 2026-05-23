@@ -49,7 +49,7 @@ const TAB_DATA := {
 			{"label": "Capital program", "amount": "$9.8k", "value": 0.78, "color": Color("b34a3f")}
 		]
 	},
-	"Pricing": {
+	"Operations": {
 		"title": "Tariffs",
 		"rows": [
 			{"label": "Urban base (5¢)", "amount": "Holding", "value": 0.35, "color": Color("3f8a8a")},
@@ -70,6 +70,92 @@ const TOOL_BUTTON_LABELS := [
 	"Growth", "Cam", "Map", "Speed", "Pause", "Help"
 ]
 
+const TOP_MENU_DEFINITIONS := [
+	{
+		"key": "game",
+		"title": "Game",
+		"items": [
+			{"id": 1, "label": "Pause / Resume", "command": "pause", "checkable": true},
+			{"id": 2, "label": "Slow Speed", "command": "speed_slow"},
+			{"id": 3, "label": "Normal Speed", "command": "speed_normal"},
+			{"id": 4, "label": "Fast Speed", "command": "speed_fast"},
+			{"separator": true},
+			{"id": 5, "label": "How To Play", "command": "help"}
+		]
+	},
+	{
+		"key": "build",
+		"title": "Build",
+		"items": [
+			{"id": 10, "label": "Track / Autorail", "command": "build_track"},
+			{"id": 11, "label": "Streetcar Stop Preset", "command": "preset_streetcar"},
+			{"id": 12, "label": "Subway Transfer Preset", "command": "preset_subway"},
+			{"id": 13, "label": "Interurban Preset", "command": "preset_interurban"},
+			{"id": 14, "label": "Terminal Preset", "command": "preset_terminal"},
+			{"separator": true},
+			{"id": 15, "label": "Station Tool", "command": "build_station"},
+			{"id": 16, "label": "Depot Tool", "command": "build_depot"},
+			{"id": 17, "label": "Signal Run Tool", "command": "build_signal"},
+			{"id": 18, "label": "Bulldoze Tool", "command": "build_bulldoze"},
+			{"separator": true},
+			{"id": 19, "label": "Autorail On / Off", "command": "toggle_autorail", "checkable": true},
+			{"id": 20, "label": "Close Build Mode", "command": "build_close"}
+		]
+	},
+	{
+		"key": "operations",
+		"title": "Operations",
+		"items": [
+			{"id": 30, "label": "Routes & Timetables", "command": "routes"},
+			{"id": 31, "label": "Manual Controller", "command": "manual_on", "checkable": true},
+			{"id": 32, "label": "Automatic Service", "command": "manual_off"},
+			{"separator": true},
+			{"id": 33, "label": "Next Line", "command": "line_next"},
+			{"id": 34, "label": "Previous Line", "command": "line_prev"},
+			{"id": 35, "label": "Next Trolley", "command": "trolley_next"},
+			{"id": 36, "label": "Previous Trolley", "command": "trolley_prev"},
+			{"separator": true},
+			{"id": 37, "label": "Tighter Headways", "command": "headway_tighter"},
+			{"id": 38, "label": "Looser Headways", "command": "headway_looser"},
+			{"id": 39, "label": "Launch Car From Depot", "command": "depot_launch"},
+			{"id": 40, "label": "Store Current Car", "command": "depot_store"}
+		]
+	},
+	{
+		"key": "view",
+		"title": "View",
+		"items": [
+			{"id": 50, "label": "System Map", "command": "map"},
+			{"id": 51, "label": "Historic Overlay", "command": "overlay"},
+			{"separator": true},
+			{"id": 52, "label": "Isometric Dispatch View", "command": "camera_iso"},
+			{"id": 53, "label": "Cycle Camera", "command": "camera_cycle"},
+			{"id": 54, "label": "Cab View", "command": "driver_cab"},
+			{"id": 55, "label": "Chase View", "command": "driver_chase"},
+			{"id": 56, "label": "Return To Main Camera", "command": "driver_off"}
+		]
+	},
+	{
+		"key": "company",
+		"title": "Company",
+		"items": [
+			{"id": 60, "label": "Finances", "command": "finance"},
+			{"id": 61, "label": "Force Growth Pass", "command": "growth"},
+			{"id": 62, "label": "Service Map", "command": "map"},
+			{"id": 63, "label": "Operations Ledger", "command": "routes"}
+		]
+	},
+	{
+		"key": "help",
+		"title": "Help",
+		"items": [
+			{"id": 70, "label": "How To Play", "command": "help"},
+			{"id": 71, "label": "Open Build Tools", "command": "build_track"},
+			{"id": 72, "label": "Open Timetable", "command": "routes"}
+		]
+	}
+]
+
 func _resolve_main_scene() -> Node:
 	var current := get_tree().get_current_scene()
 	if current != null:
@@ -86,6 +172,7 @@ func _resolve_main_scene() -> Node:
 @onready var finance_close_button: Button = $FinanceWindow/FinanceMargin/FinanceContent/HeaderPanel/HeaderContent/CloseButton
 @onready var finance_tabs: Array = $FinanceWindow/FinanceMargin/FinanceContent/TabsPanel/Tabs.get_children()
 @onready var finance_tab_buttons: Array = finance_tabs
+@onready var bottom_tool_strip: PanelContainer = $BottomBar/BottomMargin/BottomContent/ToolStrip
 @onready var tool_buttons: Array = $BottomBar/BottomMargin/BottomContent/ToolStrip/ToolRow.get_children()
 @onready var announcement_strip: PanelContainer = $AnnouncementStrip
 @onready var announcement_text_label: Label = $AnnouncementStrip/AnnouncementText
@@ -113,13 +200,19 @@ func _resolve_main_scene() -> Node:
 @onready var _corridor: Node = _main_scene.get_node_or_null("WorldRoot/CorridorSeed") if _main_scene != null else null
 @onready var _towns: Node = _main_scene.get_node_or_null("WorldRoot/TownGrowthManager") if _main_scene != null else null
 @onready var _economy: Node = _main_scene.get_node_or_null("WorldRoot/Economy") if _main_scene != null else null
+@onready var _passenger_manager: Node = _main_scene.get_node_or_null("WorldRoot/PassengerManager") if _main_scene != null else null
 @onready var _time_controller: Node = _main_scene.get_node_or_null("WorldRoot/TimeOfDay") if _main_scene != null else null
 var _current_tab := "Overview"
 var _system_map_panel: Control
+var _top_menu_bar: PanelContainer
+var _top_menu_buttons: Array[MenuButton] = []
+var _top_menu_command_map := {}
 var _finance_graph_panel: PanelContainer
 var _finance_history_graph: Control
 var _timetable_window: PanelContainer
 var _timetable_header_panel: PanelContainer
+var _timetable_control_panel: PanelContainer
+var _timetable_control_label: Label
 var _timetable_segment_panel: PanelContainer
 var _timetable_depot_panel: PanelContainer
 var _timetable_close_button: Button
@@ -134,16 +227,29 @@ var _line_selector_option: OptionButton
 var _manual_control_toggle: CheckButton
 var _line_selector_ids: Array[String] = []
 var _line_selector_syncing := false
+var _advisor_panel: PanelContainer
+var _advisor_header_label: Label
+var _advisor_summary_label: Label
+var _advisor_action_label: Label
+var _advisor_goal_label: Label
+var _advisor_milestone_label: Label
 var _driver_dashboard_panel: PanelContainer
 var _driver_dashboard: Control
+var _help_window: PanelContainer
+var _help_close_button: Button
+var _help_body_label: Label
+var _build_restore_camera_mode := -1
+var _build_camera_forced := false
 
 func _ready() -> void:
 	theme = ClassicThemeScript.build_theme()
+	_ensure_top_menu_bar()
 	_ensure_timetable_window()
 	_ensure_line_selector_panel()
+	_ensure_advisor_panel()
 	_ensure_driver_dashboard()
+	_ensure_help_window()
 	_style_controls()
-	_ensure_system_map_panel()
 	_bind_signals()
 	_setup_tool_actions()
 	_select_tab(_current_tab)
@@ -162,6 +268,7 @@ func _process(_delta: float) -> void:
 	_update_status_panel()
 	_update_build_panel()
 	_update_announcement_banner()
+	_update_advisor_panel()
 	_update_driver_dashboard()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -188,6 +295,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_timetable_window(false)
 		if _system_map_panel != null and _system_map_panel.visible:
 			_toggle_system_map_view(false)
+		if _help_window != null and _help_window.visible:
+			_toggle_help_window(false)
 		if build_mode_panel != null and build_mode_panel.visible and (_stop_placer == null or not bool(_stop_placer.get("active"))):
 			_close_build_mode()
 
@@ -195,6 +304,184 @@ func _apply_row_colors() -> void:
 	for row in finance_rows + finance_summary_rows:
 		if row.has_method("apply_theme"):
 			row.apply_theme()
+
+func _ensure_top_menu_bar() -> void:
+	if _top_menu_bar != null and is_instance_valid(_top_menu_bar):
+		return
+	_top_menu_bar = PanelContainer.new()
+	_top_menu_bar.name = "TopMenuBar"
+	_top_menu_bar.anchor_left = 0.0
+	_top_menu_bar.anchor_top = 0.0
+	_top_menu_bar.anchor_right = 1.0
+	_top_menu_bar.anchor_bottom = 0.0
+	_top_menu_bar.offset_bottom = 42.0
+	_top_menu_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_top_menu_bar)
+	move_child(_top_menu_bar, get_child_count() - 1)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 5)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 5)
+	_top_menu_bar.add_child(margin)
+
+	var row := HBoxContainer.new()
+	row.name = "TopMenuRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	row.add_theme_constant_override("separation", 6)
+	margin.add_child(row)
+
+	_top_menu_buttons.clear()
+	_top_menu_command_map.clear()
+	for menu_variant in TOP_MENU_DEFINITIONS:
+		var menu_def: Dictionary = menu_variant
+		var menu_key := String(menu_def.get("key", "menu"))
+		var button := MenuButton.new()
+		button.name = "%sMenuButton" % menu_key.capitalize()
+		button.text = String(menu_def.get("title", menu_key.capitalize()))
+		button.focus_mode = Control.FOCUS_NONE
+		button.custom_minimum_size = Vector2(92.0, 30.0)
+		button.tooltip_text = "Open %s commands." % button.text
+		row.add_child(button)
+		_top_menu_buttons.append(button)
+		var popup := button.get_popup()
+		popup.name = "%sPopup" % menu_key.capitalize()
+		popup.id_pressed.connect(func(id: int): _on_top_menu_item_pressed(menu_key, id))
+		popup.about_to_popup.connect(_sync_top_menu_checks)
+		for item_variant in menu_def.get("items", []):
+			var item: Dictionary = item_variant
+			if bool(item.get("separator", false)):
+				popup.add_separator()
+				continue
+			var id := int(item.get("id", 0))
+			var label := String(item.get("label", "Command"))
+			var command := String(item.get("command", ""))
+			if bool(item.get("checkable", false)):
+				popup.add_check_item(label, id)
+			else:
+				popup.add_item(label, id)
+			_top_menu_command_map["%s:%d" % [menu_key, id]] = command
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+
+	var status_hint := Label.new()
+	status_hint.name = "TopMenuHint"
+	status_hint.text = "Dispatcher menus: build, run, finance, map"
+	status_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	status_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(status_hint)
+
+func _on_top_menu_item_pressed(menu_key: String, id: int) -> void:
+	var command := String(_top_menu_command_map.get("%s:%d" % [menu_key, id], ""))
+	if command == "":
+		return
+	_execute_menu_command(command)
+	_sync_top_menu_checks()
+
+func _sync_top_menu_checks() -> void:
+	for button in _top_menu_buttons:
+		if button == null or not is_instance_valid(button):
+			continue
+		var menu_key := String(button.name).replace("MenuButton", "").to_lower()
+		var popup := button.get_popup()
+		for i in range(popup.get_item_count()):
+			if popup.is_item_separator(i):
+				continue
+			var command := String(_top_menu_command_map.get("%s:%d" % [menu_key, popup.get_item_id(i)], ""))
+			if command == "":
+				continue
+			if popup.is_item_checkable(i):
+				popup.set_item_checked(i, _is_menu_command_checked(command))
+
+func _is_menu_command_checked(command: String) -> bool:
+	match command:
+		"pause":
+			return get_tree().paused
+		"toggle_autorail":
+			return _stop_placer != null and _has_property(_stop_placer, "autorail_enabled") and bool(_stop_placer.get("autorail_enabled"))
+		"manual_on":
+			return _corridor != null and _corridor.has_method("is_driver_manual_control_enabled") and bool(_corridor.call("is_driver_manual_control_enabled"))
+	return false
+
+func _execute_menu_command(command: String) -> void:
+	match command:
+		"pause":
+			_toggle_pause()
+		"speed_slow":
+			_set_sim_speed(0.5)
+		"speed_normal":
+			_set_sim_speed(1.0)
+		"speed_fast":
+			_set_sim_speed(2.0)
+		"help":
+			_toggle_help_window(true)
+		"build_track":
+			_select_build_tool("track")
+		"build_station":
+			_select_build_tool("station")
+		"build_depot":
+			_select_build_tool("depot")
+		"build_signal":
+			_select_build_tool("signal")
+		"build_bulldoze":
+			_select_build_tool("bulldoze")
+		"build_close":
+			_close_build_mode()
+		"toggle_autorail":
+			_toggle_autorail()
+		"preset_streetcar":
+			_apply_build_preset("streetcar")
+		"preset_subway":
+			_apply_build_preset("subway")
+		"preset_interurban":
+			_apply_build_preset("interurban")
+		"preset_terminal":
+			_apply_build_preset("terminal")
+		"routes":
+			_toggle_timetable_window(true)
+		"manual_on":
+			_set_manual_control(true)
+		"manual_off":
+			_set_manual_control(false)
+		"line_next":
+			_cycle_active_line(1)
+		"line_prev":
+			_cycle_active_line(-1)
+		"trolley_next":
+			_cycle_controlled_trolley(1)
+		"trolley_prev":
+			_cycle_controlled_trolley(-1)
+		"headway_tighter":
+			_adjust_active_line_headways(-1.0)
+		"headway_looser":
+			_adjust_active_line_headways(1.0)
+		"depot_launch":
+			_launch_first_ready_depot()
+		"depot_store":
+			_store_first_ready_depot()
+		"map":
+			_toggle_system_map_view(true)
+		"overlay":
+			_toggle_overlay()
+		"camera_iso":
+			_reset_camera_iso()
+		"camera_cycle":
+			_cycle_camera()
+		"driver_cab":
+			_set_driver_camera_view(true, false)
+		"driver_chase":
+			_set_driver_camera_view(true, true)
+		"driver_off":
+			_set_driver_camera_view(false, true)
+		"finance":
+			_toggle_finance_window(true)
+		"growth":
+			_spawn_suburbs_now()
 
 func _style_controls() -> void:
 	var wood_dark := Color("6f4a2e")
@@ -209,6 +496,7 @@ func _style_controls() -> void:
 	var inset_panel := _make_panel(parchment, brass_dark, 1, 6, Color(0, 0, 0, 0.18), 6)
 	var header_panel := _make_panel(wood_light, brass, 2, 6, Color(0, 0, 0, 0.25), 8)
 
+	_apply_panel("TopMenuBar", header_panel)
 	_apply_panel("FinanceWindow", wood_panel)
 	_apply_panel("FinanceWindow/FinanceMargin/FinanceContent/HeaderPanel", header_panel)
 	_apply_panel("FinanceWindow/FinanceMargin/FinanceContent/TabsPanel", inset_panel)
@@ -220,11 +508,17 @@ func _style_controls() -> void:
 	_apply_panel("BottomBar/BottomMargin/BottomContent/ToolStrip", inset_panel)
 	_apply_panel("BottomBar/BottomMargin/BottomContent/StatusPanel", inset_panel)
 	_apply_signal_head("GREEN")
+	_hide_legacy_tool_strip()
 
 	for button in finance_tab_buttons:
 		if button is Button:
+			if button.text == "Pricing":
+				button.text = "Operations"
 			_apply_button_style(button, wood_dark, brass, wood_light)
 
+	for button in _top_menu_buttons:
+		if button != null:
+			_apply_button_style(button, wood_dark, brass, wood_light)
 	for button in tool_buttons:
 		if button is Button:
 			_apply_tool_button_style(button, wood_mid, brass)
@@ -242,6 +536,8 @@ func _style_controls() -> void:
 		_timetable_window.add_theme_stylebox_override("panel", wood_panel)
 	if _timetable_header_panel != null:
 		_timetable_header_panel.add_theme_stylebox_override("panel", header_panel)
+	if _timetable_control_panel != null:
+		_timetable_control_panel.add_theme_stylebox_override("panel", inset_panel)
 	if _timetable_segment_panel != null:
 		_timetable_segment_panel.add_theme_stylebox_override("panel", inset_panel)
 	if _timetable_depot_panel != null:
@@ -256,6 +552,21 @@ func _style_controls() -> void:
 		_apply_button_style(_manual_control_toggle, wood_dark, brass, wood_light)
 	if _driver_dashboard_panel != null:
 		_driver_dashboard_panel.add_theme_stylebox_override("panel", wood_panel)
+	if _advisor_panel != null:
+		_advisor_panel.add_theme_stylebox_override("panel", header_panel)
+	if _help_window != null:
+		_help_window.add_theme_stylebox_override("panel", wood_panel)
+	if _help_close_button != null:
+		_apply_button_style(_help_close_button, wood_dark, brass, wood_light)
+	_apply_control_tooltips()
+
+func _hide_legacy_tool_strip() -> void:
+	if bottom_tool_strip != null:
+		bottom_tool_strip.visible = false
+		bottom_tool_strip.custom_minimum_size = Vector2.ZERO
+	var status_panel := get_node_or_null("BottomBar/BottomMargin/BottomContent/StatusPanel") as Control
+	if status_panel != null:
+		status_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func _make_panel(bg: Color, border: Color, border_w: int, radius: int, shadow: Color, shadow_size: int) -> StyleBoxFlat:
 	var panel := StyleBoxFlat.new()
@@ -352,6 +663,8 @@ func _bind_signals() -> void:
 		_line_selector_option.item_selected.connect(_on_line_selector_selected)
 	if _manual_control_toggle != null:
 		_manual_control_toggle.toggled.connect(_on_manual_control_toggled)
+	if _help_close_button != null:
+		_help_close_button.pressed.connect(func(): _toggle_help_window(false))
 
 func _toggle_finance_window(force_state: Variant = null) -> void:
 	var target := finance_window.visible if force_state == null else bool(force_state)
@@ -392,6 +705,16 @@ func _ensure_finance_graph_panel() -> void:
 	finance_content.add_child(_finance_graph_panel)
 	if summary_panel != null:
 		finance_content.move_child(_finance_graph_panel, summary_panel.get_index())
+
+func _add_timetable_command_button(parent: Node, label: String, action: Callable) -> Button:
+	var button := Button.new()
+	button.text = label
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(78.0, 28.0)
+	_apply_button_style(button, Color("6f4a2e"), Color("caa76a"), Color("a88563"))
+	button.pressed.connect(action)
+	parent.add_child(button)
+	return button
 
 func _ensure_timetable_window() -> void:
 	if _timetable_window != null and is_instance_valid(_timetable_window):
@@ -441,6 +764,36 @@ func _ensure_timetable_window() -> void:
 	_timetable_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_timetable_summary_label.text = "No live timetable data."
 	content.add_child(_timetable_summary_label)
+
+	_timetable_control_panel = PanelContainer.new()
+	_timetable_control_panel.custom_minimum_size = Vector2(0.0, 74.0)
+	content.add_child(_timetable_control_panel)
+	var control_margin := MarginContainer.new()
+	control_margin.add_theme_constant_override("margin_left", 10)
+	control_margin.add_theme_constant_override("margin_top", 8)
+	control_margin.add_theme_constant_override("margin_right", 10)
+	control_margin.add_theme_constant_override("margin_bottom", 8)
+	_timetable_control_panel.add_child(control_margin)
+	var control_content := VBoxContainer.new()
+	control_content.add_theme_constant_override("separation", 6)
+	control_margin.add_child(control_content)
+	_timetable_control_label = Label.new()
+	_timetable_control_label.text = "Dispatcher controls"
+	_timetable_control_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	control_content.add_child(_timetable_control_label)
+	var control_row := HBoxContainer.new()
+	control_row.add_theme_constant_override("separation", 6)
+	control_content.add_child(control_row)
+	_add_timetable_command_button(control_row, "Manual/Auto", func(): _toggle_manual_control_from_ui())
+	_add_timetable_command_button(control_row, "Prev Line", func(): _cycle_active_line(-1))
+	_add_timetable_command_button(control_row, "Next Line", func(): _cycle_active_line(1))
+	_add_timetable_command_button(control_row, "Prev Car", func(): _cycle_controlled_trolley(-1))
+	_add_timetable_command_button(control_row, "Next Car", func(): _cycle_controlled_trolley(1))
+	_add_timetable_command_button(control_row, "- Headway", func(): _adjust_active_line_headways(-1.0))
+	_add_timetable_command_button(control_row, "+ Headway", func(): _adjust_active_line_headways(1.0))
+	_add_timetable_command_button(control_row, "Launch", func(): _launch_first_ready_depot())
+	_add_timetable_command_button(control_row, "Store", func(): _store_first_ready_depot())
+	_add_timetable_command_button(control_row, "Build", func(): _select_build_tool("track"))
 
 	var body := HBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -511,9 +864,9 @@ func _ensure_line_selector_panel() -> void:
 	_line_selector_panel = PanelContainer.new()
 	_line_selector_panel.name = "LineSelectorPanel"
 	_line_selector_panel.anchor_left = 0.016
-	_line_selector_panel.anchor_top = 0.015
+	_line_selector_panel.anchor_top = 0.064
 	_line_selector_panel.anchor_right = 0.24
-	_line_selector_panel.anchor_bottom = 0.073
+	_line_selector_panel.anchor_bottom = 0.122
 	add_child(_line_selector_panel)
 
 	var margin := MarginContainer.new()
@@ -543,6 +896,55 @@ func _ensure_line_selector_panel() -> void:
 	_manual_control_toggle.button_pressed = true
 	_manual_control_toggle.focus_mode = Control.FOCUS_NONE
 	row.add_child(_manual_control_toggle)
+
+func _ensure_advisor_panel() -> void:
+	if _advisor_panel != null and is_instance_valid(_advisor_panel):
+		return
+	_advisor_panel = PanelContainer.new()
+	_advisor_panel.name = "AdvisorPanel"
+	_advisor_panel.anchor_left = 0.74
+	_advisor_panel.anchor_top = 0.064
+	_advisor_panel.anchor_right = 0.985
+	_advisor_panel.anchor_bottom = 0.274
+	add_child(_advisor_panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	_advisor_panel.add_child(margin)
+
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 4)
+	margin.add_child(content)
+
+	_advisor_header_label = Label.new()
+	_advisor_header_label.text = "Dispatcher: waiting for orders"
+	_advisor_header_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_advisor_header_label)
+
+	_advisor_summary_label = Label.new()
+	_advisor_summary_label.text = "No network summary yet."
+	_advisor_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_advisor_summary_label)
+
+	_advisor_action_label = Label.new()
+	_advisor_action_label.text = "Do next: build, run, and watch the network."
+	_advisor_action_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_advisor_action_label)
+
+	_advisor_goal_label = Label.new()
+	_advisor_goal_label.text = "Goal: waiting for the first report."
+	_advisor_goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_advisor_goal_label)
+
+	_advisor_milestone_label = Label.new()
+	_advisor_milestone_label.text = "Next milestone: none yet."
+	_advisor_milestone_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_advisor_milestone_label)
 
 func _refresh_line_selector_panel() -> void:
 	if _line_selector_option == null or _corridor == null:
@@ -580,6 +982,121 @@ func _refresh_line_selector_panel() -> void:
 		_manual_control_toggle.set_pressed_no_signal(manual_enabled)
 		_manual_control_toggle.text = "Manual" if manual_enabled else "Auto stops"
 
+func _ensure_help_window() -> void:
+	if _help_window != null and is_instance_valid(_help_window):
+		return
+	_help_window = PanelContainer.new()
+	_help_window.name = "HelpWindow"
+	_help_window.visible = false
+	_help_window.anchor_left = 0.18
+	_help_window.anchor_top = 0.12
+	_help_window.anchor_right = 0.82
+	_help_window.anchor_bottom = 0.78
+	add_child(_help_window)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	_help_window.add_child(margin)
+
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 10)
+	margin.add_child(content)
+
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 8)
+	content.add_child(header_row)
+
+	var title := Label.new()
+	title.text = "How To Play"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header_row.add_child(title)
+
+	_help_close_button = Button.new()
+	_help_close_button.text = "Close"
+	_help_close_button.custom_minimum_size = Vector2(84.0, 30.0)
+	_help_close_button.focus_mode = Control.FOCUS_NONE
+	header_row.add_child(_help_close_button)
+
+	_help_body_label = Label.new()
+	_help_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_help_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_help_body_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_help_body_label.text = _help_window_text()
+	content.add_child(_help_body_label)
+
+func _help_window_text() -> String:
+	return "\n".join([
+		"START HERE",
+		"1. Use the top Build menu to lay track, choose a station preset, and add a depot.",
+		"2. Use Operations > Routes & Timetables to adjust headways, launch cars, store cars, and switch active lines.",
+		"3. Watch the monthly goal and the next milestone. Those are the fastest way to know what matters next.",
+		"",
+		"CAMERA AND WINDOWS",
+		"The top menus replace the old bottom buttons: Game, Build, Operations, View, Company, and Help.",
+		"M opens the map, F opens finance, R opens operations and timetables, O toggles the overlay.",
+		"C cycles camera mode. The line selector under the menus changes the active service line.",
+		"",
+		"BUILD TOOLS",
+		"Build presets set platform length, track count, signal spacing, and station headway in one click.",
+		"1 Track, 2 Station, 3 Depot, 4 Signal, 5 Bulldoze. G cycles tools. A toggles autorail.",
+		"Q and E rotate depots and stations. [ and ] change platform length or signal spacing.",
+		"",
+		"DRIVING",
+		"Operations can switch manual/auto control, cycle lines, cycle the controlled trolley, and tighten or loosen headways.",
+		"Shift+W adds power, Space applies the service brake, Shift+S reduces power or reverses, K recovers after an incident.",
+		"The status panel shows the next stop, signal aspect, and live running state. The Dispatcher panel explains what to fix next."
+	])
+
+func _apply_control_tooltips() -> void:
+	var tool_tips := {
+		"Routes": "Open live timetable controls and depot actions.",
+		"Finance": "Open finances and network operations metrics.",
+		"Overlay": "Toggle the historic map overlay.",
+		"Build": "Open construction tools for track, stops, depots, and signals.",
+		"Demo": "Cycle the camera mode.",
+		"Stops": "Jump straight to station placement mode.",
+		"Growth": "Force a suburban growth pass around the served stops.",
+		"Cam": "Reset the camera to a broad isometric view.",
+		"Map": "Open the system map and navigation shortcuts.",
+		"Speed": "Raise simulation speed.",
+		"Pause": "Pause or resume the simulation.",
+		"Help": "Open the in-game controls and starter guide."
+	}
+	for button in tool_buttons:
+		if button is Button:
+			button.tooltip_text = String(tool_tips.get(button.text, ""))
+	var finance_tab_tips := {
+		"Overview": "Read the high-level monthly summary.",
+		"Revenue": "See where income is coming from.",
+		"Expenses": "See what is draining cash.",
+		"Operations": "See goals, milestones, and crowding pressure."
+	}
+	for button in finance_tab_buttons:
+		if button is Button:
+			button.tooltip_text = String(finance_tab_tips.get(button.text, ""))
+	if _line_selector_option != null:
+		_line_selector_option.tooltip_text = "Choose which service line the driver tools focus on."
+	if _manual_control_toggle != null:
+		_manual_control_toggle.tooltip_text = "Toggle between manual driving and automatic station work."
+	if build_track_button != null:
+		build_track_button.tooltip_text = "Lay new track."
+	if build_station_button != null:
+		build_station_button.tooltip_text = "Place a station on live track."
+	if build_depot_button != null:
+		build_depot_button.tooltip_text = "Build a depot for launches and storage."
+	if build_signal_button != null:
+		build_signal_button.tooltip_text = "Place signal runs on a route."
+	if build_bulldoze_button != null:
+		build_bulldoze_button.tooltip_text = "Remove trackside assets and get a partial refund."
+	if build_close_button != null:
+		build_close_button.tooltip_text = "Close build mode."
+
 func _ensure_driver_dashboard() -> void:
 	if _driver_dashboard_panel != null and is_instance_valid(_driver_dashboard_panel):
 		return
@@ -616,6 +1133,12 @@ func _on_manual_control_toggled(pressed: bool) -> void:
 		return
 	_corridor.call("set_driver_manual_control", pressed)
 
+func _toggle_help_window(force_state: Variant = null) -> void:
+	_ensure_help_window()
+	if _help_window == null:
+		return
+	_help_window.visible = not _help_window.visible if force_state == null else bool(force_state)
+
 func _toggle_timetable_window(force_state: Variant = null) -> void:
 	_ensure_timetable_window()
 	if _timetable_window == null:
@@ -635,10 +1158,14 @@ func _refresh_timetable_window() -> void:
 		segments = _corridor.call("get_timetable_segments")
 	if _corridor != null and _corridor.has_method("get_depot_operations_snapshot"):
 		depots = _corridor.call("get_depot_operations_snapshot")
-	_timetable_summary_label.text = "Live cars: %d | Timetable segments: %d | Depots: %d" % [
+	if _timetable_control_label != null:
+		_timetable_control_label.text = _active_line_control_text(segments, depots)
+	var line_summary := _line_operations_summary_text()
+	_timetable_summary_label.text = "Live cars: %d | Timetable segments: %d | Depots: %d%s" % [
 		int(_corridor.call("get_fleet_size")) if _corridor != null and _corridor.has_method("get_fleet_size") else 0,
 		segments.size(),
-		depots.size()
+		depots.size(),
+		"\n%s" % line_summary if line_summary != "" else ""
 	]
 	_clear_container_children(_timetable_segment_rows)
 	_clear_container_children(_timetable_depot_rows)
@@ -651,6 +1178,67 @@ func _refresh_timetable_window() -> void:
 	if depots.is_empty():
 		_add_empty_window_row(_timetable_depot_rows, "Build a depot to launch or store trolleys.")
 	_timetable_message_label.text = _timetable_message
+
+func _active_line_control_text(segments: Array, depots: Array) -> String:
+	var line_name := "No line selected"
+	var line_id := ""
+	if _corridor != null:
+		if _corridor.has_method("get_active_service_line_id"):
+			line_id = String(_corridor.call("get_active_service_line_id"))
+		if _corridor.has_method("get_service_line_choices"):
+			for choice_variant in _corridor.call("get_service_line_choices"):
+				var choice: Dictionary = choice_variant
+				if String(choice.get("id", "")) == line_id:
+					line_name = String(choice.get("name", line_id))
+					break
+	var manual := _corridor != null and _corridor.has_method("is_driver_manual_control_enabled") and bool(_corridor.call("is_driver_manual_control_enabled"))
+	var active_segment_count := 0
+	for segment_variant in segments:
+		var segment: Dictionary = segment_variant
+		if String(segment.get("line_id", line_id)) == line_id:
+			active_segment_count += 1
+	var ready_depots := 0
+	for depot_variant in depots:
+		var depot: Dictionary = depot_variant
+		if bool(depot.get("launch_ready", false)):
+			ready_depots += 1
+	return "%s | %s | %d editable headway segments | %d ready depot%s" % [
+		line_name,
+		"manual controller" if manual else "automatic service",
+		active_segment_count,
+		ready_depots,
+		"" if ready_depots == 1 else "s"
+	]
+
+func _line_operations_summary_text() -> String:
+	if _corridor == null or not _corridor.has_method("get_line_operations_snapshot"):
+		return ""
+	var line_payload: Variant = _corridor.call("get_line_operations_snapshot")
+	if not (line_payload is Array):
+		return ""
+	var active_line := {}
+	var worst_line := {}
+	var worst_pressure := -1.0
+	for line_variant in line_payload:
+		if not (line_variant is Dictionary):
+			continue
+		var line: Dictionary = line_variant
+		var pressure := float(line.get("capacity_pressure", 0.0))
+		if bool(line.get("active", false)):
+			active_line = line
+		if pressure > worst_pressure:
+			worst_pressure = pressure
+			worst_line = line
+	var display_line: Dictionary = active_line if not active_line.is_empty() else worst_line
+	if display_line.is_empty():
+		return ""
+	return "Line stats: %s | %d/%d cars | %.1f min avg headway | %s" % [
+		String(display_line.get("name", "")),
+		int(display_line.get("fleet_count", 0)),
+		int(display_line.get("suggested_cars", 1)),
+		float(display_line.get("average_headway_min", 0.0)),
+		String(display_line.get("recommendation", "Service stable"))
+	]
 
 func _add_timetable_segment_row(segment_variant: Variant) -> void:
 	var segment: Dictionary = segment_variant
@@ -756,6 +1344,102 @@ func _store_depot_trolley(depot_id: String) -> void:
 	var result: Dictionary = _corridor.call("store_controlled_trolley_at_depot", depot_id)
 	_timetable_message = String(result.get("message", ""))
 	_refresh_timetable_window()
+
+func _toggle_manual_control_from_ui() -> void:
+	if _corridor == null or not _corridor.has_method("is_driver_manual_control_enabled"):
+		return
+	_set_manual_control(not bool(_corridor.call("is_driver_manual_control_enabled")))
+
+func _set_manual_control(enabled: bool) -> void:
+	if _corridor == null or not _corridor.has_method("set_driver_manual_control"):
+		return
+	_corridor.call("set_driver_manual_control", enabled)
+	if _manual_control_toggle != null:
+		_manual_control_toggle.set_pressed_no_signal(enabled)
+		_manual_control_toggle.text = "Manual" if enabled else "Auto stops"
+	_timetable_message = "Manual controller enabled." if enabled else "Automatic service enabled."
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
+
+func _cycle_active_line(step: int) -> void:
+	_refresh_line_selector_panel()
+	if _line_selector_ids.is_empty() or _corridor == null or not _corridor.has_method("set_active_service_line"):
+		return
+	var current_idx := _line_selector_option.selected if _line_selector_option != null else 0
+	if current_idx < 0:
+		current_idx = 0
+	var next_idx := posmod(current_idx + step, _line_selector_ids.size())
+	if bool(_corridor.call("set_active_service_line", _line_selector_ids[next_idx])):
+		if _line_selector_option != null:
+			_line_selector_syncing = true
+			_line_selector_option.select(next_idx)
+			_line_selector_syncing = false
+			_timetable_message = "Active line changed to %s." % _line_selector_option.get_item_text(next_idx)
+		else:
+			_timetable_message = "Active line changed."
+		if _timetable_window != null and _timetable_window.visible:
+			_refresh_timetable_window()
+
+func _cycle_controlled_trolley(step: int) -> void:
+	if _corridor == null or not _corridor.has_method("cycle_controlled_trolley"):
+		return
+	if bool(_corridor.call("cycle_controlled_trolley", step)):
+		_timetable_message = "Controlled trolley changed."
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
+
+func _adjust_active_line_headways(delta_minutes: float) -> void:
+	if _corridor == null or not _corridor.has_method("get_timetable_segments"):
+		return
+	var active_line_id := String(_corridor.call("get_active_service_line_id")) if _corridor.has_method("get_active_service_line_id") else ""
+	var changed := 0
+	var last_message := ""
+	for segment_variant in _corridor.call("get_timetable_segments"):
+		var segment: Dictionary = segment_variant
+		if active_line_id != "" and String(segment.get("line_id", active_line_id)) != active_line_id:
+			continue
+		var segment_id := String(segment.get("id", ""))
+		if segment_id == "":
+			continue
+		var result: Dictionary = _corridor.call("adjust_timetable_segment_headway", segment_id, delta_minutes)
+		if bool(result.get("ok", false)):
+			changed += 1
+			last_message = String(result.get("message", ""))
+	_timetable_message = "%d segment headway%s adjusted." % [changed, "" if changed == 1 else "s"] if changed > 1 else last_message
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
+
+func _launch_first_ready_depot() -> void:
+	if _corridor == null or not _corridor.has_method("get_depot_operations_snapshot"):
+		return
+	for depot_variant in _corridor.call("get_depot_operations_snapshot"):
+		var depot: Dictionary = depot_variant
+		if bool(depot.get("launch_ready", false)):
+			_launch_depot_trolley(String(depot.get("id", "")))
+			return
+	_timetable_message = "No depot has a car or enough cash for launch."
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
+
+func _store_first_ready_depot() -> void:
+	if _corridor == null or not _corridor.has_method("get_depot_operations_snapshot"):
+		return
+	var best_id := ""
+	var best_distance := INF
+	for depot_variant in _corridor.call("get_depot_operations_snapshot"):
+		var depot: Dictionary = depot_variant
+		if not bool(depot.get("store_ready", false)):
+			continue
+		var distance := float(depot.get("distance_to_driver_m", INF))
+		if distance < best_distance:
+			best_distance = distance
+			best_id = String(depot.get("id", ""))
+	if best_id != "":
+		_store_depot_trolley(best_id)
+		return
+	_timetable_message = "Bring the controlled trolley onto a depot lead before storing it."
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
 
 func _clear_container_children(container: Node) -> void:
 	if container == null:
@@ -961,6 +1645,7 @@ func _select_build_tool(mode_name: String) -> void:
 		build_mode_panel.visible = true
 	if _stop_placer != null and _stop_placer.has_method("set_tool_mode_name"):
 		_stop_placer.call("set_tool_mode_name", mode_name, true)
+	_enter_build_camera(true)
 	_update_build_panel()
 
 func _close_build_mode() -> void:
@@ -968,9 +1653,40 @@ func _close_build_mode() -> void:
 		build_mode_panel.visible = false
 	if _stop_placer != null and _stop_placer.has_method("set_active"):
 		_stop_placer.call("set_active", false)
+	_exit_build_camera()
 	_update_build_panel()
 
-func _on_build_tool_state_changed(_active: bool, _tool_mode: int, _has_anchor: bool) -> void:
+func _toggle_autorail() -> void:
+	if _stop_placer == null:
+		return
+	if _stop_placer.has_method("toggle_autorail"):
+		var enabled := bool(_stop_placer.call("toggle_autorail"))
+		_timetable_message = "Autorail %s." % ("enabled" if enabled else "disabled")
+	elif _has_property(_stop_placer, "autorail_enabled"):
+		var enabled := not bool(_stop_placer.get("autorail_enabled"))
+		_stop_placer.set("autorail_enabled", enabled)
+		_timetable_message = "Autorail %s." % ("enabled" if enabled else "disabled")
+	_update_build_panel()
+
+func _apply_build_preset(preset_name: String) -> void:
+	if _stop_placer == null or not _stop_placer.has_method("apply_build_preset"):
+		_select_build_tool("station")
+		return
+	var result: Dictionary = _stop_placer.call("apply_build_preset", preset_name)
+	var mode := String(result.get("mode", "station"))
+	if mode != "":
+		_select_build_tool(mode)
+	else:
+		_select_build_tool("station")
+	_timetable_message = String(result.get("message", "Build preset applied."))
+	_update_build_panel()
+
+func _on_build_tool_state_changed(active: bool, _tool_mode: int, _has_anchor: bool) -> void:
+	if not active and build_mode_panel != null and build_mode_panel.visible:
+		_close_build_mode()
+		return
+	if active and build_mode_panel != null and build_mode_panel.visible:
+		_enter_build_camera(false)
 	_update_build_panel()
 
 func _has_property(target: Object, prop_name: String) -> bool:
@@ -986,19 +1702,85 @@ func _spawn_suburbs_now() -> void:
 		_towns.call_deferred("SpawnSuburbsForAllStops")
 
 func _cycle_camera() -> void:
+	if build_mode_panel != null and build_mode_panel.visible:
+		return
 	if _camera_rig and _camera_rig.has_method("cycle_mode"):
 		_camera_rig.call("cycle_mode")
 
+func _camera_mode_value(mode_name: String, fallback: int) -> int:
+	if _camera_rig == null:
+		return fallback
+	var modes: Variant = _camera_rig.get("CameraMode")
+	if modes is Dictionary and modes.has(mode_name):
+		return int(modes[mode_name])
+	return fallback
+
+func _current_camera_mode() -> int:
+	if _camera_rig == null or not _has_property(_camera_rig, "target_mode"):
+		return _camera_mode_value("ISOMETRIC", 1)
+	return int(_camera_rig.get("target_mode"))
+
+func _resolve_build_camera_focus() -> Vector3:
+	if _stop_placer != null and _stop_placer.has_method("get_tycoon_build_state"):
+		var payload: Dictionary = _stop_placer.call("get_tycoon_build_state")
+		if bool(payload.get("has_camera_focus", false)):
+			var focus_variant: Variant = payload.get("camera_focus_point", Vector3.ZERO)
+			if focus_variant is Vector3:
+				return focus_variant
+	if _camera_rig != null and _camera_rig.has_method("get_active_focus_point"):
+		return _camera_rig.call("get_active_focus_point")
+	return Vector3.ZERO
+
+func _enter_build_camera(force_refocus: bool) -> void:
+	if _camera_rig == null:
+		return
+	if not _build_camera_forced:
+		_build_restore_camera_mode = _current_camera_mode()
+	var focus := _resolve_build_camera_focus()
+	if _camera_rig.has_method("enter_build_mode"):
+		_camera_rig.call("enter_build_mode", focus)
+	elif _camera_rig.has_method("set"):
+		if _camera_rig.has_method("set_build_focus_point"):
+			_camera_rig.call("set_build_focus_point", focus, force_refocus)
+		_camera_rig.set("target_mode", _camera_mode_value("BUILD", 2))
+	_build_camera_forced = true
+
+func _exit_build_camera() -> void:
+	if not _build_camera_forced or _camera_rig == null:
+		return
+	var restore_mode := _build_restore_camera_mode
+	if restore_mode == _camera_mode_value("BUILD", 2) or restore_mode < 0:
+		restore_mode = _camera_mode_value("ISOMETRIC", 1)
+	if _camera_rig.has_method("leave_build_mode"):
+		_camera_rig.call("leave_build_mode", restore_mode)
+	elif _camera_rig.has_method("set"):
+		_camera_rig.set("target_mode", restore_mode)
+	_build_camera_forced = false
+	_build_restore_camera_mode = -1
+
 func _speed_bump() -> void:
-	var tree := get_tree()
-	tree.time_scale = clamp(tree.time_scale + 0.25, 0.25, 3.0)
+	_set_sim_speed(Engine.time_scale + 0.25)
+
+func _set_sim_speed(scale: float) -> void:
+	Engine.time_scale = clampf(scale, 0.25, 3.0)
+	if Engine.time_scale > 0.0:
+		get_tree().paused = false
 
 func _toggle_pause() -> void:
 	var tree := get_tree()
 	tree.paused = not tree.paused
 
+func _set_driver_camera_view(active: bool, chase_view: bool) -> void:
+	if _corridor == null:
+		return
+	if _corridor.has_method("set_driver_view_active"):
+		_corridor.call("set_driver_view_active", active, chase_view)
+		return
+	if active and _corridor.has_method("toggle_driver_view"):
+		_corridor.call("toggle_driver_view", chase_view)
+
 func _show_help_toast() -> void:
-	print("Controls: C cycle camera, X subway inspection camera, V driver/chase, hold Shift+W to notch up power, Space service brake, hold Shift+S to notch down or reverse, N trolley type, L cycle service line, K recover after an incident, M map, O overlay, mouse wheel zooms overlay, middle-drag pans overlay, F finances, R routes/timetable, 1-5 build tools, G cycles build tools, A autorail, Q/E rotate depots and stations, [ ] change station length or signal spacing, left click builds, right click cancels.")
+	_toggle_help_window()
 
 func _update_status_panel() -> void:
 	if signal_line_label == null or status_title_label == null or status_line_label == null or service_line_label == null or time_line_label == null:
@@ -1011,7 +1793,8 @@ func _update_status_panel() -> void:
 		var weather_text := String(weather_payload.get("hud_text", ""))
 		if weather_text != "":
 			time_line_label.text = "%s | %s" % [time_line_label.text, weather_text]
-	status_title_label.text = "Running"
+	var run_state := "Paused" if get_tree().paused else "Running x%.2f" % Engine.time_scale
+	status_title_label.text = run_state
 	status_line_label.text = "No station target"
 	service_line_label.text = "Service: 78 | Line settling | Fare x1.00"
 	if _corridor and _corridor.has_method("get_driver_incident_status"):
@@ -1107,6 +1890,43 @@ func _update_status_panel() -> void:
 	signal_line_label.text = signal_text
 	signal_line_label.modulate = signal_color
 
+func _update_advisor_panel() -> void:
+	if _advisor_panel == null:
+		return
+	if _economy == null or not _economy.has_method("get_advisor_payload"):
+		_advisor_panel.visible = false
+		return
+	var payload: Dictionary = _economy.call("get_advisor_payload")
+	if payload.is_empty():
+		_advisor_panel.visible = false
+		return
+	_advisor_panel.visible = true
+	var severity := String(payload.get("severity", "good"))
+	var severity_prefix := "[GOOD]"
+	match severity:
+		"setup":
+			severity_prefix = "[SETUP]"
+		"watch":
+			severity_prefix = "[WATCH]"
+		"urgent":
+			severity_prefix = "[URGENT]"
+	_advisor_header_label.text = "%s %s" % [severity_prefix, String(payload.get("headline", "Dispatcher"))]
+	_advisor_summary_label.text = String(payload.get("summary_text", ""))
+	_advisor_action_label.text = "Do next: %s" % String(payload.get("recommendation_text", ""))
+	_advisor_goal_label.text = String(payload.get("goal_text", ""))
+	var contract_text := String(payload.get("contract_text", ""))
+	var milestone_text := String(payload.get("milestone_text", ""))
+	_advisor_milestone_label.text = "%s\n%s" % [contract_text, milestone_text] if contract_text != "" else milestone_text
+	var header_color := Color("6f8b52")
+	match severity:
+		"setup":
+			header_color = Color("8c6a4a")
+		"watch":
+			header_color = Color("caa76a")
+		"urgent":
+			header_color = Color("b34a3f")
+	_advisor_header_label.modulate = header_color
+
 func _update_driver_dashboard() -> void:
 	if _driver_dashboard_panel == null or _driver_dashboard == null:
 		return
@@ -1137,6 +1957,7 @@ func _update_build_panel() -> void:
 	var preview_cost := float(payload.get("preview_cost", 0.0))
 	var frequency := float(payload.get("frequency", 6.0))
 	var autorail_enabled := bool(payload.get("autorail_enabled", false))
+	var has_anchor := bool(payload.get("has_anchor", false))
 	var rotation_deg := float(payload.get("rotation_deg", 0.0))
 	var station_length_tiles := int(payload.get("station_length_tiles", 3))
 	var station_track_count := int(payload.get("station_track_count", 2))
@@ -1146,24 +1967,33 @@ func _update_build_panel() -> void:
 		cost_text = "Cost: $%s" % _money_text(preview_cost)
 	elif preview_cost < 0.0:
 		cost_text = "Refund: $%s" % _money_text(absf(preview_cost))
-	build_info_label.text = "Mode: %s | Cash: $%s | %s%s" % [
+	var anchor_text := " | Anchor set" if has_anchor else ""
+	build_info_label.text = "Mode: %s | Cash: $%s | %s%s%s" % [
 		mode,
 		_money_text(cash),
 		cost_text,
-		" | Headway %.0f min" % frequency if mode == "Station" else ""
+		" | Headway %.0f min" % frequency if mode == "Station" else "",
+		anchor_text
 	]
 	var status := String(payload.get("status", ""))
 	var tool_hint := "Left click to build, right click to cancel. Hotkeys: 1 Track, 2 Station, 3 Depot, 4 Signal, 5 Bulldoze."
 	match mode:
 		"Track":
-			tool_hint = "A toggles autorail (%s). Click-drag from an anchor to lay terrain-following roadbed." % ("on" if autorail_enabled else "off")
+			tool_hint = "A toggles autorail (%s). Click once to set an anchor, click again to extend track." % ("on" if autorail_enabled else "off")
+			if has_anchor:
+				tool_hint = "Anchor locked. Move and click to extend track from the current endpoint."
 		"Station":
 			tool_hint = "[ ] set platform length (%d tiles). Q/E rotate. %d-track station snaps to live track." % [station_length_tiles, station_track_count]
 		"Depot":
 			tool_hint = "Q/E rotate depot frontage before placing. Depot lead snaps to track."
 		"Signal":
 			tool_hint = "Click once to start a signal run, click again to finish. [ ] adjust spacing (%.0fm)." % signal_run_spacing_m
-	build_hint_label.text = "%s | Rotation %.0f°" % [status if status != "" else tool_hint, rotation_deg] if mode in ["Station", "Depot"] else (status if status != "" else tool_hint)
+	var camera_hint := "Top-down build view active. Arrow keys or screen edge pan move the map, mouse wheel zooms, Close restores the previous camera."
+	var hint_text := status if status != "" else tool_hint
+	if mode in ["Station", "Depot"]:
+		build_hint_label.text = "%s | Rotation %.0f° | %s" % [hint_text, rotation_deg, camera_hint]
+	else:
+		build_hint_label.text = "%s | %s" % [hint_text, camera_hint]
 	_set_build_button_state(build_track_button, mode == "Track")
 	_set_build_button_state(build_station_button, mode == "Station")
 	_set_build_button_state(build_depot_button, mode == "Depot")
@@ -1183,11 +2013,26 @@ func _update_announcement_banner() -> void:
 		return
 	announcement_strip.visible = false
 	if _corridor == null or not _corridor.has_method("get_driver_announcement_status"):
-		return
-	var payload: Dictionary = _corridor.call("get_driver_announcement_status")
-	var text := String(payload.get("text", ""))
-	var age_s := float(payload.get("age_s", 999.0))
-	if text == "" or age_s > 4.5:
-		return
-	announcement_text_label.text = text
-	announcement_strip.visible = true
+		pass
+	else:
+		var payload: Dictionary = _corridor.call("get_driver_announcement_status")
+		var text := String(payload.get("text", ""))
+		var age_s := float(payload.get("age_s", 999.0))
+		if text != "" and age_s <= 4.5:
+			announcement_text_label.text = text
+			announcement_strip.visible = true
+			return
+	if _passenger_manager != null and _passenger_manager.has_method("get_network_gameplay_snapshot"):
+		var network_payload: Dictionary = _passenger_manager.call("get_network_gameplay_snapshot")
+		if int(network_payload.get("severe_stop_count", 0)) > 0:
+			var advisory_text := String(network_payload.get("advisory_text", ""))
+			if advisory_text != "":
+				announcement_text_label.text = advisory_text
+				announcement_strip.visible = true
+				return
+	if _economy != null and _economy.has_method("get_gameplay_banner_payload"):
+		var gameplay_payload: Dictionary = _economy.call("get_gameplay_banner_payload")
+		var gameplay_text := String(gameplay_payload.get("text", ""))
+		if gameplay_text != "":
+			announcement_text_label.text = gameplay_text
+			announcement_strip.visible = true

@@ -23,6 +23,8 @@ config/features=PackedStringArray("4.6")
 [logging]
 
 file_logging/enable_file_logging=false
+file_logging/enable_file_logging.pc=false
+file_logging/enable_file_logging.macos=false
 
 [display]
 
@@ -187,4 +189,5 @@ toggle_driver_view={
 
 [rendering]
 
+rendering_device/driver.macos="vulkan"
 textures/vram_compression/import_etc2_astc=true

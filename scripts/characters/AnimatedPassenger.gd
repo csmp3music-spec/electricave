@@ -5,6 +5,7 @@ var _phase := 0.0
 var _anim_speed := 1.0
 var _base_yaw := 0.0
 var _walk_style := false
+var _wait_stress := 0.0
 
 var _body: Node3D
 var _torso: MeshInstance3D
@@ -13,6 +14,10 @@ var _left_arm: Node3D
 var _right_arm: Node3D
 var _left_leg: Node3D
 var _right_leg: Node3D
+var _left_foot: MeshInstance3D
+var _right_foot: MeshInstance3D
+var _bag: MeshInstance3D
+var _bag_strap: MeshInstance3D
 
 func _ready() -> void:
 	_build_mesh()
@@ -26,16 +31,21 @@ func configure(seed: int, walk_style: bool = false) -> void:
 	_build_mesh()
 	_apply_palette(seed)
 
+func set_wait_stress(value: float) -> void:
+	_wait_stress = clampf(value, 0.0, 1.0)
+
 func _process(delta: float) -> void:
 	if _body == null:
 		return
 	_phase += delta * (_anim_speed * (2.0 if _walk_style else 1.2))
 	var sway := sin(_phase)
-	var bob := sin(_phase * 2.0) * (0.035 if _walk_style else 0.012)
+	var fidget := _wait_stress * (0.016 + 0.010 * absf(sin(_phase * 0.47)))
+	var bob := sin(_phase * 2.0) * (0.035 if _walk_style else 0.012 + fidget)
 	_body.position.y = bob
-	_body.rotation.y = sin(_phase * 0.35) * (0.08 if _walk_style else 0.04)
-	_left_arm.rotation.x = sway * (0.52 if _walk_style else 0.16)
-	_right_arm.rotation.x = -sway * (0.52 if _walk_style else 0.16)
+	_body.rotation.y = sin(_phase * 0.35) * (0.08 if _walk_style else 0.04 + _wait_stress * 0.03)
+	_body.rotation.z = sin(_phase * 0.23) * _wait_stress * 0.025
+	_left_arm.rotation.x = sway * (0.52 if _walk_style else 0.16 + _wait_stress * 0.08)
+	_right_arm.rotation.x = -sway * (0.52 if _walk_style else 0.16 + _wait_stress * 0.08)
 	_left_leg.rotation.x = -sway * (0.44 if _walk_style else 0.10)
 	_right_leg.rotation.x = sway * (0.44 if _walk_style else 0.10)
 
@@ -65,6 +75,8 @@ func _build_mesh() -> void:
 	_right_arm = _make_limb(Vector3(0.24, 1.04, 0.0), Vector3(0.10, 0.48, 0.10))
 	_left_leg = _make_limb(Vector3(-0.10, 0.42, 0.0), Vector3(0.12, 0.62, 0.12))
 	_right_leg = _make_limb(Vector3(0.10, 0.42, 0.0), Vector3(0.12, 0.62, 0.12))
+	_left_foot = _make_box("LeftFoot", Vector3(0.16, 0.07, 0.25), Vector3(-0.10, 0.07, 0.04))
+	_right_foot = _make_box("RightFoot", Vector3(0.16, 0.07, 0.25), Vector3(0.10, 0.07, 0.04))
 
 	var hat := MeshInstance3D.new()
 	var hat_mesh := BoxMesh.new()
@@ -74,6 +86,12 @@ func _build_mesh() -> void:
 	hat.visible = false
 	hat.name = "Hat"
 	_body.add_child(hat)
+
+	_bag = _make_box("Bag", Vector3(0.18, 0.28, 0.10), Vector3(0.26, 0.78, 0.02))
+	_bag.visible = false
+	_bag_strap = _make_box("BagStrap", Vector3(0.035, 0.62, 0.028), Vector3(0.16, 1.02, 0.07))
+	_bag_strap.rotation.z = deg_to_rad(-18.0)
+	_bag_strap.visible = false
 
 func _make_limb(pos: Vector3, size: Vector3) -> Node3D:
 	var pivot := Node3D.new()
@@ -86,6 +104,16 @@ func _make_limb(pos: Vector3, size: Vector3) -> Node3D:
 	mesh_instance.position = Vector3(0.0, -size.y * 0.5 + 0.02, 0.0)
 	pivot.add_child(mesh_instance)
 	return pivot
+
+func _make_box(node_name: String, size: Vector3, pos: Vector3) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh_instance.mesh = mesh
+	mesh_instance.position = pos
+	_body.add_child(mesh_instance)
+	return mesh_instance
 
 func _apply_palette(seed: int) -> void:
 	var coat_colors := [
@@ -110,28 +138,59 @@ func _apply_palette(seed: int) -> void:
 	var coat: Color = coat_colors[seed % coat_colors.size()]
 	var trousers: Color = trouser_colors[(seed / 5) % trouser_colors.size()]
 	var skin: Color = skin_colors[(seed / 11) % skin_colors.size()]
-	_apply_material(_torso, coat)
-	_apply_material(_head, skin)
-	_apply_limb_material(_left_arm, coat.darkened(0.04))
-	_apply_limb_material(_right_arm, coat.darkened(0.04))
-	_apply_limb_material(_left_leg, trousers)
-	_apply_limb_material(_right_leg, trousers)
+	var leather := Color("3a281e").lightened(float(seed % 3) * 0.04)
+	_apply_material(_torso, coat, "cloth")
+	_apply_material(_head, skin, "skin")
+	_apply_limb_material(_left_arm, coat.darkened(0.04), "cloth")
+	_apply_limb_material(_right_arm, coat.darkened(0.04), "cloth")
+	_apply_limb_material(_left_leg, trousers, "wool")
+	_apply_limb_material(_right_leg, trousers, "wool")
+	_apply_material(_left_foot, leather, "leather")
+	_apply_material(_right_foot, leather, "leather")
 	var hat := _body.get_node_or_null("Hat") as MeshInstance3D
 	if hat != null:
 		hat.visible = seed % 4 == 0
-		_apply_material(hat, coat.darkened(0.18))
+		_apply_material(hat, coat.darkened(0.18), "felt")
+	if _bag != null and _bag_strap != null:
+		var show_bag := seed % 5 == 0
+		_bag.visible = show_bag
+		_bag_strap.visible = show_bag
+		_apply_material(_bag, leather.lightened(0.06), "leather")
+		_apply_material(_bag_strap, leather.darkened(0.05), "leather")
 
-func _apply_limb_material(limb: Node3D, color: Color) -> void:
+func _apply_limb_material(limb: Node3D, color: Color, material_kind: String = "cloth") -> void:
 	if limb == null or limb.get_child_count() == 0:
 		return
 	var mesh_instance := limb.get_child(0) as MeshInstance3D
-	_apply_material(mesh_instance, color)
+	_apply_material(mesh_instance, color, material_kind)
 
-func _apply_material(mesh_instance: MeshInstance3D, color: Color) -> void:
+func _apply_material(mesh_instance: MeshInstance3D, color: Color, material_kind: String = "cloth") -> void:
 	if mesh_instance == null:
 		return
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
-	mat.roughness = 0.92
-	mat.metallic = 0.02
+	mat.metallic = 0.0
+	match material_kind:
+		"skin":
+			mat.roughness = 0.62
+			_set_material_property_if_available(mat, "metallic_specular", 0.28)
+			_set_material_property_if_available(mat, "subsurf_scatter_enabled", true)
+			_set_material_property_if_available(mat, "subsurf_scatter_strength", 0.08)
+		"leather":
+			mat.roughness = 0.58
+			_set_material_property_if_available(mat, "metallic_specular", 0.34)
+		"felt", "wool":
+			mat.roughness = 0.96
+			_set_material_property_if_available(mat, "metallic_specular", 0.12)
+		_:
+			mat.roughness = 0.88
+			_set_material_property_if_available(mat, "metallic_specular", 0.18)
+	_set_material_property_if_available(mat, "ao_enabled", true)
+	_set_material_property_if_available(mat, "ao_light_affect", 0.18)
 	mesh_instance.set_surface_override_material(0, mat)
+
+func _set_material_property_if_available(material: Object, property_name: String, value) -> void:
+	for property_variant in material.get_property_list():
+		if String(property_variant.get("name", "")) == property_name:
+			material.set(property_name, value)
+			return

@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=12 format=3]
 
 [sub_resource type="BoxMesh" id="1"]
 size = Vector3(26, 5, 16)
@@ -22,6 +22,23 @@ albedo_color = Color(0.713726, 0.623529, 0.454902, 1)
 [sub_resource type="StandardMaterial3D" id="6"]
 albedo_color = Color(0.364706, 0.25098, 0.176471, 1)
 
+[sub_resource type="BoxMesh" id="7"]
+size = Vector3(2, 0.45, 22)
+
+[sub_resource type="BoxMesh" id="8"]
+size = Vector3(0.55, 11, 0.55)
+
+[sub_resource type="CylinderMesh" id="9"]
+height = 3.0
+top_radius = 1.0
+bottom_radius = 8.0
+
+[sub_resource type="BoxMesh" id="10"]
+size = Vector3(1.35, 0.8, 2.3)
+
+[sub_resource type="BoxMesh" id="11"]
+size = Vector3(18, 0.4, 5)
+
 [node name="NorumbegaPark" type="Node3D"]
 
 [node name="Plaza" type="MeshInstance3D" parent="."]
@@ -39,10 +56,70 @@ mesh = SubResource("2")
 material_override = SubResource("6")
 position = Vector3(-10, 6, 5)
 
+[node name="MerryGoRoundCanopy" type="MeshInstance3D" parent="."]
+mesh = SubResource("9")
+material_override = SubResource("5")
+position = Vector3(-10, 9, 5)
+
+[node name="MerryGoRoundHorseA" type="MeshInstance3D" parent="."]
+mesh = SubResource("10")
+material_override = SubResource("5")
+position = Vector3(-5.5, 1.4, 5)
+
+[node name="MerryGoRoundHorseB" type="MeshInstance3D" parent="."]
+mesh = SubResource("10")
+material_override = SubResource("5")
+position = Vector3(-14.5, 1.4, 5)
+rotation = Vector3(0, 3.14159, 0)
+
+[node name="MerryGoRoundHorseC" type="MeshInstance3D" parent="."]
+mesh = SubResource("10")
+material_override = SubResource("5")
+position = Vector3(-10, 1.4, 9.4)
+rotation = Vector3(0, 1.5708, 0)
+
 [node name="ObservationTower" type="MeshInstance3D" parent="."]
 mesh = SubResource("3")
 material_override = SubResource("6")
 position = Vector3(11, 11, -3)
+
+[node name="RiverLandingBoardwalk" type="MeshInstance3D" parent="."]
+mesh = SubResource("11")
+material_override = SubResource("6")
+position = Vector3(10, 0.45, 9)
+
+[node name="ScenicRailwayTrackA" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(8, 8, 5)
+rotation = Vector3(-0.42, -0.46, 0)
+
+[node name="ScenicRailwayTrackB" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(15, 13, 1)
+rotation = Vector3(0.55, 0.52, 0)
+
+[node name="ScenicRailwayTrackC" type="MeshInstance3D" parent="."]
+mesh = SubResource("7")
+material_override = SubResource("6")
+position = Vector3(10, 6, -10)
+rotation = Vector3(0.1, 1.2, 0)
+
+[node name="ScenicRailwaySupportA" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("6")
+position = Vector3(4, 5.5, 7)
+
+[node name="ScenicRailwaySupportB" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("6")
+position = Vector3(14, 5.5, 2)
+
+[node name="ScenicRailwaySupportC" type="MeshInstance3D" parent="."]
+mesh = SubResource("8")
+material_override = SubResource("6")
+position = Vector3(17, 5.5, -8)
 
 [node name="Label" type="Label3D" parent="."]
 text = "Norumbega Park"

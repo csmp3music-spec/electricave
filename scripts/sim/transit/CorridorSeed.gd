@@ -7,6 +7,7 @@ const PCCCarScenePath := "res://scenes/transit/PCCCar.tscn"
 const Type5CarScenePath := "res://scenes/transit/Type5Car.tscn"
 const AtlanticElCarScenePath := "res://scenes/transit/AtlanticElCar.tscn"
 const WashingtonTunnelTrainScenePath := "res://scenes/transit/WashingtonTunnelTrain.tscn"
+const OrangeLineCarScenePath := "res://scenes/transit/OrangeLineCar.tscn"
 const CambridgeDorchesterCarScenePath := "res://scenes/transit/CambridgeDorchesterCar.tscn"
 const BlueLineCarScenePath := "res://scenes/transit/BlueLineCar.tscn"
 const SnowPlowCarScenePath := "res://scenes/transit/SnowPlowCar.tscn"
@@ -23,12 +24,27 @@ const AtlanticServiceId := "atlantic"
 const WashingtonServiceId := "washington"
 const CambridgeServiceId := "cambridge"
 const MattapanServiceId := "mattapan"
+const SalemNhServiceId := "salem_nh"
+const CanobieServiceId := "canobie"
+const WhalomServiceId := "whalom"
+const NantasketServiceId := "nantasket"
+const DriverMotorBusName := &"DriverMotor"
+const DriverTrackBusName := &"DriverTrack"
+const DriverCabBusName := &"DriverCab"
+const StationBusName := &"Station"
+const MasterBusName := &"Master"
 const BallastAlbedoPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_diff_1k.jpg"
 const BallastRoughnessPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_rough_1k.jpg"
+const BallastNormalPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_nor_gl_1k.jpg"
+const BallastAoPath := "res://assets/textures/track_materials/clean_pebbles/clean_pebbles_ao_1k.jpg"
 const SleeperAlbedoPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_diff_1k.jpg"
 const SleeperRoughnessPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_rough_1k.jpg"
+const SleeperNormalPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_nor_gl_1k.jpg"
+const SleeperAoPath := "res://assets/textures/track_materials/weathered_planks/weathered_planks_ao_1k.jpg"
 const RailAlbedoPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_diff_1k.jpg"
 const RailRoughnessPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_rough_1k.jpg"
+const RailNormalPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_nor_gl_1k.jpg"
+const RailAoPath := "res://assets/textures/track_materials/metal_plate_02/metal_plate_02_ao_1k.jpg"
 const BrickAlbedoPath := "res://assets/textures/period_boston/castle_brick_02_red/castle_brick_02_red_diff_1k.jpg"
 const BrickRoughnessPath := "res://assets/textures/period_boston/castle_brick_02_red/castle_brick_02_red_rough_1k.jpg"
 const BrickNormalPath := "res://assets/textures/period_boston/castle_brick_02_red/castle_brick_02_red_nor_gl_1k.jpg"
@@ -81,6 +97,8 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var subway_segment_end_open_length := 18.0
 @export var subway_junction_extra_open_length := 16.0
 @export var subway_junction_wall_push := 4.5
+@export var subway_station_end_caps_enabled := true
+@export var subway_junction_walls_enabled := true
 @export var subway_station_names := PackedStringArray([
 	"Park Street",
 	"Boylston",
@@ -332,6 +350,13 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var path_parent_path: NodePath
 @export var spawn_trolleys := true
 @export var trolley_count := 4
+@export var macos_safe_startup_fleet := true
+@export var macos_safe_startup_reduce_visuals := true
+@export var macos_safe_startup_keep_tremont_subway := true
+@export var macos_safe_startup_keep_other_subway_visuals := true
+@export var macos_startup_total_car_budget := 16
+@export var macos_startup_per_line_car_cap := 1
+@export var macos_safe_startup_use_proxy_ai_cars := true
 @export var trolley_speed_mps := 14.0
 @export var trolley_max_speed_mps := 26.0
 @export var driver_trolley_index := 0
@@ -385,14 +410,19 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var driver_audio_enabled := true
 @export_file("*.ogg", "*.wav", "*.mp3") var trolley_motor_loop_path := "res://assets/audio/trolley/droning_train_motor_on_halt.ogg"
 @export_file("*.ogg", "*.wav", "*.mp3") var trolley_track_loop_path := "res://assets/audio/trolley/wws_102n_tram_front.ogg"
+@export_file("*.ogg", "*.wav", "*.mp3") var trolley_cab_bed_loop_path := "res://assets/audio/trolley/complete_train_ride_4_minutes.ogg"
 @export var trolley_motor_idle_volume_db := -33.0
 @export var trolley_motor_max_volume_db := -19.0
 @export var trolley_track_idle_volume_db := -46.0
 @export var trolley_track_max_volume_db := -24.0
+@export var trolley_cab_idle_volume_db := -42.0
+@export var trolley_cab_max_volume_db := -27.0
 @export var trolley_motor_idle_pitch := 0.8
 @export var trolley_motor_max_pitch := 1.24
 @export var trolley_track_idle_pitch := 0.84
 @export var trolley_track_max_pitch := 1.12
+@export var trolley_cab_idle_pitch := 0.92
+@export var trolley_cab_max_pitch := 1.05
 @export var trolley_audio_blend_speed := 18.0
 @export var main_camera_path: NodePath
 @export var toggle_driver_action := "toggle_driver_view"
@@ -426,6 +456,10 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var blue_service_headway_min := 5.0
 @export var mattapan_service_headway_min := 6.0
 @export var green_branch_service_headway_min := 6.0
+@export var northern_interurban_service_car_count := 2
+@export var northern_interurban_service_headway_min := 14.0
+@export var south_shore_service_car_count := 2
+@export var south_shore_service_headway_min := 16.0
 @export var green_surface_track_height := 0.42
 @export var snow_plow_speed_mps := 7.0
 @export var snow_speed_limit_mps := 4.8
@@ -498,6 +532,7 @@ var _player_trolley_scene_index := 0
 var _driver_route_stops: Array[Dictionary] = []
 var _driver_motor_audio: AudioStreamPlayer
 var _driver_track_audio: AudioStreamPlayer
+var _driver_cab_audio: AudioStreamPlayer
 var _station_ambience_audio: AudioStreamPlayer
 var _station_chime_audio: AudioStreamPlayer
 var _signal_path: Path3D
@@ -547,12 +582,17 @@ var _snow_plows := {}
 var _line_snow_cleared := {}
 var _line_snow_depth := {}
 var _driver_curve_overspeed_s := 0.0
+var _startup_fleet_budget_active := false
+var _startup_car_budget_remaining := -1
 
 func _ready() -> void:
 	if main_camera_path != NodePath(""):
 		_main_camera = get_node(main_camera_path) as Camera3D
+		if _main_camera != null:
+			_main_camera.attributes = _build_runtime_camera_attributes(false)
 	_resolve_gameplay_dependencies()
 	_set_default_player_trolley_scene_index()
+	_setup_audio_buses()
 	_setup_driver_audio()
 	_setup_station_audio()
 	if not auto_seed:
@@ -612,6 +652,8 @@ func _seed_corridor() -> void:
 	_system_route_points = route_points
 	_service_lines.clear()
 	_driver_line_id = MainLineServiceId
+	_begin_startup_fleet_budget()
+	var reduced_visuals := _use_macos_safe_visual_mode()
 	var dir := (route_points[route_points.size() - 1] - route_points[0]).normalized()
 	if dir.length() < 0.01:
 		dir = direction.normalized()
@@ -626,15 +668,18 @@ func _seed_corridor() -> void:
 		town_manager.AddTransitStop(pos, frequency, town_name)
 	track_builder.add_segment(route_points)
 	_configure_main_camera(route_points)
-	_build_subway_design(stop_points, route_points, track_builder)
-	_build_north_terminal_extension(track_builder)
-	_build_blue_line_phase(track_builder)
-	_build_elevated_layer(track_builder)
-	_build_atlantic_avenue_elevated(track_builder)
-	_build_orange_line_elevated(track_builder)
-	_build_washington_street_tunnel(track_builder)
-	_build_cambridge_dorchester_tunnel(track_builder)
-	_build_mattapan_extension(track_builder)
+	if not reduced_visuals or macos_safe_startup_keep_tremont_subway:
+		_build_subway_design(stop_points, route_points, track_builder)
+	if not reduced_visuals or macos_safe_startup_keep_other_subway_visuals:
+		_build_north_terminal_extension(track_builder)
+		_build_blue_line_phase(track_builder)
+		_build_washington_street_tunnel(track_builder)
+		_build_cambridge_dorchester_tunnel(track_builder)
+	if not reduced_visuals:
+		_build_elevated_layer(track_builder)
+		_build_atlantic_avenue_elevated(track_builder)
+		_build_orange_line_elevated(track_builder)
+		_build_mattapan_extension(track_builder)
 	var path := _build_mainline_path(route_points, track_builder)
 	_build_driver_route_stops(path, stop_points)
 	_build_timetable_segments()
@@ -646,6 +691,7 @@ func _seed_corridor() -> void:
 		_corridor_theme("tremont").get("line_color", Color("2d8f45"))
 	)
 	_build_operational_historical_lines(track_builder, town_manager)
+	_end_startup_fleet_budget()
 	_activate_service_line(MainLineServiceId)
 	_seed_initial_towns(town_manager)
 
@@ -700,9 +746,40 @@ func _seed_corridor() -> void:
 		track_builder.add_segment(branch_points)
 		town_positions[to_name] = end_pos
 		town_manager.AddTransitStop(end_pos, frequency, to_name, "park")
-	_build_framingham_landmarks(town_positions, track_builder)
-	_build_historic_carhouse_landmarks(town_positions, track_builder)
+	if not reduced_visuals:
+		_build_boston_core_landmarks(track_builder)
+		_build_framingham_landmarks(town_positions, track_builder)
+		_build_historic_carhouse_landmarks(town_positions, track_builder)
 	_seeded = true
+
+func _begin_startup_fleet_budget() -> void:
+	_startup_fleet_budget_active = false
+	_startup_car_budget_remaining = -1
+	if not macos_safe_startup_fleet or not OS.has_feature("macos"):
+		return
+	_startup_fleet_budget_active = true
+	_startup_car_budget_remaining = maxi(1, macos_startup_total_car_budget)
+
+func _use_macos_safe_visual_mode() -> bool:
+	return macos_safe_startup_reduce_visuals and OS.has_feature("macos")
+
+func _use_lightweight_subway_visual_mode() -> bool:
+	return _use_macos_safe_visual_mode()
+
+func _end_startup_fleet_budget() -> void:
+	_startup_fleet_budget_active = false
+	_startup_car_budget_remaining = -1
+
+func _effective_startup_car_count(line_id: String, requested_count: int) -> int:
+	if requested_count <= 0:
+		return 0
+	if not _startup_fleet_budget_active:
+		return requested_count
+	var clamped := mini(requested_count, maxi(1, macos_startup_per_line_car_cap))
+	clamped = mini(clamped, maxi(0, _startup_car_budget_remaining))
+	if clamped > 0:
+		_startup_car_budget_remaining -= clamped
+	return clamped
 
 func _build_mainline_path(points: PackedVector3Array, track_builder: Node) -> Path3D:
 	return _build_service_path(path_name, points, track_builder)
@@ -805,6 +882,318 @@ func _build_historic_carhouse_landmarks(town_positions: Dictionary, track_builde
 		var forest_hills_anchor := forest_hills_points[forest_hills_points.size() - 1] + Vector3(0.0, 0.2, 0.0)
 		var forest_hills_forward := (forest_hills_points[forest_hills_points.size() - 1] - forest_hills_points[forest_hills_points.size() - 2]).normalized()
 		_add_historic_carhouse(root, "Forest Hills Carhouse", forest_hills_anchor, forest_hills_forward, "forest_hills")
+
+func _build_boston_core_landmarks(track_builder: Node) -> void:
+	var parent := _get_path_parent(track_builder)
+	if parent == null:
+		return
+	var existing := parent.get_node_or_null("BostonCoreLandmarks")
+	if existing:
+		existing.queue_free()
+	var root := Node3D.new()
+	root.name = "BostonCoreLandmarks"
+	parent.add_child(root)
+	_build_boston_common_landmark(root)
+	_build_public_garden_landmark(root)
+	_build_commonwealth_mall_landmark(root)
+	_build_state_house_landmark(root)
+	_build_downtown_1913_skyline(root)
+	_build_longfellow_bridge_landmark(root)
+
+func _geo_landmark_point(lon: float, lat: float, height: float = 0.0) -> Vector3:
+	var projected := _project_geo_points(PackedVector2Array([Vector2(lon, lat)]))
+	if projected.is_empty():
+		return Vector3.ZERO
+	var point := projected[0]
+	point.y = height
+	return point
+
+func _build_boston_common_landmark(parent: Node3D) -> void:
+	var west := _geo_landmark_point(-71.0724, 42.3562)
+	var east := _geo_landmark_point(-71.0608, 42.3555)
+	if west == Vector3.ZERO or east == Vector3.ZERO:
+		return
+	var forward := (east - west).normalized()
+	if forward.length() < 0.01:
+		forward = Vector3.RIGHT
+	var center := west.lerp(east, 0.5)
+	_add_box(parent, Vector3(128.0, 0.16, 316.0), center + Vector3(0.0, 0.08, 0.0), forward, Color("506d46"))
+	_add_box(parent, Vector3(22.0, 0.12, 84.0), center + Vector3(0.0, 0.14, 0.0), forward, Color("c7b48c"))
+	_add_box(parent, Vector3(16.0, 0.12, 138.0), center + Vector3(32.0, 0.14, -10.0), forward, Color("c7b48c"))
+	var frog_pond := _geo_landmark_point(-71.0648, 42.3550, 0.05)
+	_add_box(parent, Vector3(30.0, 0.1, 22.0), frog_pond + Vector3(0.0, 0.05, 0.0), forward.rotated(Vector3.UP, deg_to_rad(12.0)), Color("587e98"))
+	_add_landmark_label(parent, "Boston Common", center + Vector3(0.0, 4.8, 0.0), -forward, 0.8)
+
+func _build_public_garden_landmark(parent: Node3D) -> void:
+	var west := _geo_landmark_point(-71.0738, 42.3533)
+	var east := _geo_landmark_point(-71.0676, 42.3527)
+	if west == Vector3.ZERO or east == Vector3.ZERO:
+		return
+	var forward := (east - west).normalized()
+	if forward.length() < 0.01:
+		forward = Vector3.RIGHT
+	var center := west.lerp(east, 0.5)
+	_add_box(parent, Vector3(112.0, 0.16, 196.0), center + Vector3(0.0, 0.08, 0.0), forward, Color("5b7650"))
+	var lagoon := _geo_landmark_point(-71.0708, 42.3530, 0.05)
+	_add_box(parent, Vector3(58.0, 0.1, 34.0), lagoon + Vector3(0.0, 0.05, 0.0), forward.rotated(Vector3.UP, deg_to_rad(-18.0)), Color("5a84a0"))
+	_add_box(parent, Vector3(12.0, 0.12, 126.0), center + Vector3(0.0, 0.14, 0.0), forward.rotated(Vector3.UP, deg_to_rad(28.0)), Color("d0bf97"))
+	var portal := _geo_landmark_point(-71.0734, 42.3528, green_surface_track_height + 0.02)
+	_add_landmark_label(parent, "Public Garden Portal", portal + Vector3(0.0, 3.0, 0.0), Vector3(1.0, 0.0, 0.2).normalized(), 0.7)
+	_add_landmark_label(parent, "Public Garden", center + Vector3(0.0, 4.9, 0.0), -forward, 0.78)
+
+func _build_commonwealth_mall_landmark(parent: Node3D) -> void:
+	var mall_points := _project_geo_points(PackedVector2Array([
+		Vector2(-71.0743, 42.3508),
+		Vector2(-71.0794, 42.3498),
+		Vector2(-71.0868, 42.3486)
+	]))
+	if mall_points.size() < 2:
+		return
+	var deck_root := _make_subway_section(parent, "CommonwealthMall")
+	for i in range(mall_points.size() - 1):
+		var a := mall_points[i]
+		var b := mall_points[i + 1]
+		var forward := (b - a).normalized()
+		if forward.length() < 0.01:
+			continue
+		var center := (a + b) * 0.5
+		var length := a.distance_to(b)
+		_add_box(deck_root, Vector3(26.0, 0.14, length), center + Vector3(0.0, 0.07, 0.0), forward, Color("59734d"))
+		_add_surface_rapid_segment(deck_root, Vector3(a.x, green_surface_track_height, a.z), Vector3(b.x, green_surface_track_height, b.z), "tremont")
+	_add_landmark_label(deck_root, "Commonwealth Avenue Mall", mall_points[1] + Vector3(0.0, 4.4, 0.0), Vector3(1.0, 0.0, 0.0), 0.74)
+
+func _build_state_house_landmark(parent: Node3D) -> void:
+	var center := _geo_landmark_point(-71.0636, 42.3587)
+	if center == Vector3.ZERO:
+		return
+	var south := _geo_landmark_point(-71.0636, 42.3576)
+	var forward := (south - center).normalized()
+	if forward.length() < 0.01:
+		forward = Vector3.FORWARD
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	_add_box(parent, Vector3(54.0, 12.0, 30.0), center + Vector3(0.0, 6.0, 0.0), forward, Color("b9a680"))
+	_add_box(parent, Vector3(24.0, 16.0, 16.0), center + Vector3(0.0, 14.0, -3.0), forward, Color("d1c4aa"))
+	_add_box(parent, Vector3(18.0, 10.0, 18.0), center + right * -18.0 + Vector3(0.0, 5.0, 2.0), forward, Color("b39d77"))
+	_add_box(parent, Vector3(18.0, 10.0, 18.0), center + right * 18.0 + Vector3(0.0, 5.0, 2.0), forward, Color("b39d77"))
+	_add_box(parent, Vector3(18.0, 6.0, 8.0), center - forward * 14.0 + Vector3(0.0, 3.0, 0.0), forward, Color("d6c8ab"))
+	_add_landmark_cylinder(parent, center + Vector3(0.0, 17.5, -2.0), 7.0, 4.6, Color("c9b27a"))
+	_add_landmark_sphere(parent, center + Vector3(0.0, 22.2, -2.0), Vector3(8.0, 6.8, 8.0), Color("c59b2d"))
+	_add_landmark_cylinder(parent, center + Vector3(0.0, 28.5, -2.0), 2.1, 4.2, Color("9b7f2b"))
+	_add_landmark_label(parent, "Massachusetts State House", center + Vector3(0.0, 32.0, 0.0), -forward, 0.8)
+
+func _build_downtown_1913_skyline(parent: Node3D) -> void:
+	var skyline_buildings := [
+		{
+			"name": "Ames Building",
+			"lon": -71.0593,
+			"lat": 42.3597,
+			"yaw_deg": 14.0,
+			"tiers": [
+				{"size": Vector3(21.0, 30.0, 18.0), "y_offset": 15.0, "color": Color("806a57")},
+				{"size": Vector3(17.0, 7.0, 14.0), "y_offset": 33.5, "color": Color("8d7866")},
+				{"size": Vector3(9.0, 4.0, 8.0), "y_offset": 39.0, "color": Color("6f5b48")}
+			]
+		},
+		{
+			"name": "Exchange Building",
+			"lon": -71.0554,
+			"lat": 42.3587,
+			"yaw_deg": 10.0,
+			"tiers": [
+				{"size": Vector3(28.0, 26.0, 24.0), "y_offset": 13.0, "color": Color("7b6556")},
+				{"size": Vector3(24.0, 7.0, 20.0), "y_offset": 29.5, "color": Color("8b796c")}
+			]
+		},
+		{
+			"name": "Second Brazer Building",
+			"lon": -71.0563,
+			"lat": 42.3586,
+			"yaw_deg": 18.0,
+			"tiers": [
+				{"size": Vector3(16.0, 28.0, 14.0), "y_offset": 14.0, "color": Color("8f7b68")},
+				{"size": Vector3(14.0, 7.0, 12.0), "y_offset": 31.5, "color": Color("c1b3a2")}
+			]
+		},
+		{
+			"name": "International Trust Company Building",
+			"lon": -71.0575,
+			"lat": 42.3552,
+			"yaw_deg": 6.0,
+			"tiers": [
+				{"size": Vector3(24.0, 23.0, 19.0), "y_offset": 11.5, "color": Color("bba891")},
+				{"size": Vector3(20.0, 5.0, 15.0), "y_offset": 25.5, "color": Color("d2c2a9")}
+			]
+		},
+		{
+			"name": "Board of Trade Building",
+			"lon": -71.0540,
+			"lat": 42.3592,
+			"yaw_deg": 12.0,
+			"tiers": [
+				{"size": Vector3(18.0, 29.0, 15.0), "y_offset": 14.5, "color": Color("8a7560")},
+				{"size": Vector3(14.0, 6.0, 11.0), "y_offset": 32.0, "color": Color("a18d79")}
+			]
+		},
+		{
+			"name": "Old State House",
+			"lon": -71.0570,
+			"lat": 42.3588,
+			"yaw_deg": 15.0,
+			"tiers": [
+				{"size": Vector3(14.0, 16.0, 10.0), "y_offset": 8.0, "color": Color("6b543f")},
+				{"size": Vector3(9.0, 7.0, 7.0), "y_offset": 19.5, "color": Color("7c6757")}
+			]
+		},
+		{
+			"name": "Old South Meeting House",
+			"lon": -71.0587,
+			"lat": 42.3556,
+			"yaw_deg": 4.0,
+			"tiers": [
+				{"size": Vector3(18.0, 18.0, 14.0), "y_offset": 9.0, "color": Color("725845")},
+				{"size": Vector3(10.0, 8.0, 10.0), "y_offset": 22.0, "color": Color("836550")}
+			]
+		},
+		{
+			"name": "Park Street Church",
+			"lon": -71.0622,
+			"lat": 42.3565,
+			"yaw_deg": -10.0,
+			"tiers": [
+				{"size": Vector3(12.0, 18.0, 12.0), "y_offset": 9.0, "color": Color("b7a790")},
+				{"size": Vector3(6.0, 12.0, 6.0), "y_offset": 24.0, "color": Color("d4c7b4")},
+				{"size": Vector3(2.6, 16.0, 2.6), "y_offset": 38.0, "color": Color("e8dfd1")}
+			]
+		},
+		{
+			"name": "Trinity Church",
+			"lon": -71.0789,
+			"lat": 42.3499,
+			"yaw_deg": 18.0,
+			"tiers": [
+				{"size": Vector3(22.0, 18.0, 18.0), "y_offset": 9.0, "color": Color("7f5e46")},
+				{"size": Vector3(9.0, 14.0, 9.0), "y_offset": 25.0, "color": Color("8f6f57")},
+				{"size": Vector3(2.8, 10.0, 2.8), "y_offset": 37.0, "color": Color("a78e78")}
+			]
+		}
+	]
+	for skyline_variant in skyline_buildings:
+		_add_1913_skyline_building(parent, skyline_variant)
+	_add_1913_financial_district_fill(parent)
+	_add_1913_custom_house_construction(parent)
+	var skyline_center := _geo_landmark_point(-71.0567, 42.3585)
+	_add_landmark_label(parent, "Boston Skyline c. 1913", skyline_center + Vector3(0.0, 48.0, 0.0), Vector3(0.68, 0.0, 1.0).normalized(), 0.78)
+
+func _add_1913_skyline_building(parent: Node3D, spec: Dictionary) -> void:
+	var center := _geo_landmark_point(float(spec.get("lon", 0.0)), float(spec.get("lat", 0.0)))
+	if center == Vector3.ZERO:
+		return
+	var forward := Vector3.FORWARD.rotated(Vector3.UP, deg_to_rad(float(spec.get("yaw_deg", 0.0))))
+	var tiers: Array = spec.get("tiers", [])
+	for tier_variant in tiers:
+		var tier: Dictionary = tier_variant
+		var size: Vector3 = tier.get("size", Vector3(12.0, 16.0, 12.0))
+		var y_offset := float(tier.get("y_offset", size.y * 0.5))
+		var color: Color = tier.get("color", Color("7a6a58"))
+		var offset: Vector3 = tier.get("offset", Vector3.ZERO)
+		_add_box(parent, size, center + Vector3(offset.x, y_offset + offset.y, offset.z), forward, color)
+
+func _add_1913_financial_district_fill(parent: Node3D) -> void:
+	var fill_blocks := [
+		{"lon": -71.0574, "lat": 42.3591, "size": Vector3(18.0, 20.0, 16.0), "yaw_deg": 8.0, "color": Color("6e6052")},
+		{"lon": -71.0568, "lat": 42.3579, "size": Vector3(16.0, 18.0, 14.0), "yaw_deg": 18.0, "color": Color("7a6a5b")},
+		{"lon": -71.0551, "lat": 42.3578, "size": Vector3(20.0, 22.0, 16.0), "yaw_deg": 14.0, "color": Color("77685a")},
+		{"lon": -71.0563, "lat": 42.3559, "size": Vector3(18.0, 19.0, 15.0), "yaw_deg": 6.0, "color": Color("8a7867")},
+		{"lon": -71.0542, "lat": 42.3583, "size": Vector3(18.0, 24.0, 15.0), "yaw_deg": 10.0, "color": Color("857463")},
+		{"lon": -71.0546, "lat": 42.3568, "size": Vector3(18.0, 20.0, 16.0), "yaw_deg": 12.0, "color": Color("6f6356")}
+	]
+	for block_variant in fill_blocks:
+		var center := _geo_landmark_point(float(block_variant.get("lon", 0.0)), float(block_variant.get("lat", 0.0)))
+		if center == Vector3.ZERO:
+			continue
+		var size: Vector3 = block_variant.get("size", Vector3(16.0, 18.0, 14.0))
+		var forward := Vector3.FORWARD.rotated(Vector3.UP, deg_to_rad(float(block_variant.get("yaw_deg", 0.0))))
+		_add_box(parent, size, center + Vector3(0.0, size.y * 0.5, 0.0), forward, block_variant.get("color", Color("746558")))
+
+func _add_1913_custom_house_construction(parent: Node3D) -> void:
+	var center := _geo_landmark_point(-71.0533, 42.3592)
+	if center == Vector3.ZERO:
+		return
+	var forward := Vector3.FORWARD.rotated(Vector3.UP, deg_to_rad(12.0))
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	_add_box(parent, Vector3(30.0, 9.0, 42.0), center + Vector3(0.0, 4.5, 0.0), forward, Color("c8bfaf"))
+	_add_box(parent, Vector3(24.0, 2.6, 36.0), center + Vector3(0.0, 10.3, 0.0), forward, Color("d9d3c7"))
+	for side in [-1.0, 1.0]:
+		for depth_side in [-1.0, 1.0]:
+			var column_anchor: Vector3 = center + right * side * 9.6 + forward * depth_side * 14.6
+			_add_box(parent, Vector3(1.1, 8.2, 1.1), column_anchor + Vector3(0.0, 4.1, 0.0), forward, Color("e9e2d5"))
+	_add_landmark_sphere(parent, center + Vector3(0.0, 11.9, 0.0), Vector3(9.0, 2.1, 9.0), Color("c8c1b2"))
+	var frame_height := 38.0
+	var frame_center := center + Vector3(0.0, 10.8 + frame_height * 0.5, 0.0)
+	for side in [-1.0, 1.0]:
+		for depth_side in [-1.0, 1.0]:
+			var leg: Vector3 = frame_center + right * side * 5.4 + forward * depth_side * 5.4
+			_add_box(parent, Vector3(0.7, frame_height, 0.7), leg, forward, Color("5d5a57"))
+	for level_index in range(5):
+		var level_y := 14.5 + float(level_index) * 7.0
+		_add_box(parent, Vector3(12.4, 0.36, 12.4), center + Vector3(0.0, level_y, 0.0), forward, Color("88817a"))
+		_add_box(parent, Vector3(12.4, 0.18, 0.34), center + forward * 6.0 + Vector3(0.0, level_y + 0.6, 0.0), right, Color("8c6f47"))
+	var crane_mast_height := 12.0
+	_add_box(parent, Vector3(0.5, crane_mast_height, 0.5), center + right * 1.6 + Vector3(0.0, 10.8 + frame_height + crane_mast_height * 0.5, 0.0), forward, Color("5d5143"))
+	_add_box(parent, Vector3(13.0, 0.42, 0.42), center + right * 7.0 + Vector3(0.0, 10.8 + frame_height + crane_mast_height - 1.3, 0.0), forward, Color("725d3f"))
+	_add_landmark_label(parent, "Custom House Tower (under construction)", center + Vector3(0.0, 54.0, 0.0), Vector3(0.5, 0.0, 1.0).normalized(), 0.7)
+
+func _build_longfellow_bridge_landmark(parent: Node3D) -> void:
+	var boston_end := _geo_landmark_point(-71.0708, 42.3612, 1.1)
+	var cambridge_end := _geo_landmark_point(-71.0854, 42.3626, 1.1)
+	if boston_end == Vector3.ZERO or cambridge_end == Vector3.ZERO:
+		return
+	var forward := (cambridge_end - boston_end).normalized()
+	if forward.length() < 0.01:
+		return
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var length := boston_end.distance_to(cambridge_end)
+	var center := (boston_end + cambridge_end) * 0.5
+	_add_box(parent, Vector3(22.0, 0.64, length), center + Vector3(0.0, 0.12, 0.0), forward, Color("7b746e"))
+	for side in [-1.0, 1.0]:
+		_add_box(parent, Vector3(0.5, 1.6, length), center + right * side * 8.8 + Vector3(0.0, 0.88, 0.0), forward, Color("615c57"))
+	for t in [0.18, 0.45, 0.72]:
+		var pier := boston_end.lerp(cambridge_end, t)
+		_add_box(parent, Vector3(4.0, 6.8, 4.0), pier + Vector3(0.0, -3.0, 0.0), forward, Color("7a7066"))
+		_add_box(parent, Vector3(3.6, 6.0, 2.6), pier + right * 4.2 + Vector3(0.0, 4.0, 0.0), forward, Color("8f867c"))
+		_add_box(parent, Vector3(3.6, 6.0, 2.6), pier - right * 4.2 + Vector3(0.0, 4.0, 0.0), forward, Color("8f867c"))
+	_add_landmark_label(parent, "Longfellow Bridge", center + Vector3(0.0, 8.8, 0.0), -forward, 0.76)
+
+func _add_landmark_cylinder(parent: Node3D, position: Vector3, radius: float, height: float, color: Color) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = height
+	mesh.radial_segments = 24
+	mesh_instance.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.95
+	mesh_instance.set_surface_override_material(0, material)
+	mesh_instance.position = position
+	parent.add_child(mesh_instance)
+
+func _add_landmark_sphere(parent: Node3D, position: Vector3, radii: Vector3, color: Color) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.radial_segments = 24
+	mesh.rings = 14
+	mesh_instance.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.92
+	mesh_instance.set_surface_override_material(0, material)
+	mesh_instance.scale = radii
+	mesh_instance.position = position
+	parent.add_child(mesh_instance)
 
 func _add_historic_carhouse(parent: Node3D, label: String, anchor: Vector3, forward: Vector3, style_id: String) -> void:
 	if parent == null:
@@ -925,6 +1314,10 @@ func _service_line_ids_sorted() -> Array[String]:
 		GreenDServiceId,
 		GreenEServiceId,
 		MainLineServiceId,
+		SalemNhServiceId,
+		CanobieServiceId,
+		WhalomServiceId,
+		NantasketServiceId,
 		OrangeServiceId,
 		AtlanticServiceId,
 		WashingtonServiceId,
@@ -995,6 +1388,7 @@ func _line_fleet(line_id: String) -> Array:
 
 func _build_operational_historical_lines(track_builder: Node, town_manager: Node) -> void:
 	_build_green_branch_services(track_builder, town_manager)
+	_build_requested_interurban_lines(track_builder, town_manager)
 	_build_operational_service_line(
 		BlueServiceId,
 		"Blue Line North Shore",
@@ -1014,7 +1408,7 @@ func _build_operational_historical_lines(track_builder: Node, town_manager: Node
 		_build_atlantic_service_points(),
 		atlantic_elevated_station_names,
 		atlantic_service_car_count,
-		PCCCarScenePath,
+		AtlanticElCarScenePath,
 		atlantic_service_headway_min,
 		_corridor_theme("atlantic_elevated").get("line_color", Color("d96a16")),
 		track_builder,
@@ -1027,7 +1421,7 @@ func _build_operational_historical_lines(track_builder: Node, town_manager: Node
 		_build_historical_subway_service_points(washington_street_geo),
 		washington_street_station_names,
 		washington_service_car_count,
-		PCCCarScenePath,
+		WashingtonTunnelTrainScenePath,
 		washington_service_headway_min,
 		_corridor_theme("washington").get("line_color", Color("d9731f")),
 		track_builder,
@@ -1098,6 +1492,8 @@ func _configure_service_line_fleet(line_id: String, fleet: Array[TrolleyMover]) 
 			profile = {"cruise": 10.5, "max": 15.5, "accel": 4.2, "brake": 8.6}
 		GreenDServiceId:
 			profile = {"cruise": 12.5, "max": 18.5, "accel": 4.4, "brake": 8.8}
+		SalemNhServiceId, CanobieServiceId, WhalomServiceId, NantasketServiceId:
+			profile = {"cruise": 11.5, "max": 16.5, "accel": 4.2, "brake": 8.6}
 		GreenEServiceId:
 			profile = {"cruise": 10.8, "max": 16.0, "accel": 4.2, "brake": 8.8}
 		OrangeServiceId:
@@ -1207,7 +1603,7 @@ func _build_orange_service_line(track_builder: Node, town_manager: Node) -> void
 		points,
 		stop_names,
 		orange_service_car_count,
-		PCCCarScenePath,
+		OrangeLineCarScenePath,
 		orange_service_headway_min,
 		_corridor_theme("orange_elevated").get("line_color", Color("d9731f")),
 		track_builder,
@@ -1406,6 +1802,286 @@ func _build_green_branch_services(track_builder: Node, town_manager: Node) -> vo
 		town_manager
 	)
 
+func _build_requested_interurban_lines(track_builder: Node, town_manager: Node) -> void:
+	_build_light_interurban_branch_service(
+		SalemNhServiceId,
+		"Boston Northern Interurban - Salem, NH",
+		"SalemNhInterurban",
+		1,
+		_salem_nh_route_geo(),
+		_salem_nh_stop_names(),
+		_salem_nh_stop_geo(),
+		Type5CarScenePath,
+		Color("3d855f"),
+		northern_interurban_service_car_count,
+		northern_interurban_service_headway_min,
+		track_builder,
+		town_manager
+	)
+	_build_light_interurban_branch_service(
+		CanobieServiceId,
+		"Boston Northern Interurban - Canobie Lake Park",
+		"CanobieLakeInterurban",
+		1,
+		_canobie_route_geo(),
+		_canobie_stop_names(),
+		_canobie_stop_geo(),
+		Type5CarScenePath,
+		Color("6a8e35"),
+		northern_interurban_service_car_count,
+		northern_interurban_service_headway_min,
+		track_builder,
+		town_manager
+	)
+	_build_light_interurban_branch_service(
+		WhalomServiceId,
+		"Boston Northern Interurban - Whalom Park",
+		"WhalomParkInterurban",
+		1,
+		_whalom_route_geo(),
+		_whalom_stop_names(),
+		_whalom_stop_geo(),
+		Type5CarScenePath,
+		Color("8d7a32"),
+		northern_interurban_service_car_count,
+		northern_interurban_service_headway_min + 2.0,
+		track_builder,
+		town_manager
+	)
+	_build_light_interurban_branch_service(
+		NantasketServiceId,
+		"South Shore Portal - Nantasket Beach / Paragon Park",
+		"NantasketBeachInterurban",
+		2,
+		_nantasket_route_geo(),
+		_nantasket_stop_names(),
+		_nantasket_stop_geo(),
+		Type5CarScenePath,
+		Color("2f7f7d"),
+		south_shore_service_car_count,
+		south_shore_service_headway_min,
+		track_builder,
+		town_manager
+	)
+
+func _light_interurban_trunk_stop_names(shared_stop_count: int) -> PackedStringArray:
+	return _green_trunk_stop_names(shared_stop_count)
+
+func _light_interurban_trunk_stop_positions(shared_stop_count: int) -> PackedVector3Array:
+	return _green_trunk_stop_positions(shared_stop_count)
+
+func _build_light_interurban_branch_service(line_id: String, display_name: String, root_name: String, shared_stop_count: int, branch_route_geo: PackedVector2Array, branch_stop_names: PackedStringArray, branch_stop_geo: PackedVector2Array, scene_path: String, line_color: Color, car_count: int, headway_min: float, track_builder: Node, town_manager: Node) -> void:
+	if branch_route_geo.size() < 2 or branch_stop_names.is_empty() or branch_stop_names.size() != branch_stop_geo.size():
+		return
+	var trunk_stop_names := _light_interurban_trunk_stop_names(shared_stop_count)
+	var trunk_stop_positions := _light_interurban_trunk_stop_positions(shared_stop_count)
+	if trunk_stop_names.size() != trunk_stop_positions.size() or trunk_stop_names.is_empty():
+		return
+	var route_points := PackedVector3Array()
+	var stop_positions := PackedVector3Array()
+	var stop_names := PackedStringArray()
+	for i in range(trunk_stop_positions.size()):
+		route_points.append(trunk_stop_positions[i])
+		stop_positions.append(trunk_stop_positions[i])
+		stop_names.append(trunk_stop_names[i])
+	var branch_route_points := PackedVector3Array()
+	for point in _project_geo_points(branch_route_geo):
+		branch_route_points.append(Vector3(point.x, green_surface_track_height, point.z))
+	var branch_stop_points := PackedVector3Array()
+	for point in _project_geo_points(branch_stop_geo):
+		branch_stop_points.append(Vector3(point.x, green_surface_track_height, point.z))
+	var shared_point := trunk_stop_positions[trunk_stop_positions.size() - 1]
+	var first_branch_point := branch_route_points[0]
+	if shared_point.distance_to(first_branch_point) > 6.0:
+		route_points.append(shared_point.lerp(first_branch_point, 0.34))
+		route_points.append(shared_point.lerp(first_branch_point, 0.68))
+	for point in branch_route_points:
+		route_points.append(point)
+	for i in range(branch_stop_points.size()):
+		stop_positions.append(branch_stop_points[i])
+		stop_names.append(branch_stop_names[i])
+	var path := _build_service_path("%sServicePath" % root_name, route_points, track_builder)
+	if path == null or path.curve == null:
+		return
+	var route_stops := _build_route_stops_for_points(path.curve, stop_names, stop_positions)
+	var fleet := _spawn_line_fleet(path, line_id, car_count, scene_path)
+	_configure_service_line_fleet(line_id, fleet)
+	var segments := _build_line_timetable_segments(line_id, display_name, route_stops, headway_min)
+	_register_service_line(
+		line_id,
+		display_name,
+		path,
+		route_stops,
+		fleet,
+		null,
+		[],
+		segments,
+		route_points,
+		line_color
+	)
+	_add_line_stops_to_town_manager(town_manager, route_stops)
+	if _use_macos_safe_visual_mode() and line_id != NantasketServiceId:
+		if line_id == CanobieServiceId or line_id == WhalomServiceId:
+			_build_interurban_terminal_scenery("%sTerminalScenery" % root_name, branch_stop_points, branch_stop_names, track_builder)
+		return
+	_build_interurban_branch_geometry(root_name, shared_point, branch_route_points, branch_stop_points, branch_stop_names, track_builder)
+
+func _salem_nh_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.0734, 42.3528),
+		Vector2(-71.0718, 42.3593),
+		Vector2(-71.0790, 42.3624),
+		Vector2(-71.0862, 42.3625),
+		Vector2(-71.0792, 42.3724),
+		Vector2(-71.0768, 42.4020),
+		Vector2(-71.0743, 42.4267),
+		Vector2(-71.1363, 42.4526),
+		Vector2(-71.1100, 42.5248),
+		Vector2(-71.1368, 42.6583),
+		Vector2(-71.1359, 42.6986),
+		Vector2(-71.1909, 42.7262),
+		Vector2(-71.3162, 42.6334),
+		Vector2(-71.2009, 42.7884)
+	])
+
+func _salem_nh_stop_names() -> PackedStringArray:
+	return PackedStringArray([
+		"Public Garden Portal",
+		"Charles Circle",
+		"Longfellow Bridge",
+		"Kendall",
+		"East Cambridge",
+		"Wellington",
+		"Malden",
+		"Winchester",
+		"Reading",
+		"Andover",
+		"North Andover",
+		"Methuen",
+		"Lowell",
+		"Salem, NH"
+	])
+
+func _salem_nh_stop_geo() -> PackedVector2Array:
+	return _salem_nh_route_geo()
+
+func _canobie_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.0734, 42.3528),
+		Vector2(-71.0718, 42.3593),
+		Vector2(-71.0790, 42.3624),
+		Vector2(-71.0862, 42.3625),
+		Vector2(-71.0792, 42.3724),
+		Vector2(-71.0768, 42.4020),
+		Vector2(-71.0743, 42.4267),
+		Vector2(-71.1363, 42.4526),
+		Vector2(-71.1100, 42.5248),
+		Vector2(-71.1368, 42.6583),
+		Vector2(-71.1359, 42.6986),
+		Vector2(-71.1909, 42.7262),
+		Vector2(-71.3162, 42.6334),
+		Vector2(-71.2009, 42.7884),
+		Vector2(-71.2058, 42.8247)
+	])
+
+func _canobie_stop_names() -> PackedStringArray:
+	return PackedStringArray([
+		"Public Garden Portal",
+		"Charles Circle",
+		"Longfellow Bridge",
+		"Kendall",
+		"East Cambridge",
+		"Wellington",
+		"Malden",
+		"Winchester",
+		"Reading",
+		"Andover",
+		"North Andover",
+		"Methuen",
+		"Lowell",
+		"Salem, NH",
+		"Canobie Lake Park"
+	])
+
+func _canobie_stop_geo() -> PackedVector2Array:
+	return _canobie_route_geo()
+
+func _whalom_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.0734, 42.3528),
+		Vector2(-71.0718, 42.3593),
+		Vector2(-71.0790, 42.3624),
+		Vector2(-71.0862, 42.3625),
+		Vector2(-71.0792, 42.3724),
+		Vector2(-71.0768, 42.4020),
+		Vector2(-71.0743, 42.4267),
+		Vector2(-71.1363, 42.4526),
+		Vector2(-71.1100, 42.5248),
+		Vector2(-71.3162, 42.6334),
+		Vector2(-71.3495, 42.4604),
+		Vector2(-71.8031, 42.5834),
+		Vector2(-71.7562, 42.5884),
+		Vector2(-71.7384, 42.5852)
+	])
+
+func _whalom_stop_names() -> PackedStringArray:
+	return PackedStringArray([
+		"Public Garden Portal",
+		"Charles Circle",
+		"Longfellow Bridge",
+		"Kendall",
+		"East Cambridge",
+		"Wellington",
+		"Malden",
+		"Winchester",
+		"Reading",
+		"Lowell",
+		"Concord",
+		"Fitchburg",
+		"Lunenburg",
+		"Whalom Park"
+	])
+
+func _whalom_stop_geo() -> PackedVector2Array:
+	return _whalom_route_geo()
+
+func _nantasket_route_geo() -> PackedVector2Array:
+	return PackedVector2Array([
+		Vector2(-71.0666, 42.3474),
+		Vector2(-71.0552, 42.3523),
+		Vector2(-71.0470, 42.3435),
+		Vector2(-71.0344, 42.3441),
+		Vector2(-71.0365, 42.3307),
+		Vector2(-71.0318, 42.3389),
+		Vector2(-71.0037, 42.2529),
+		Vector2(-71.0054, 42.2518),
+		Vector2(-71.0023, 42.2073),
+		Vector2(-70.8919, 42.2418),
+		Vector2(-70.8796, 42.2589),
+		Vector2(-70.8712, 42.2481),
+		Vector2(-70.8791, 42.2733)
+	])
+
+func _nantasket_stop_names() -> PackedStringArray:
+	return PackedStringArray([
+		"Pleasant Street Portal",
+		"South Station",
+		"South Boston Waterfront",
+		"Black Falcon / Commonwealth Pier",
+		"City Point",
+		"Castle Island",
+		"Quincy",
+		"Quincy Center",
+		"Braintree Center",
+		"Hingham",
+		"World's End",
+		"Nantasket Junction",
+		"Nantasket Beach / Paragon Park"
+	])
+
+func _nantasket_stop_geo() -> PackedVector2Array:
+	return _nantasket_route_geo()
+
 func _build_green_surface_branch_service(line_id: String, display_name: String, root_name: String, shared_stop_count: int, branch_route_geo: PackedVector2Array, branch_stop_names: PackedStringArray, branch_stop_geo: PackedVector2Array, scene_path: String, line_color: Color, track_builder: Node, town_manager: Node) -> void:
 	if branch_route_geo.size() < 2 or branch_stop_names.is_empty() or branch_stop_names.size() != branch_stop_geo.size():
 		return
@@ -1449,6 +2125,8 @@ func _build_green_surface_branch_service(line_id: String, display_name: String, 
 		town_manager,
 		stop_positions
 	)
+	if _use_macos_safe_visual_mode():
+		return
 	_build_green_surface_branch_geometry(root_name, shared_point, branch_route_points, branch_stop_points, branch_stop_names, track_builder)
 
 func _build_green_surface_branch_geometry(root_name: String, shared_tunnel_point: Vector3, branch_route_points: PackedVector3Array, branch_stop_points: PackedVector3Array, branch_stop_names: PackedStringArray, track_builder: Node) -> void:
@@ -1471,6 +2149,29 @@ func _build_green_surface_branch_geometry(root_name: String, shared_tunnel_point
 		_add_surface_rapid_segment(segment_root, branch_route_points[i], branch_route_points[i + 1], "tremont")
 	for i in range(min(branch_stop_points.size(), branch_stop_names.size())):
 		_add_surface_rapid_station(station_root, branch_stop_points[i], _station_forward(branch_stop_points, i), branch_stop_names[i], "tremont")
+
+func _build_interurban_branch_geometry(root_name: String, shared_tunnel_point: Vector3, branch_route_points: PackedVector3Array, branch_stop_points: PackedVector3Array, branch_stop_names: PackedStringArray, track_builder: Node) -> void:
+	if branch_route_points.is_empty():
+		return
+	var parent := _get_path_parent(track_builder)
+	if parent == null:
+		return
+	var existing := parent.get_node_or_null(root_name)
+	if existing:
+		existing.queue_free()
+	var root := Node3D.new()
+	root.name = root_name
+	parent.add_child(root)
+	var portal_root := _make_subway_section(root, "Portal")
+	var segment_root := _make_subway_section(root, "Segments")
+	var station_root := _make_subway_section(root, "Stations")
+	var terminal_root := _make_subway_section(root, "TerminalScenery")
+	_build_green_branch_portal(portal_root, shared_tunnel_point, branch_route_points[0])
+	for i in range(branch_route_points.size() - 1):
+		_add_interurban_surface_segment(segment_root, branch_route_points[i], branch_route_points[i + 1], "tremont")
+	for i in range(min(branch_stop_points.size(), branch_stop_names.size())):
+		_add_interurban_surface_station(station_root, branch_stop_points[i], _station_forward(branch_stop_points, i), branch_stop_names[i], "tremont")
+		_add_interurban_terminal_scenery_for_stop(terminal_root, branch_stop_points[i], _station_forward(branch_stop_points, i), branch_stop_names[i])
 
 func _build_green_branch_portal(parent: Node3D, tunnel_point: Vector3, surface_point: Vector3) -> void:
 	var p1 := tunnel_point.lerp(surface_point, 0.34)
@@ -1566,7 +2267,15 @@ func _add_line_stops_to_town_manager(town_manager: Node, route_stops: Array[Dict
 	if town_manager == null:
 		return
 	for stop in route_stops:
-		town_manager.AddTransitStop(stop.get("position", Vector3.ZERO), frequency, String(stop.get("name", "")), "urban")
+		var stop_name := String(stop.get("name", ""))
+		town_manager.AddTransitStop(stop.get("position", Vector3.ZERO), frequency, stop_name, _stop_kind_for_service_stop(stop_name))
+
+func _stop_kind_for_service_stop(stop_name: String) -> String:
+	match stop_name:
+		"Canobie Lake Park", "Whalom Park", "Nantasket Beach / Paragon Park", "White City", "Norumbega Park":
+			return "park"
+		_:
+			return "urban"
 
 func _build_signal_system(path: Path3D) -> void:
 	var signal_data := _build_line_signal_system(MainLineServiceId, path)
@@ -1717,6 +2426,7 @@ func _spawn_trolley_fleet(path: Path3D) -> void:
 func _spawn_line_fleet(path: Path3D, line_id: String, car_count: int, scene_path_override: String) -> Array[TrolleyMover]:
 	if not spawn_trolleys:
 		return []
+	car_count = _effective_startup_car_count(line_id, car_count)
 	if path == null or car_count <= 0:
 		return []
 	var curve := path.curve
@@ -1773,6 +2483,9 @@ func _attach_trolley_body(trolley: Node3D, car_index: int = 0) -> void:
 	for child in mount.get_children():
 		child.queue_free()
 	var scene_path := _scene_path_for_trolley(trolley, car_index)
+	if _should_use_proxy_trolley_body(trolley):
+		_build_proxy_trolley_body(mount, line_id, scene_path)
+		return
 	if ResourceLoader.exists(scene_path):
 		var scene := load(scene_path) as PackedScene
 		if scene != null:
@@ -1853,6 +2566,115 @@ func _attach_trolley_body(trolley: Node3D, car_index: int = 0) -> void:
 	headlight.light_color = Color(1.0, 0.95, 0.82)
 	headlight.transform.origin = Vector3(0.0, 1.2, -7.2)
 	mount.add_child(headlight)
+
+func _should_use_proxy_trolley_body(trolley: Node3D) -> bool:
+	if not macos_safe_startup_use_proxy_ai_cars or not OS.has_feature("macos"):
+		return false
+	if trolley is TrolleyMover:
+		return not (trolley as TrolleyMover).controlled
+	return true
+
+func _proxy_trolley_palette(line_id: String, scene_path: String) -> Dictionary:
+	var body := Color("2d8f45")
+	var trim := Color("efe3d0")
+	var roof := Color("253226")
+	var windows := Color(0.78, 0.87, 0.96, 0.18)
+	match line_id:
+		OrangeServiceId, WashingtonServiceId:
+			body = Color("d9731f")
+			trim = Color("efe3d0")
+			roof = Color("2d2926")
+		AtlanticServiceId:
+			body = Color("d9731f")
+			trim = Color("181614")
+			roof = Color("101010")
+		BlueServiceId:
+			body = Color("2c67c9")
+			trim = Color("dfe8f7")
+			roof = Color("273448")
+		CambridgeServiceId, MattapanServiceId:
+			body = Color("8f1f2f")
+			trim = Color("efe3d0")
+			roof = Color("2d2326")
+		GreenAServiceId, GreenBServiceId, GreenCServiceId, GreenDServiceId, GreenEServiceId, MainLineServiceId:
+			body = Color("2d8f45")
+			trim = Color("efe3d0")
+			roof = Color("253226")
+	if scene_path == SnowPlowCarScenePath:
+		body = Color("d7aa34")
+		trim = Color("2d2926")
+		roof = Color("1b1a18")
+	return {
+		"body": body,
+		"trim": trim,
+		"roof": roof,
+		"windows": windows
+	}
+
+func _build_proxy_trolley_body(mount: Node3D, line_id: String, scene_path: String) -> void:
+	var palette := _proxy_trolley_palette(line_id, scene_path)
+
+	var lower := MeshInstance3D.new()
+	var lower_mesh := BoxMesh.new()
+	lower_mesh.size = Vector3(6.4, 1.2, 13.6)
+	lower.mesh = lower_mesh
+	var lower_mat := StandardMaterial3D.new()
+	lower_mat.albedo_color = palette["body"]
+	lower_mat.metallic = 0.12
+	lower_mat.roughness = 0.32
+	lower.set_surface_override_material(0, lower_mat)
+	lower.position = Vector3(0.0, 0.9, 0.0)
+	mount.add_child(lower)
+
+	var belt := MeshInstance3D.new()
+	var belt_mesh := BoxMesh.new()
+	belt_mesh.size = Vector3(6.6, 0.25, 13.8)
+	belt.mesh = belt_mesh
+	var belt_mat := StandardMaterial3D.new()
+	belt_mat.albedo_color = palette["trim"]
+	belt_mat.metallic = 0.18
+	belt_mat.roughness = 0.28
+	belt.set_surface_override_material(0, belt_mat)
+	belt.position = Vector3(0.0, 1.55, 0.0)
+	mount.add_child(belt)
+
+	var windows_mesh_instance := MeshInstance3D.new()
+	var windows_mesh := BoxMesh.new()
+	windows_mesh.size = Vector3(6.0, 1.1, 13.0)
+	windows_mesh_instance.mesh = windows_mesh
+	var windows_mat := StandardMaterial3D.new()
+	windows_mat.albedo_color = palette["windows"]
+	windows_mat.metallic = 0.02
+	windows_mat.roughness = 0.08
+	windows_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	windows_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	windows_mesh_instance.set_surface_override_material(0, windows_mat)
+	windows_mesh_instance.position = Vector3(0.0, 2.2, 0.0)
+	mount.add_child(windows_mesh_instance)
+
+	var roof_mesh_instance := MeshInstance3D.new()
+	var roof_mesh := BoxMesh.new()
+	roof_mesh.size = Vector3(6.8, 0.4, 12.6)
+	roof_mesh_instance.mesh = roof_mesh
+	var roof_mat := StandardMaterial3D.new()
+	roof_mat.albedo_color = palette["roof"]
+	roof_mat.metallic = 0.1
+	roof_mat.roughness = 0.28
+	roof_mesh_instance.set_surface_override_material(0, roof_mat)
+	roof_mesh_instance.position = Vector3(0.0, 2.9, 0.0)
+	mount.add_child(roof_mesh_instance)
+
+	var pole := MeshInstance3D.new()
+	var pole_mesh := CylinderMesh.new()
+	pole_mesh.top_radius = 0.07
+	pole_mesh.bottom_radius = 0.07
+	pole_mesh.height = 2.8
+	pole.mesh = pole_mesh
+	var pole_mat := StandardMaterial3D.new()
+	pole_mat.albedo_color = Color("202020")
+	pole.set_surface_override_material(0, pole_mat)
+	pole.position = Vector3(0.0, 3.4, -2.8)
+	mount.add_child(pole)
 
 func _apply_line_specific_livery(model: Node, line_id: String) -> void:
 	if model == null:
@@ -2027,6 +2849,41 @@ func is_driver_manual_control_enabled() -> bool:
 func toggle_driver_manual_control() -> void:
 	set_driver_manual_control(not _driver_manual_control_enabled)
 
+func set_driver_view_active(active: bool, chase_view := true) -> void:
+	if active and _driver_camera == null and _chase_camera == null:
+		return
+	_driver_active = active
+	if active:
+		_view_mode = 1 if chase_view else 0
+	_update_active_camera()
+	if _main_camera != null:
+		_main_camera.current = not _driver_active
+
+func toggle_driver_view(chase_view := true) -> void:
+	set_driver_view_active(not _driver_active, chase_view)
+
+func is_driver_view_active() -> bool:
+	return _driver_active
+
+func cycle_controlled_trolley(step: int = 1) -> bool:
+	var candidates: Array[int] = []
+	var current_candidate_idx := -1
+	var global_index := 1
+	for line_id in _service_line_ids_sorted():
+		var fleet: Array = _line_fleet(line_id)
+		for fleet_index in range(fleet.size()):
+			var trolley := fleet[fleet_index] as TrolleyMover
+			if trolley == null or not is_instance_valid(trolley):
+				continue
+			candidates.append(global_index)
+			if trolley == _driver_trolley:
+				current_candidate_idx = candidates.size() - 1
+			global_index += 1
+	if candidates.is_empty():
+		return false
+	var next_idx := posmod((0 if current_candidate_idx < 0 else current_candidate_idx) + step, candidates.size())
+	return set_controlled_trolley_index(candidates[next_idx])
+
 func set_controlled_trolley_index(car_index: int) -> bool:
 	var global_index := 1
 	for line_id in _service_line_ids_sorted():
@@ -2059,6 +2916,7 @@ func get_timetable_segments() -> Array[Dictionary]:
 			var suggested_cars := _suggested_cars_for_segment(segment)
 			payload.append({
 				"id": String(segment.get("id", "")),
+				"line_id": line_id,
 				"name": String(segment.get("name", "")),
 				"line_name": String(segment.get("line_name", entry.get("name", line_id))),
 				"headway_min": float(segment.get("headway_min", 0.0)),
@@ -2069,6 +2927,82 @@ func get_timetable_segments() -> Array[Dictionary]:
 				"suggested_cars": suggested_cars
 			})
 	return payload
+
+func get_line_operations_snapshot() -> Array[Dictionary]:
+	var payload: Array[Dictionary] = []
+	for line_id in _service_line_ids_sorted():
+		var entry := _service_line_entry(line_id)
+		if entry.is_empty():
+			continue
+		var fleet_count := _line_fleet(line_id).size()
+		var route_stops: Array = entry.get("route_stops", [])
+		var segments: Array = entry.get("timetable_segments", [])
+		var route_length_m := _service_line_route_length_m(entry)
+		var weighted_headway := 0.0
+		var weighted_length := 0.0
+		var suggested_cars := 0
+		var active_segment_cars := 0
+		var worst_segment_name := ""
+		var worst_segment_pressure := 0.0
+		for segment_variant in segments:
+			var segment: Dictionary = segment_variant
+			var length_m := maxf(1.0, float(segment.get("length_m", 0.0)))
+			var headway_min := maxf(2.0, float(segment.get("headway_min", 0.0)))
+			var active_cars := _active_cars_in_segment(segment, line_id)
+			var segment_suggested := _suggested_cars_for_segment(segment)
+			var segment_pressure := clampf(float(maxi(0, segment_suggested - active_cars)) / maxf(1.0, float(segment_suggested)), 0.0, 1.0)
+			weighted_headway += headway_min * length_m
+			weighted_length += length_m
+			suggested_cars += segment_suggested
+			active_segment_cars += active_cars
+			if segment_pressure > worst_segment_pressure:
+				worst_segment_pressure = segment_pressure
+				worst_segment_name = String(segment.get("name", "Line segment"))
+		var average_headway_min := weighted_headway / maxf(1.0, weighted_length)
+		if segments.is_empty():
+			average_headway_min = 0.0
+			suggested_cars = maxi(1, int(ceil(route_length_m / maxf(1.0, _average_service_speed_mps() * 8.0 * 60.0))))
+		var target_cars := maxi(1, suggested_cars)
+		var capacity_ratio := clampf(float(fleet_count) / float(target_cars), 0.0, 1.4)
+		var capacity_pressure := clampf(float(maxi(0, target_cars - fleet_count)) / float(target_cars), 0.0, 1.0)
+		var recommendation := "Service stable"
+		if fleet_count <= 0:
+			recommendation = "Launch a car"
+			capacity_pressure = 1.0
+		elif capacity_pressure >= 0.34:
+			recommendation = "Add %d car%s" % [maxi(1, target_cars - fleet_count), "" if maxi(1, target_cars - fleet_count) == 1 else "s"]
+		elif average_headway_min > 10.5:
+			recommendation = "Tighten headway"
+			capacity_pressure = maxf(capacity_pressure, 0.28)
+		elif worst_segment_pressure >= 0.18:
+			recommendation = "Rebalance %s" % worst_segment_name
+		payload.append({
+			"line_id": line_id,
+			"name": String(entry.get("name", line_id)),
+			"fleet_count": fleet_count,
+			"stop_count": route_stops.size(),
+			"route_length_m": route_length_m,
+			"average_headway_min": average_headway_min,
+			"active_segment_cars": active_segment_cars,
+			"suggested_cars": target_cars,
+			"capacity_ratio": capacity_ratio,
+			"capacity_pressure": capacity_pressure,
+			"worst_segment": worst_segment_name,
+			"worst_segment_pressure": worst_segment_pressure,
+			"recommendation": recommendation,
+			"active": line_id == _driver_line_id
+		})
+	return payload
+
+func _service_line_route_length_m(entry: Dictionary) -> float:
+	var path := entry.get("path", null) as Path3D
+	if path != null and path.curve != null:
+		return path.curve.get_baked_length()
+	var points: PackedVector3Array = entry.get("route_points", PackedVector3Array())
+	var length_m := 0.0
+	for i in range(1, points.size()):
+		length_m += points[i - 1].distance_to(points[i])
+	return length_m
 
 func adjust_timetable_segment_headway(segment_id: String, delta_minutes: float) -> Dictionary:
 	if segment_id == "":
@@ -2474,15 +3408,25 @@ func _is_green_service_line(line_id: String) -> bool:
 		GreenBServiceId,
 		GreenCServiceId,
 		GreenDServiceId,
-		GreenEServiceId
+		GreenEServiceId,
+		SalemNhServiceId,
+		CanobieServiceId,
+		WhalomServiceId,
+		NantasketServiceId
 	]
 
 func _preferred_scene_path_for_line(line_id: String) -> String:
 	match line_id:
-		GreenAServiceId, GreenBServiceId, GreenCServiceId, GreenDServiceId, MainLineServiceId:
+		GreenAServiceId, GreenBServiceId, GreenCServiceId, GreenDServiceId, MainLineServiceId, SalemNhServiceId, CanobieServiceId, WhalomServiceId, NantasketServiceId:
 			return Type5CarScenePath
-		GreenEServiceId, MattapanServiceId, OrangeServiceId, AtlanticServiceId, WashingtonServiceId:
+		GreenEServiceId, MattapanServiceId:
 			return PCCCarScenePath
+		OrangeServiceId:
+			return OrangeLineCarScenePath
+		AtlanticServiceId:
+			return AtlanticElCarScenePath
+		WashingtonServiceId:
+			return WashingtonTunnelTrainScenePath
 		CambridgeServiceId:
 			return CambridgeDorchesterCarScenePath
 		BlueServiceId:
@@ -2516,6 +3460,17 @@ func _get_trolley_visual_root(trolley: Node3D) -> Node3D:
 		mount.add_child(visual_root)
 	return visual_root
 
+func _build_runtime_camera_attributes(cinematic_bias: bool) -> CameraAttributesPractical:
+	var attributes := CameraAttributesPractical.new()
+	attributes.exposure_sensitivity = 150.0 if cinematic_bias else 172.0
+	attributes.exposure_multiplier = 1.0 if cinematic_bias else 1.08
+	attributes.auto_exposure_enabled = true
+	attributes.auto_exposure_scale = 0.62
+	attributes.auto_exposure_speed = 0.82
+	attributes.auto_exposure_min_sensitivity = 72.0
+	attributes.auto_exposure_max_sensitivity = 620.0
+	return attributes
+
 func _attach_driver_camera(trolley: Node3D) -> Camera3D:
 	var mount := trolley
 	if trolley is TrolleyMover:
@@ -2524,6 +3479,7 @@ func _attach_driver_camera(trolley: Node3D) -> Camera3D:
 	cam.fov = driver_camera_fov
 	cam.near = 0.05
 	cam.current = false
+	cam.attributes = _build_runtime_camera_attributes(false)
 	cam.position = Vector3(0.0, driver_camera_height, -driver_camera_forward)
 	cam.rotation_degrees = Vector3(-3.5, 0.0, 0.0)
 	mount.add_child(cam)
@@ -2537,6 +3493,7 @@ func _attach_chase_camera(trolley: Node3D) -> Camera3D:
 	cam.fov = 62.0
 	cam.near = 0.05
 	cam.current = false
+	cam.attributes = _build_runtime_camera_attributes(true)
 	cam.position = chase_surface_camera_offset
 	cam.rotation_degrees = Vector3(chase_surface_camera_pitch_deg, 0.0, 0.0)
 	mount.add_child(cam)
@@ -2640,19 +3597,58 @@ func _update_active_camera() -> void:
 func _setup_driver_audio() -> void:
 	if not driver_audio_enabled:
 		return
-	_driver_motor_audio = _ensure_driver_audio_player("DriverMotorAudio", trolley_motor_loop_path)
-	_driver_track_audio = _ensure_driver_audio_player("DriverTrackAudio", trolley_track_loop_path)
+	_setup_audio_buses()
+	_driver_motor_audio = _ensure_driver_audio_player("DriverMotorAudio", trolley_motor_loop_path, DriverMotorBusName)
+	_driver_track_audio = _ensure_driver_audio_player("DriverTrackAudio", trolley_track_loop_path, DriverTrackBusName)
+	_driver_cab_audio = _ensure_driver_audio_player("DriverCabAudio", trolley_cab_bed_loop_path, DriverCabBusName)
 
 func _setup_station_audio() -> void:
 	if not station_ambience_enabled:
 		return
-	_station_ambience_audio = _ensure_audio_player("StationAmbienceAudio", station_ambience_loop_path, true)
-	_station_chime_audio = _ensure_audio_player("StationChimeAudio", station_chime_path, false)
+	_setup_audio_buses()
+	_station_ambience_audio = _ensure_audio_player("StationAmbienceAudio", station_ambience_loop_path, true, StationBusName)
+	_station_chime_audio = _ensure_audio_player("StationChimeAudio", station_chime_path, false, StationBusName)
 
-func _ensure_driver_audio_player(player_name: String, stream_path: String) -> AudioStreamPlayer:
-	return _ensure_audio_player(player_name, stream_path, true)
+func _setup_audio_buses() -> void:
+	_ensure_audio_bus(DriverMotorBusName, MasterBusName, _default_lowpass_effect(12000.0, 0.58), _default_reverb_effect(0.78, 0.54, 0.86, 0.08, 1.0, 0.08))
+	_ensure_audio_bus(DriverTrackBusName, MasterBusName, _default_lowpass_effect(13500.0, 0.52), _default_reverb_effect(0.82, 0.48, 0.92, 0.04, 1.0, 0.06))
+	_ensure_audio_bus(DriverCabBusName, MasterBusName, _default_lowpass_effect(8800.0, 0.64), _default_reverb_effect(0.72, 0.58, 0.78, 0.10, 1.0, 0.10))
+	_ensure_audio_bus(StationBusName, MasterBusName, _default_lowpass_effect(14000.0, 0.45), _default_reverb_effect(0.86, 0.50, 0.94, 0.02, 1.0, 0.18))
 
-func _ensure_audio_player(player_name: String, stream_path: String, loop_enabled: bool) -> AudioStreamPlayer:
+func _ensure_audio_bus(bus_name: StringName, send_bus_name: StringName, lowpass: AudioEffectLowPassFilter, reverb: AudioEffectReverb) -> void:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index == -1:
+		AudioServer.add_bus()
+		bus_index = AudioServer.get_bus_count() - 1
+		AudioServer.set_bus_name(bus_index, bus_name)
+	if AudioServer.get_bus_send(bus_index) != send_bus_name:
+		AudioServer.set_bus_send(bus_index, send_bus_name)
+	if AudioServer.get_bus_effect_count(bus_index) < 1:
+		AudioServer.add_bus_effect(bus_index, lowpass, 0)
+	if AudioServer.get_bus_effect_count(bus_index) < 2:
+		AudioServer.add_bus_effect(bus_index, reverb, 1)
+
+func _default_lowpass_effect(cutoff_hz: float, resonance: float) -> AudioEffectLowPassFilter:
+	var effect := AudioEffectLowPassFilter.new()
+	effect.cutoff_hz = cutoff_hz
+	effect.resonance = resonance
+	effect.gain = 1.0
+	return effect
+
+func _default_reverb_effect(room_size: float, damping: float, spread: float, hipass: float, dry: float, wet: float) -> AudioEffectReverb:
+	var effect := AudioEffectReverb.new()
+	effect.room_size = room_size
+	effect.damping = damping
+	effect.spread = spread
+	effect.hipass = hipass
+	effect.dry = dry
+	effect.wet = wet
+	return effect
+
+func _ensure_driver_audio_player(player_name: String, stream_path: String, bus_name: StringName) -> AudioStreamPlayer:
+	return _ensure_audio_player(player_name, stream_path, true, bus_name)
+
+func _ensure_audio_player(player_name: String, stream_path: String, loop_enabled: bool, bus_name: StringName = MasterBusName) -> AudioStreamPlayer:
 	if stream_path == "":
 		return null
 	var player := get_node_or_null(player_name) as AudioStreamPlayer
@@ -2660,12 +3656,53 @@ func _ensure_audio_player(player_name: String, stream_path: String, loop_enabled
 		player = AudioStreamPlayer.new()
 		player.name = player_name
 		add_child(player)
-	player.bus = &"Master"
+	player.bus = bus_name
 	player.autoplay = false
 	player.volume_db = -80.0
 	player.pitch_scale = 1.0
 	player.stream = _load_audio_stream(stream_path, loop_enabled)
 	return player
+
+func _audio_bus_effect(bus_name: StringName, effect_idx: int) -> AudioEffect:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index == -1 or effect_idx < 0 or AudioServer.get_bus_effect_count(bus_index) <= effect_idx:
+		return null
+	return AudioServer.get_bus_effect(bus_index, effect_idx)
+
+func _driver_subway_audio_mix() -> float:
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley):
+		return 0.0
+	return clampf((chase_subway_depth_threshold - _driver_trolley.global_position.y) / 10.0, 0.0, 1.0)
+
+func _driver_station_audio_mix() -> float:
+	var payload := _driver_station_payload()
+	if payload.is_empty():
+		return 0.0
+	if String(payload.get("current", "")) != "":
+		return 1.0
+	var distance_m := float(payload.get("distance_m", -1.0))
+	if distance_m < 0.0:
+		return 0.0
+	return 1.0 - clampf(distance_m / maxf(1.0, station_announcement_approach_distance_m), 0.0, 1.0)
+
+func _update_audio_bus_mix(delta: float, speed_ratio: float, subway_mix: float, station_mix: float) -> void:
+	var wetness := clampf(float(_weather_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
+	var storminess := clampf(float(_weather_payload.get("storminess", 0.0)), 0.0, 1.0)
+	var weather_mix := clampf(wetness * 0.72 + storminess * 0.44, 0.0, 1.0)
+	_apply_audio_bus_effects(DriverMotorBusName, delta, lerpf(14500.0, 4800.0, subway_mix * 0.78 + station_mix * 0.22), lerpf(0.08, 0.26, subway_mix * 0.7 + station_mix * 0.18))
+	_apply_audio_bus_effects(DriverTrackBusName, delta, lerpf(16000.0, 5800.0, subway_mix * 0.66 + weather_mix * 0.18), lerpf(0.05, 0.34, subway_mix * 0.78 + station_mix * 0.22 + weather_mix * 0.12))
+	_apply_audio_bus_effects(DriverCabBusName, delta, lerpf(9800.0, 4200.0, subway_mix * 0.86 + station_mix * 0.14), lerpf(0.08, 0.30, subway_mix * 0.72 + weather_mix * 0.14))
+	_apply_audio_bus_effects(StationBusName, delta, lerpf(15000.0, 7200.0, subway_mix * 0.6), lerpf(0.18, 0.42, subway_mix * 0.8 + station_mix * 0.2))
+
+func _apply_audio_bus_effects(bus_name: StringName, delta: float, target_cutoff_hz: float, target_reverb_wet: float) -> void:
+	var lowpass := _audio_bus_effect(bus_name, 0) as AudioEffectLowPassFilter
+	if lowpass != null:
+		lowpass.cutoff_hz = move_toward(lowpass.cutoff_hz, target_cutoff_hz, 18000.0 * delta)
+		lowpass.resonance = move_toward(lowpass.resonance, lerpf(0.42, 0.68, clampf(1.0 - target_cutoff_hz / 16000.0, 0.0, 1.0)), 1.5 * delta)
+	var reverb := _audio_bus_effect(bus_name, 1) as AudioEffectReverb
+	if reverb != null:
+		reverb.wet = move_toward(reverb.wet, target_reverb_wet, 0.9 * delta)
+		reverb.dry = move_toward(reverb.dry, lerpf(1.0, 0.86, clampf(target_reverb_wet / 0.45, 0.0, 1.0)), 0.8 * delta)
 
 func _load_audio_stream(stream_path: String, loop_enabled: bool) -> AudioStream:
 	if stream_path == "" or not ResourceLoader.exists(stream_path):
@@ -2686,22 +3723,32 @@ func _load_audio_stream(stream_path: String, loop_enabled: bool) -> AudioStream:
 func _update_driver_audio(delta: float) -> void:
 	if not driver_audio_enabled:
 		return
-	if _driver_motor_audio == null and _driver_track_audio == null:
+	if _driver_motor_audio == null and _driver_track_audio == null and _driver_cab_audio == null:
 		_setup_driver_audio()
 	var speed_ratio := 0.0
 	var throttle_ratio := 0.0
+	var subway_mix := 0.0
+	var station_mix := 0.0
+	var wetness := clampf(float(_weather_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
 	if _driver_trolley != null and is_instance_valid(_driver_trolley):
 		var max_speed := maxf(1.0, _driver_trolley.max_speed_mps)
 		speed_ratio = clampf(absf(_driver_trolley.speed_mps) / max_speed, 0.0, 1.0)
 		throttle_ratio = clampf(absf(_driver_trolley.target_speed_mps) / max_speed, 0.0, 1.0)
+		subway_mix = _driver_subway_audio_mix()
+		station_mix = _driver_station_audio_mix()
 	var motor_mix := clampf(maxf(throttle_ratio, speed_ratio * 0.7), 0.0, 1.0)
 	var track_mix := clampf((speed_ratio - 0.04) / 0.96, 0.0, 1.0)
-	var motor_db := lerpf(trolley_motor_idle_volume_db, trolley_motor_max_volume_db, motor_mix)
-	var track_db := lerpf(trolley_track_idle_volume_db, trolley_track_max_volume_db, track_mix)
+	var cab_mix := clampf(speed_ratio * 0.82 + subway_mix * 0.22 + wetness * 0.08, 0.0, 1.0)
+	var motor_db := lerpf(trolley_motor_idle_volume_db, trolley_motor_max_volume_db, motor_mix) + lerpf(0.0, -2.6, subway_mix)
+	var track_db := lerpf(trolley_track_idle_volume_db, trolley_track_max_volume_db, track_mix) + lerpf(0.0, 2.8, subway_mix + wetness * 0.18)
+	var cab_db := lerpf(trolley_cab_idle_volume_db, trolley_cab_max_volume_db, cab_mix) + lerpf(0.0, 1.6, subway_mix)
 	var motor_pitch := lerpf(trolley_motor_idle_pitch, trolley_motor_max_pitch, clampf(throttle_ratio * 0.75 + speed_ratio * 0.25, 0.0, 1.0))
 	var track_pitch := lerpf(trolley_track_idle_pitch, trolley_track_max_pitch, speed_ratio)
+	var cab_pitch := lerpf(trolley_cab_idle_pitch, trolley_cab_max_pitch, clampf(speed_ratio * 0.65 + subway_mix * 0.1, 0.0, 1.0))
 	_apply_driver_audio_state(_driver_motor_audio, motor_db, motor_pitch, delta)
 	_apply_driver_audio_state(_driver_track_audio, track_db, track_pitch, delta)
+	_apply_driver_audio_state(_driver_cab_audio, cab_db, cab_pitch, delta)
+	_update_audio_bus_mix(delta, speed_ratio, subway_mix, station_mix)
 
 func _update_station_ambience(delta: float) -> void:
 	if not station_ambience_enabled or _station_ambience_audio == null or _station_ambience_audio.stream == null:
@@ -2720,10 +3767,12 @@ func _update_station_ambience(delta: float) -> void:
 	var target_db := -80.0
 	if target_presence > 0.02:
 		target_db = lerpf(-34.0, -24.0, waiting_weight) + lerpf(-8.0, 0.0, target_presence)
+	var subway_mix := _driver_subway_audio_mix()
+	target_db += lerpf(0.0, 1.8, subway_mix * target_presence)
 	if not _station_ambience_audio.playing and target_db > -70.0:
 		_station_ambience_audio.play()
 		_station_ambience_audio.volume_db = target_db
-	var target_pitch := lerpf(0.94, 1.04, waiting_weight)
+	var target_pitch := lerpf(0.94, 1.04, waiting_weight) * lerpf(1.0, 0.97, subway_mix)
 	_station_ambience_audio.volume_db = move_toward(_station_ambience_audio.volume_db, target_db, 24.0 * delta)
 	_station_ambience_audio.pitch_scale = move_toward(_station_ambience_audio.pitch_scale, target_pitch, 0.7 * delta)
 
@@ -2847,6 +3896,8 @@ func get_driver_hud_status() -> Dictionary:
 	var drive_payload: Dictionary = service_payload.get("drive", {})
 	var curve_payload := _driver_curve_warning_payload()
 	var weather_lamp_payload := _driver_weather_lamp_payload()
+	var stop_advisory_payload := _driver_stop_advisory_payload(station_payload, speed_mps)
+	var dispatch_payload := _driver_dispatch_advisory_payload(station_payload, service_payload)
 	var braking := bool(drive_payload.get("braking", false))
 	var stop_distance_m := float(station_payload.get("distance_m", -1.0))
 	var brake_ratio := 0.88 if braking else 0.18
@@ -2876,6 +3927,10 @@ func get_driver_hud_status() -> Dictionary:
 		"curve_lamp": String(curve_payload.get("lamp", "OFF")),
 		"curve_text": String(curve_payload.get("text", "Track steady")),
 		"curve_level": float(curve_payload.get("level", 0.0)),
+		"advisory_text": String(stop_advisory_payload.get("text", "Approach clear")),
+		"advisory_level": String(stop_advisory_payload.get("level", "OFF")),
+		"dispatch_text": String(dispatch_payload.get("text", "Spacing steady")),
+		"dispatch_level": String(dispatch_payload.get("level", "OFF")),
 		"weather_lamp": String(weather_lamp_payload.get("lamp", "OFF")),
 		"weather_signal_text": String(weather_lamp_payload.get("text", weather_text))
 	}
@@ -2897,6 +3952,54 @@ func _driver_dashboard_controller_ratio(drive_payload: Dictionary) -> float:
 		var reverse_notches := maxi(1, int(drive_payload.get("reverse_notches", 1)))
 		return -clampf(float(abs(power_notch)) / float(reverse_notches), 0.0, 1.0)
 	return 0.0
+
+func _driver_stop_advisory_payload(station_payload: Dictionary, speed_mps: float) -> Dictionary:
+	var current_name := String(station_payload.get("current", ""))
+	var next_name := String(station_payload.get("next", ""))
+	var distance_m := float(station_payload.get("distance_m", -1.0))
+	var can_board := bool(station_payload.get("can_board", false))
+	var needs_slowdown := bool(station_payload.get("needs_slowdown", false))
+	if current_name != "":
+		if needs_slowdown:
+			return {"level": "RED", "text": "Hard brake for %s" % current_name}
+		if can_board:
+			var dwell_s := float(station_payload.get("dwell_seconds", 0.0))
+			var target_dwell_s := float(station_payload.get("target_dwell_seconds", 0.0))
+			if bool(station_payload.get("hold_for_headway", false)):
+				return {"level": "YELLOW", "text": "Hold %s %.0fs for spacing" % [current_name, maxf(0.0, target_dwell_s - dwell_s)]}
+			return {"level": "GREEN", "text": "Spot stop at %s" % current_name}
+	if next_name == "" or distance_m < 0.0:
+		return {"level": "OFF", "text": "Approach clear"}
+	if distance_m > 420.0 and speed_mps < 1.5:
+		return {"level": "OFF", "text": "Approach clear"}
+	var service_brake_mps2 := 3.2
+	if _driver_trolley != null and is_instance_valid(_driver_trolley):
+		service_brake_mps2 = clampf(float(_driver_trolley.brake_mps2) * 0.28, 2.6, 4.4)
+	var reaction_distance_m := speed_mps * 1.35
+	var braking_distance_m := reaction_distance_m + (speed_mps * speed_mps) / maxf(1.0, 2.0 * service_brake_mps2)
+	var setup_distance_m := braking_distance_m * 1.3 + 12.0
+	if distance_m <= braking_distance_m * 0.82 and speed_mps > driver_service_stop_speed_threshold_mps:
+		return {"level": "RED", "text": "Late braking for %s" % next_name}
+	if distance_m <= setup_distance_m:
+		return {"level": "YELLOW", "text": "Set up stop: %s %.0fm" % [next_name, distance_m]}
+	return {"level": "GREEN", "text": "Station ahead: %s %.0fm" % [next_name, distance_m]}
+
+func _driver_dispatch_advisory_payload(station_payload: Dictionary, service_payload: Dictionary) -> Dictionary:
+	if bool(station_payload.get("hold_for_headway", false)):
+		return {"level": "YELLOW", "text": "Dispatch hold for headway"}
+	var headway_target_m := float(service_payload.get("headway_target_m", 0.0))
+	var headway_ahead_m := float(service_payload.get("headway_ahead_m", -1.0))
+	var headway_behind_m := float(service_payload.get("headway_behind_m", -1.0))
+	if headway_target_m <= 0.0 or headway_ahead_m < 0.0:
+		return {"level": "OFF", "text": "Spacing steady"}
+	var ratio := headway_ahead_m / maxf(1.0, headway_target_m)
+	if ratio < 0.55:
+		return {"level": "RED", "text": "Closing on leader"}
+	if ratio < 0.88:
+		return {"level": "YELLOW", "text": "Headway tight"}
+	if headway_behind_m > 0.0 and headway_behind_m / maxf(1.0, headway_target_m) > 1.4 and ratio > 1.3:
+		return {"level": "YELLOW", "text": "Gap opening behind"}
+	return {"level": "GREEN", "text": "Headway on target"}
 
 func _driver_curve_warning_payload() -> Dictionary:
 	if _driver_trolley == null or not is_instance_valid(_driver_trolley) or not _driver_trolley.has_method("get_curve_dynamics"):
@@ -3056,11 +4159,19 @@ func get_system_map_snapshot() -> Dictionary:
 	for line_id in _service_line_ids_sorted():
 		var entry := _service_line_entry(line_id)
 		for stop_entry in entry.get("route_stops", []):
+			var stop_name := String(stop_entry.get("name", ""))
+			var service_snapshot := _stop_service_snapshot_for_map(stop_name)
 			stop_payload.append({
-				"name": String(stop_entry.get("name", "")),
+				"name": stop_name,
 				"position": stop_entry.get("position", Vector3.ZERO),
 				"line_id": line_id,
-				"line_name": String(entry.get("name", line_id))
+				"line_name": String(entry.get("name", line_id)),
+				"waiting": int(service_snapshot.get("waiting", 0)),
+				"rating": float(service_snapshot.get("rating", 75.0)),
+				"crowding_pressure": float(service_snapshot.get("crowding_pressure", 0.0)),
+				"perceived_wait_min": float(service_snapshot.get("perceived_wait_min", 0.0)),
+				"overcrowded": bool(service_snapshot.get("overcrowded", false)),
+				"severe_overcrowding": bool(service_snapshot.get("severe_overcrowding", false))
 			})
 	return {
 		"routes": route_payload,
@@ -3070,6 +4181,16 @@ func get_system_map_snapshot() -> Dictionary:
 		"trolleys": trolley_payload,
 		"stops": stop_payload
 	}
+
+func _stop_service_snapshot_for_map(stop_name: String) -> Dictionary:
+	if stop_name == "":
+		return {}
+	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
+		_resolve_gameplay_dependencies()
+	if _passenger_manager == null or not _passenger_manager.has_method("get_stop_service_snapshot"):
+		return {}
+	var snapshot: Variant = _passenger_manager.call("get_stop_service_snapshot", stop_name)
+	return snapshot if snapshot is Dictionary else {}
 
 func _nearest_trolley_ahead() -> Dictionary:
 	if _driver_trolley == null or not is_instance_valid(_driver_trolley):
@@ -3273,14 +4394,23 @@ func _update_snow_plows(delta: float) -> void:
 
 func _sync_track_weather_state() -> void:
 	var track_builder := _get_track_builder()
-	if track_builder == null or not track_builder.has_method("set_weather_surface_state"):
-		return
 	var visible_snow := 0.0
 	for line_id in _snow_exposed_line_ids():
 		if bool(_line_snow_cleared.get(line_id, false)):
 			continue
 		visible_snow = maxf(visible_snow, float(_line_snow_depth.get(line_id, 0.0)))
-	track_builder.call("set_weather_surface_state", visible_snow, float(_weather_payload.get("surface_wetness", 0.0)))
+	var wetness := float(_weather_payload.get("surface_wetness", 0.0))
+	if track_builder != null and track_builder.has_method("set_weather_surface_state"):
+		track_builder.call("set_weather_surface_state", visible_snow, wetness)
+	_apply_track_surface_weather_state(visible_snow, wetness)
+
+func _apply_track_surface_weather_state(snow_amount: float, wetness: float) -> void:
+	if _track_surface_material != null:
+		_track_surface_material.set_shader_parameter("rain_wetness", clampf(wetness, 0.0, 1.0))
+		_track_surface_material.set_shader_parameter("snow_cover", clampf(snow_amount, 0.0, 1.0))
+	if _track_rail_material != null:
+		_track_rail_material.albedo_color = Color(0.86, 0.86, 0.84, 1.0).lerp(Color(0.92, 0.92, 0.91, 1.0), clampf(snow_amount * 0.2, 0.0, 1.0)).darkened(clampf(wetness, 0.0, 1.0) * 0.10)
+		_track_rail_material.roughness = clampf(0.28 - wetness * 0.12 + snow_amount * 0.05, 0.08, 0.9)
 
 func _ensure_snow_plow(line_id: String) -> TrolleyMover:
 	var existing := _snow_plows.get(line_id, null) as TrolleyMover
@@ -3772,12 +4902,13 @@ func _build_blue_phase_segment(parent: Node3D, surface_parent: Node3D, a_name: S
 		_add_box(segment_root, Vector3(2.0, subway_track_bed_height, length), center + right * offset + Vector3(0.0, -1.85, 0.0), forward, Color("4a4743"))
 		_add_box(segment_root, Vector3(0.16, 0.12, length), center + right * (offset - 0.72) + Vector3(0.0, -1.48, 0.0), forward, Color("b7b0a1"))
 		_add_box(segment_root, Vector3(0.16, 0.12, length), center + right * (offset + 0.72) + Vector3(0.0, -1.48, 0.0), forward, Color("b7b0a1"))
-	_add_tunnel_track_details(segment_root, shell_span["center"], forward, right, [-2.9, 2.9], shell_span["length"])
-	_add_tunnel_lights(segment_root, shell_span["center"], forward, shell_span["length"])
+	_add_tunnel_track_details(segment_root, shell_span["center"], forward, right, width, [-2.9, 2.9], shell_span["length"], "blue")
+	_add_tunnel_lights(segment_root, shell_span["center"], forward, right, width, shell_span["length"], "blue")
 
 func _build_blue_phase_station(parent: Node3D, surface_parent: Node3D, points: PackedVector3Array, track_points: PackedVector3Array, idx: int) -> void:
 	var station_name := blue_line_station_names[idx]
 	var spec := _station_spec(station_name)
+	var lightweight := _use_lightweight_subway_visual_mode()
 	var forward := _station_forward(points, idx)
 	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
 	var width := _resolved_station_width(spec, float(spec.get("width", 24.0)), int(spec.get("tracks", 2)))
@@ -3790,12 +4921,14 @@ func _build_blue_phase_station(parent: Node3D, surface_parent: Node3D, points: P
 	for offset in _track_offsets_for_spec(spec, int(spec.get("tracks", 2))):
 		_add_track_surface_box(root, Vector3(2.0, subway_track_bed_height, length), center + right * offset + Vector3(0.0, -1.85, 0.0), forward)
 	_add_station_platforms(root, center, forward, right, width, length, platform_width, spec, String(spec.get("layout", "side")), "blue")
-	_add_station_mezzanines(root, center, forward, right, width, float(spec.get("mezzanine_length", length * 0.5)), spec)
+	if not lightweight:
+		_add_station_mezzanines(root, center, forward, right, width, float(spec.get("mezzanine_length", length * 0.5)), spec)
 	_add_station_extra_boxes(root, center, forward, right, spec)
-	_add_station_lights(root, center, forward, right, length, width)
+	_add_station_lights(root, center, forward, right, length, width, "blue")
 	_add_station_name_boards(root, center, forward, right, width, length, station_name, "blue")
-	_add_station_surface_boxes(surface_parent, center + Vector3(0.0, subway_depth - blue_line_depth, 0.0), forward, right, spec, "blue")
-	_add_headhouse(surface_parent, center + Vector3(0.0, subway_depth - blue_line_depth, 0.0), forward, right, station_name, spec, "blue")
+	if not lightweight:
+		_add_station_surface_boxes(surface_parent, center + Vector3(0.0, subway_depth - blue_line_depth, 0.0), forward, right, spec, "blue")
+		_add_headhouse(surface_parent, center + Vector3(0.0, subway_depth - blue_line_depth, 0.0), forward, right, station_name, spec, "blue")
 
 func _build_blue_surface_portal(parent: Node3D, surface_parent: Node3D, maverick_surface: Vector3, airport_surface: Vector3) -> void:
 	var forward := (airport_surface - maverick_surface).normalized()
@@ -3852,6 +4985,238 @@ func _add_surface_rapid_station(parent: Node3D, point: Vector3, forward: Vector3
 	label.modulate = Color(0.95, 0.97, 0.99, 1.0)
 	label.position = center + Vector3(0.0, 3.5, 0.0)
 	parent.add_child(label)
+
+func _add_interurban_surface_segment(parent: Node3D, a: Vector3, b: Vector3, style_id: String = "blue") -> void:
+	var forward := (b - a).normalized()
+	if forward.length() < 0.01:
+		return
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var length := a.distance_to(b)
+	var center := (a + b) * 0.5
+	var theme := _corridor_theme(style_id)
+	var shoulder_color: Color = theme.get("trim_color", Color("6b6157"))
+	_add_box(parent, Vector3(12.0, 0.7, length), center + Vector3(0.0, -0.5, 0.0), forward, Color("69635a"))
+	_add_track_surface_box(parent, Vector3(6.6, 0.22, length), center + Vector3(0.0, -0.08, 0.0), forward)
+	for offset in [-2.45, 2.45]:
+		_add_rail_box(parent, Vector3(0.16, 0.16, length), center + right * offset + Vector3(0.0, 0.10, 0.0), forward)
+	var sleeper_count := clampi(int(round(length / 160.0)), 2, 40)
+	for i in range(sleeper_count):
+		var t := 0.5 if sleeper_count <= 1 else float(i) / float(sleeper_count - 1)
+		var sleeper_pos := a.lerp(b, t) + Vector3(0.0, 0.02, 0.0)
+		_add_box_with_material(parent, Vector3(0.28, 0.14, 5.8), sleeper_pos, right, _ensure_period_material("timber"))
+	for side in [-1.0, 1.0]:
+		_add_box(parent, Vector3(0.18, 0.7, length), center + right * side * 5.2 + Vector3(0.0, 0.2, 0.0), forward, shoulder_color)
+
+func _add_interurban_surface_station(parent: Node3D, point: Vector3, forward: Vector3, station_name: String, style_id: String = "blue") -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var theme := _corridor_theme(style_id)
+	var line_color: Color = theme.get("line_color", Color("3a7dbf"))
+	var platform_center := point + right * 5.4 + Vector3(0.0, 0.24, 0.0)
+	_add_box(parent, Vector3(3.4, 0.36, 24.0), platform_center, forward, Color("d4d8cf"))
+	_add_box(parent, Vector3(0.22, 0.1, 24.0), platform_center - right * 1.4 + Vector3(0.0, 0.12, 0.0), forward, line_color.lightened(0.2))
+	_add_box(parent, Vector3(5.6, 2.3, 4.2), point + right * 7.2 + Vector3(0.0, 1.15, 0.0), forward, Color("7d705f"))
+	_add_box(parent, Vector3(6.2, 0.28, 4.8), point + right * 7.2 + Vector3(0.0, 2.46, 0.0), forward, Color("4b4d52"))
+	var label := Label3D.new()
+	label.text = _station_display_name(station_name)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.font_size = 24
+	label.modulate = Color(0.95, 0.97, 0.99, 1.0)
+	label.position = point + Vector3(0.0, 3.1, 0.0)
+	parent.add_child(label)
+
+func _build_interurban_terminal_scenery(root_name: String, branch_stop_points: PackedVector3Array, branch_stop_names: PackedStringArray, track_builder: Node) -> void:
+	if branch_stop_points.is_empty() or branch_stop_names.is_empty():
+		return
+	var parent := _get_path_parent(track_builder)
+	if parent == null:
+		return
+	var existing := parent.get_node_or_null(root_name)
+	if existing:
+		existing.queue_free()
+	var root := Node3D.new()
+	root.name = root_name
+	parent.add_child(root)
+	for i in range(min(branch_stop_points.size(), branch_stop_names.size())):
+		_add_interurban_terminal_scenery_for_stop(root, branch_stop_points[i], _station_forward(branch_stop_points, i), branch_stop_names[i])
+
+func _add_interurban_terminal_scenery_for_stop(parent: Node3D, point: Vector3, forward: Vector3, station_name: String) -> void:
+	if parent == null:
+		return
+	if forward.length() < 0.01:
+		forward = Vector3.FORWARD
+	match station_name:
+		"Canobie Lake Park":
+			_add_canobie_lake_park_terminal(parent, point, forward.normalized())
+		"Whalom Park":
+			_add_whalom_park_terminal(parent, point, forward.normalized())
+
+func _add_canobie_lake_park_terminal(parent: Node3D, point: Vector3, forward: Vector3) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var ground := point + right * 50.0 + forward * 42.0
+	_add_box(parent, Vector3(142.0, 0.16, 156.0), ground + Vector3(0.0, -0.04, 0.0), forward, Color("5f7f4b"))
+	_add_box(parent, Vector3(82.0, 0.12, 42.0), point + right * 44.0 + forward * 16.0 + Vector3(0.0, 0.04, 0.0), forward, Color("c4b485"))
+	_add_box(parent, Vector3(86.0, 0.08, 68.0), point + right * 106.0 + forward * 74.0 + Vector3(0.0, 0.02, 0.0), forward, Color("2d6f82"))
+	_add_trolley_park_terminal_platform(parent, point, forward, Color("6a8e35"), "CANOBIE LAKE PARK")
+	_add_trolley_park_gate(parent, point + right * 24.0 + forward * 18.0, forward, "CANOBIE LAKE PARK", Color("f0e5ba"), Color("2c5d3b"))
+	_add_box_with_material(parent, Vector3(38.0, 6.8, 24.0), point + right * 58.0 + forward * 26.0 + Vector3(0.0, 3.4, 0.0), forward, _ensure_period_material("timber", Color("c0a579")))
+	_add_box(parent, Vector3(42.0, 1.2, 27.0), point + right * 58.0 + forward * 26.0 + Vector3(0.0, 7.5, 0.0), forward, Color("8b3f32"))
+	_add_trolley_park_carousel(parent, point + right * 34.0 + forward * 78.0, forward, Color("b94b3a"), Color("f2d37c"))
+	_add_trolley_park_roller_coaster(parent, point + right * 72.0 + forward * 92.0, forward, Color("8b3f32"), Color("d9c28a"))
+	_add_trolley_park_observation_wheel(parent, point + right * 84.0 + forward * 44.0, forward, Color("e7d7aa"), Color("b94b3a"))
+	_add_box(parent, Vector3(52.0, 0.3, 8.0), point + right * 83.0 + forward * 44.0 + Vector3(0.0, 0.2, 0.0), forward, Color("92764e"))
+	_add_box(parent, Vector3(8.0, 0.35, 46.0), point + right * 84.0 + forward * 88.0 + Vector3(0.0, 0.24, 0.0), right, Color("92764e"))
+	_add_trolley_park_midway(parent, point + right * 27.0 + forward * 48.0, forward, Color("f4e4bb"), Color("b94b3a"))
+	_add_trolley_park_tree_grove(parent, point + right * 10.0 + forward * 104.0, forward, 7)
+	_add_trolley_park_tree_grove(parent, point + right * 112.0 + forward * 22.0, forward, 6)
+	_add_landmark_label(parent, "Canobie Lake Park trolley terminal", point + right * 53.0 + forward * 2.0 + Vector3(0.0, 13.0, 0.0), forward, 0.86)
+
+func _add_whalom_park_terminal(parent: Node3D, point: Vector3, forward: Vector3) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var ground := point - right * 50.0 + forward * 42.0
+	_add_box(parent, Vector3(146.0, 0.16, 148.0), ground + Vector3(0.0, -0.04, 0.0), forward, Color("6f7847"))
+	_add_box(parent, Vector3(80.0, 0.08, 72.0), point - right * 112.0 + forward * 68.0 + Vector3(0.0, 0.02, 0.0), forward, Color("315f78"))
+	_add_box(parent, Vector3(62.0, 0.18, 26.0), point - right * 45.0 + forward * 16.0 + Vector3(0.0, 0.05, 0.0), forward, Color("c2a86f"))
+	_add_trolley_park_terminal_platform(parent, point, forward, Color("8d7a32"), "WHALOM PARK")
+	_add_trolley_park_gate(parent, point - right * 24.0 + forward * 18.0, forward, "WHALOM PARK", Color("efd79a"), Color("7b2d2a"))
+	_add_box_with_material(parent, Vector3(46.0, 7.2, 22.0), point - right * 58.0 + forward * 27.0 + Vector3(0.0, 3.6, 0.0), forward, _ensure_period_material("plaster", Color("d9c69c")))
+	_add_box(parent, Vector3(50.0, 1.0, 25.0), point - right * 58.0 + forward * 27.0 + Vector3(0.0, 7.8, 0.0), forward, Color("6e3f31"))
+	_add_trolley_park_carousel(parent, point - right * 33.0 + forward * 73.0, forward, Color("7b2d2a"), Color("e2c170"))
+	_add_trolley_park_roller_coaster(parent, point - right * 78.0 + forward * 92.0, forward, Color("7b2d2a"), Color("e1c47d"))
+	_add_box(parent, Vector3(72.0, 0.32, 8.0), point - right * 80.0 + forward * 48.0 + Vector3(0.0, 0.22, 0.0), forward, Color("8e7048"))
+	_add_box(parent, Vector3(9.0, 0.34, 44.0), point - right * 96.0 + forward * 82.0 + Vector3(0.0, 0.24, 0.0), right, Color("8e7048"))
+	_add_trolley_park_midway(parent, point - right * 29.0 + forward * 47.0, forward, Color("f0dca7"), Color("7b2d2a"))
+	_add_trolley_park_tree_grove(parent, point - right * 112.0 + forward * 18.0, forward, 6)
+	_add_trolley_park_tree_grove(parent, point - right * 16.0 + forward * 108.0, forward, 7)
+	_add_landmark_label(parent, "Whalom Park trolley terminal", point - right * 54.0 + forward * 2.0 + Vector3(0.0, 13.0, 0.0), forward, 0.86)
+
+func _add_trolley_park_terminal_platform(parent: Node3D, point: Vector3, forward: Vector3, line_color: Color, sign_text: String) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var center := point + right * 5.8 + Vector3(0.0, 0.3, 0.0)
+	_add_box(parent, Vector3(5.6, 0.42, 44.0), center, forward, Color("ddd7c2"))
+	_add_box(parent, Vector3(0.24, 0.16, 44.0), center - right * 2.45 + Vector3(0.0, 0.18, 0.0), forward, line_color.lightened(0.12))
+	_add_box(parent, Vector3(8.8, 0.35, 34.0), center + right * 0.8 + Vector3(0.0, 4.6, 0.0), forward, Color("71583d"))
+	for end in [-14.0, 0.0, 14.0]:
+		for side in [-1.0, 1.0]:
+			_add_box(parent, Vector3(0.28, 4.4, 0.28), center + right * side * 3.9 + forward * end + Vector3(0.0, 2.3, 0.0), forward, Color("5c4632"))
+	_add_trolley_park_sign(parent, sign_text, point + right * 6.2 - forward * 23.0 + Vector3(0.0, 5.4, 0.0), forward, line_color.darkened(0.1), Color("fff0c6"))
+
+func _add_trolley_park_gate(parent: Node3D, center: Vector3, forward: Vector3, title: String, body_color: Color, trim_color: Color) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	_add_box(parent, Vector3(34.0, 1.4, 4.2), center + Vector3(0.0, 7.8, 0.0), forward, body_color)
+	for side in [-1.0, 1.0]:
+		_add_box(parent, Vector3(4.6, 12.0, 4.6), center + right * side * 16.0 + Vector3(0.0, 6.0, 0.0), forward, trim_color)
+		_add_terminal_cone(parent, center + right * side * 16.0 + Vector3(0.0, 13.8, 0.0), 0.4, 4.2, 4.0, body_color)
+	_add_trolley_park_sign(parent, title, center + Vector3(0.0, 9.2, -0.08), forward, trim_color, Color("fff1c8"))
+
+func _add_trolley_park_sign(parent: Node3D, text: String, position: Vector3, forward: Vector3, bg_color: Color, text_color: Color) -> void:
+	_add_box(parent, Vector3(24.0, 3.0, 0.42), position, forward, bg_color)
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.font_size = 24
+	label.outline_size = 4
+	label.outline_modulate = Color(0.05, 0.035, 0.02, 0.82)
+	label.modulate = text_color
+	label.position = position + Vector3(0.0, 0.04, 0.0)
+	parent.add_child(label)
+
+func _add_trolley_park_carousel(parent: Node3D, center: Vector3, forward: Vector3, accent_color: Color, canopy_color: Color) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	_add_landmark_cylinder(parent, center + Vector3(0.0, 0.48, 0.0), 8.2, 0.95, Color("d7c694"))
+	_add_landmark_cylinder(parent, center + Vector3(0.0, 3.0, 0.0), 0.28, 6.0, Color("6b5138"))
+	_add_terminal_cone(parent, center + Vector3(0.0, 5.3, 0.0), 1.2, 8.8, 2.8, canopy_color)
+	_add_landmark_cylinder(parent, center + Vector3(0.0, 4.95, 0.0), 8.7, 0.28, accent_color)
+	for i in range(8):
+		var angle := PI * 2.0 * float(i) / 8.0
+		var radial := right * cos(angle) + forward * sin(angle)
+		var tangent := (-right * sin(angle) + forward * cos(angle)).normalized()
+		_add_box(parent, Vector3(1.4, 0.8, 2.6), center + radial * 5.6 + Vector3(0.0, 1.35, 0.0), tangent, Color("efe6c8"))
+		_add_box(parent, Vector3(0.16, 3.4, 0.16), center + radial * 5.6 + Vector3(0.0, 2.9, 0.0), tangent, Color("b59b68"))
+
+func _add_trolley_park_roller_coaster(parent: Node3D, origin: Vector3, forward: Vector3, support_color: Color, track_color: Color) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var points := [
+		origin - right * 36.0 - forward * 20.0 + Vector3(0.0, 4.0, 0.0),
+		origin - right * 22.0 - forward * 8.0 + Vector3(0.0, 12.0, 0.0),
+		origin - right * 8.0 + forward * 5.0 + Vector3(0.0, 20.0, 0.0),
+		origin + right * 8.0 + forward * 18.0 + Vector3(0.0, 7.0, 0.0),
+		origin + right * 25.0 + forward * 4.0 + Vector3(0.0, 13.0, 0.0),
+		origin + right * 38.0 - forward * 16.0 + Vector3(0.0, 5.0, 0.0)
+	]
+	for i in range(points.size() - 1):
+		_add_terminal_box_between(parent, points[i], points[i + 1], 0.72, track_color)
+		_add_terminal_box_between(parent, points[i] - right * 1.4, points[i + 1] - right * 1.4, 0.34, support_color)
+		_add_terminal_box_between(parent, points[i] + right * 1.4, points[i + 1] + right * 1.4, 0.34, support_color)
+	for point_variant in points:
+		var p: Vector3 = point_variant
+		var height := maxf(1.0, p.y - origin.y)
+		_add_box(parent, Vector3(0.5, height, 0.5), Vector3(p.x, origin.y + height * 0.5, p.z), forward, support_color)
+		_add_box(parent, Vector3(0.36, height * 0.9, 0.36), Vector3(p.x, origin.y + height * 0.45, p.z) + right * 2.2, forward.rotated(Vector3.UP, deg_to_rad(14.0)), support_color)
+	_add_trolley_park_sign(parent, "SCENIC RAILWAY", origin + Vector3(0.0, 3.6, 0.0), forward, support_color.darkened(0.12), Color("fff0bd"))
+
+func _add_trolley_park_observation_wheel(parent: Node3D, center: Vector3, forward: Vector3, frame_color: Color, cabin_color: Color) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var hub := center + Vector3(0.0, 17.0, 0.0)
+	_add_terminal_box_between(parent, center - right * 9.0 + Vector3(0.0, 0.4, 0.0), hub, 0.52, frame_color)
+	_add_terminal_box_between(parent, center + right * 9.0 + Vector3(0.0, 0.4, 0.0), hub, 0.52, frame_color)
+	_add_landmark_cylinder(parent, hub, 1.2, 0.8, frame_color)
+	for i in range(12):
+		var angle := PI * 2.0 * float(i) / 12.0
+		var radial := right * cos(angle) + Vector3.UP * sin(angle)
+		var rim_point := hub + radial * 12.0
+		_add_terminal_box_between(parent, hub, rim_point, 0.18, frame_color)
+		if i % 2 == 0:
+			_add_box(parent, Vector3(2.2, 1.6, 1.4), rim_point, forward, cabin_color)
+	for i in range(12):
+		var angle_a := PI * 2.0 * float(i) / 12.0
+		var angle_b := PI * 2.0 * float((i + 1) % 12) / 12.0
+		var a := hub + (right * cos(angle_a) + Vector3.UP * sin(angle_a)) * 12.0
+		var b := hub + (right * cos(angle_b) + Vector3.UP * sin(angle_b)) * 12.0
+		_add_terminal_box_between(parent, a, b, 0.22, frame_color)
+
+func _add_trolley_park_midway(parent: Node3D, center: Vector3, forward: Vector3, booth_color: Color, awning_color: Color) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	for row_variant in [-1.0, 1.0]:
+		var row := float(row_variant)
+		for i in range(4):
+			var offset := (float(i) - 1.5) * 11.0
+			var booth_center: Vector3 = center + right * row * 8.0 + forward * offset
+			_add_box(parent, Vector3(6.8, 3.2, 5.2), booth_center + Vector3(0.0, 1.6, 0.0), forward, booth_color)
+			_add_box(parent, Vector3(7.4, 0.55, 5.8), booth_center + Vector3(0.0, 3.5, 0.0), forward, awning_color if i % 2 == 0 else Color("2d6f82"))
+	_add_box(parent, Vector3(18.0, 0.12, 50.0), center + Vector3(0.0, 0.07, 0.0), forward, Color("b79b68"))
+
+func _add_trolley_park_tree_grove(parent: Node3D, center: Vector3, forward: Vector3, count: int) -> void:
+	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
+	for i in range(count):
+		var lateral := float((i % 4) - 1) * 9.0
+		var longitudinal := float(floor(float(i) / 4.0)) * 11.0
+		_add_trolley_park_tree(parent, center + right * lateral + forward * longitudinal)
+
+func _add_trolley_park_tree(parent: Node3D, center: Vector3) -> void:
+	_add_landmark_cylinder(parent, center + Vector3(0.0, 2.0, 0.0), 0.55, 4.0, Color("5d3d24"))
+	_add_landmark_sphere(parent, center + Vector3(0.0, 5.1, 0.0), Vector3(4.4, 4.0, 4.4), Color("47673c"))
+
+func _add_terminal_cone(parent: Node3D, position: Vector3, top_radius: float, bottom_radius: float, height: float, color: Color) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = top_radius
+	mesh.bottom_radius = bottom_radius
+	mesh.height = height
+	mesh.radial_segments = 24
+	mesh_instance.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.86
+	mesh_instance.set_surface_override_material(0, material)
+	mesh_instance.position = position
+	parent.add_child(mesh_instance)
+
+func _add_terminal_box_between(parent: Node3D, a: Vector3, b: Vector3, thickness: float, color: Color) -> void:
+	var delta := b - a
+	var length := delta.length()
+	if length < 0.1:
+		return
+	_add_box(parent, Vector3(thickness, thickness, length), (a + b) * 0.5, delta.normalized(), color)
 
 func _build_north_terminal_extension(track_builder: Node) -> void:
 	if not build_north_terminal_extension:
@@ -4318,14 +5683,15 @@ func _build_subway_segment(parent: Node3D, surface_parent: Node3D, section_name:
 		_add_track_surface_box(segment_root, Vector3(2.0, subway_track_bed_height, length), center + right * offset + Vector3(0.0, -1.85, 0.0), forward)
 		_add_box(segment_root, Vector3(0.16, 0.12, length), center + right * (offset - 0.72) + Vector3(0.0, -1.48, 0.0), forward, Color("b7b0a1"))
 		_add_box(segment_root, Vector3(0.16, 0.12, length), center + right * (offset + 0.72) + Vector3(0.0, -1.48, 0.0), forward, Color("b7b0a1"))
-	_add_tunnel_track_details(segment_root, shell_span["center"], forward, right, track_offsets, shell_span["length"])
-	_add_tunnel_lights(segment_root, shell_span["center"], forward, shell_span["length"])
+	_add_tunnel_track_details(segment_root, shell_span["center"], forward, right, width, track_offsets, shell_span["length"], style_id)
+	_add_tunnel_lights(segment_root, shell_span["center"], forward, right, width, shell_span["length"], style_id)
 
 func _build_subway_station(parent: Node3D, surface_parent: Node3D, points: PackedVector3Array, idx: int) -> void:
 	_build_named_subway_station(parent, surface_parent, points, idx, mainline_towns[idx], "tremont")
 
 func _build_named_subway_station(parent: Node3D, surface_parent: Node3D, points: PackedVector3Array, idx: int, station_name: String, style_id: String = "tremont") -> void:
 	var spec := _station_spec(station_name)
+	var lightweight := _use_lightweight_subway_visual_mode()
 	var forward := _station_forward(points, idx)
 	var right := Vector3(-forward.z, 0.0, forward.x).normalized()
 	var station_root := _make_subway_section(parent, _section_name(station_name))
@@ -4341,7 +5707,8 @@ func _build_named_subway_station(parent: Node3D, surface_parent: Node3D, points:
 	_add_surface_alignment(surface_parent, points[maxi(0, idx - 1)], points[mini(points.size() - 1, idx + 1)], width * 0.46, Color("544437"), style_id)
 	_add_surface_alignment(surface_parent, surface_center - forward * (length * 0.41), surface_center + forward * (length * 0.41), width * 0.62, Color("544437"), style_id)
 	_add_station_shell(station_root, center, forward, right, width, length, spec, tracks, style_id, station_name)
-	_add_station_mezzanines(station_root, center, forward, right, width, mezzanine_length, spec)
+	if not lightweight:
+		_add_station_mezzanines(station_root, center, forward, right, width, mezzanine_length, spec)
 
 	for offset in _track_offsets_for_spec(spec, tracks):
 		_add_track_surface_box(station_root, Vector3(2.1, subway_track_bed_height, length), center + right * offset + Vector3(0.0, -1.85, 0.0), forward)
@@ -4362,10 +5729,12 @@ func _build_named_subway_station(parent: Node3D, surface_parent: Node3D, points:
 	if bool(spec.get("corridor", false)):
 		_add_box(station_root, Vector3(5.0, 2.8, 28.0), center + right * (width * 0.5 + 2.4) + Vector3(0.0, 1.2, 0.0), right, Color("b8ae99"))
 
-	_add_station_access_shafts(station_root, center, forward, right, width, station_name, spec)
-	_add_station_lights(station_root, center, forward, right, length, width)
-	_add_station_surface_boxes(surface_parent, center, forward, right, spec, style_id)
-	_add_headhouse(surface_parent, center, forward, right, station_name, spec, style_id)
+	if not lightweight:
+		_add_station_access_shafts(station_root, center, forward, right, width, station_name, spec)
+	_add_station_lights(station_root, center, forward, right, length, width, style_id)
+	if not lightweight:
+		_add_station_surface_boxes(surface_parent, center, forward, right, spec, style_id)
+		_add_headhouse(surface_parent, center, forward, right, station_name, spec, style_id)
 
 func _add_headhouse(parent: Node3D, station_center: Vector3, forward: Vector3, right: Vector3, station_name: String, spec: Dictionary = {}, style_id: String = "tremont") -> void:
 	var above := station_center - Vector3(0.0, subway_depth, 0.0)
@@ -5441,11 +6810,23 @@ func _add_station_extra_boxes(parent: Node3D, center: Vector3, forward: Vector3,
 		if absf(yaw_deg) > 0.01:
 			orient = orient.rotated(Vector3.UP, deg_to_rad(yaw_deg)).normalized()
 		var pos := center + right * float(entry.get("right_offset", 0.0)) + forward * float(entry.get("forward_offset", 0.0)) + Vector3(0.0, float(entry.get("up_offset", 0.0)), 0.0)
+		var box_color := Color(String(entry.get("color", "b8ae99")))
 		var is_junction_wall := absf(yaw_deg) >= 8.0 and size.y >= subway_tunnel_height * 0.55 and size.x <= 1.5 and size.z >= 18.0
 		if is_junction_wall:
-			pos = _push_box_outward_from_center(center, pos, orient, subway_junction_wall_push)
-			size.z = maxf(8.0, size.z - subway_segment_end_open_length)
-		_add_box(parent, size, pos, orient, Color(String(entry.get("color", "b8ae99"))))
+			if not subway_junction_walls_enabled:
+				continue
+			var tracks := int(spec.get("tracks", 2))
+			var track_clear_width := _station_track_half_extent(spec, tracks) * 2.0 + 4.0
+			var cross_factor := maxf(0.25, absf(orient.dot(right)))
+			var gap_length := clampf(track_clear_width / cross_factor, 10.0, maxf(10.0, size.z - 2.0))
+			var segment_length := (size.z - gap_length) * 0.5
+			if segment_length >= 1.0:
+				for side_variant in [-1.0, 1.0]:
+					var side := float(side_variant)
+					var segment_pos: Vector3 = pos + orient * side * (gap_length * 0.5 + segment_length * 0.5)
+					_add_box(parent, Vector3(size.x, size.y, segment_length), segment_pos, orient, box_color)
+			continue
+		_add_box(parent, size, pos, orient, box_color)
 
 func _add_station_surface_boxes(parent: Node3D, station_center: Vector3, forward: Vector3, right: Vector3, spec: Dictionary, style_id: String = "tremont") -> void:
 	var above := station_center - Vector3(0.0, subway_depth, 0.0)
@@ -5506,17 +6887,80 @@ func _add_station_name_boards(parent: Node3D, center: Vector3, forward: Vector3,
 			label.rotation = Vector3(0.0, -PI * 0.5 * side, 0.0)
 			parent.add_child(label)
 
-func _add_station_wall_finish(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, style_id: String = "tremont") -> void:
+func _quadratic_bezier_point(a: Vector3, b: Vector3, c: Vector3, t: float) -> Vector3:
+	var u := 1.0 - t
+	return a * (u * u) + b * (2.0 * u * t) + c * (t * t)
+
+func _add_tremont_curved_liner(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, floor_y: float, roof_y: float, is_station: bool = false) -> void:
+	var theme := _corridor_theme("tremont")
+	var sign_bg: Color = theme.get("sign_bg", Color("e7dcc2"))
+	var tile_material := _ensure_period_material(String(theme.get("tile_material", "tremont_tile")), sign_bg)
+	var vault_material := _ensure_period_material(String(theme.get("wall_material", "tremont_vault")))
+	var trim_color: Color = theme.get("trim_color", Color("635446"))
+	var liner_length := maxf(2.0, length - 0.8)
+	var springline_y := floor_y + (2.1 if is_station else 1.7)
+	var crown_y := roof_y - (0.92 if is_station else 0.82)
+	var spring_half_span := maxf(2.4, width * 0.5 - subway_wall_thickness - 0.34)
+	var crown_half_span := maxf(1.9, spring_half_span * (0.34 if is_station else 0.26))
+	var lower_height := maxf(0.92, springline_y - floor_y - 0.26)
+	var lower_center_y := floor_y + lower_height * 0.5 - center.y + 0.08
+	var strip_thickness := 0.18 if is_station else 0.16
+	var strip_count := 5 if is_station else 4
+	for side_variant in [-1.0, 1.0]:
+		var side := float(side_variant)
+		var lower_wall_x := width * 0.5 - subway_wall_thickness - 0.11
+		_add_box_with_material(parent, Vector3(0.18, lower_height, liner_length), center + right * side * lower_wall_x + Vector3(0.0, lower_center_y, 0.0), forward, tile_material)
+		_add_box(parent, Vector3(0.22, 0.18, liner_length), center + right * side * (lower_wall_x + side * -0.02) + Vector3(0.0, lower_center_y + lower_height * 0.5 - 0.02, 0.0), forward, trim_color)
+		_add_box(parent, Vector3(0.22, 0.16, liner_length), center + right * side * (lower_wall_x + side * -0.02) + Vector3(0.0, floor_y - center.y + 0.22, 0.0), forward, trim_color)
+		var start: Vector3 = right * side * spring_half_span + Vector3(0.0, springline_y - center.y, 0.0)
+		var control: Vector3 = right * side * (spring_half_span * (0.74 if is_station else 0.70)) + Vector3(0.0, springline_y - center.y + (crown_y - springline_y) * 0.78, 0.0)
+		var finish: Vector3 = right * side * crown_half_span + Vector3(0.0, crown_y - center.y, 0.0)
+		for i in range(strip_count):
+			var t0 := float(i) / float(strip_count)
+			var t1 := float(i + 1) / float(strip_count)
+			var p0 := _quadratic_bezier_point(start, control, finish, t0)
+			var p1 := _quadratic_bezier_point(start, control, finish, t1)
+			var tangent := (p1 - p0).normalized()
+			if tangent.length() < 0.01:
+				continue
+			var normal := tangent.cross(forward).normalized()
+			if normal.length() < 0.01:
+				continue
+			if normal.dot(right * side) < 0.0:
+				normal = -normal
+			var basis := Basis(normal, tangent, forward).orthonormalized()
+			var segment_center: Vector3 = center + (p0 + p1) * 0.5
+			_add_box_with_material_basis(parent, Vector3(strip_thickness, p0.distance_to(p1) + 0.14, liner_length), segment_center, basis, vault_material)
+	_add_box_with_material(parent, Vector3(crown_half_span * 2.0 + 1.0, 0.22, liner_length), center + Vector3(0.0, crown_y - center.y + 0.02, 0.0), forward, vault_material)
+	_add_box(parent, Vector3(crown_half_span * 2.0 + 0.78, 0.14, liner_length), center + Vector3(0.0, crown_y - center.y - 0.18, 0.0), forward, trim_color)
+
+func _add_station_wall_finish(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, style_id: String = "tremont", floor_y: float = 0.0, roof_y: float = 0.0) -> void:
+	if style_id == "tremont":
+		_add_tremont_curved_liner(parent, center, forward, right, width, length, floor_y, roof_y, true)
+		var theme_tremont := _corridor_theme(style_id)
+		var sign_bg_tremont: Color = theme_tremont.get("sign_bg", Color("e7dcc2"))
+		var tile_material_tremont := _ensure_period_material(String(theme_tremont.get("tile_material", "tremont_tile")), sign_bg_tremont)
+		var bay_count_tremont := maxi(2, int(round(length / 34.0)))
+		for i in range(bay_count_tremont):
+			var t_tremont := float(i + 1) / float(bay_count_tremont + 1)
+			var pier_center_tremont := center - forward * (length * 0.5) + forward * (length * t_tremont)
+			for side_variant in [-1.0, 1.0]:
+				var side_tremont := float(side_variant)
+				_add_box_with_material(parent, Vector3(0.42, 4.4, 0.58), pier_center_tremont + right * side_tremont * (width * 0.5 - subway_wall_thickness - 0.32) + Vector3(0.0, 0.02, 0.0), forward, tile_material_tremont)
+		return
 	var theme := _corridor_theme(style_id)
 	var wall_material := _ensure_period_material(String(theme.get("wall_material", "plaster")))
 	var sign_bg: Color = theme.get("sign_bg", Color("efe4c3"))
 	var tile_material := _ensure_period_material(String(theme.get("tile_material", "tile")), sign_bg)
 	var trim_color: Color = theme.get("trim_color", Color("6c5845"))
+	var line_color: Color = theme.get("line_color", Color("2d8f45"))
+	var tile_band_height := float(theme.get("tile_band_height", subway_tile_band_height))
 	for side in [-1.0, 1.0]:
 		_add_box_with_material(parent, Vector3(0.12, 4.3, length - 0.8), center + right * side * (width * 0.5 - subway_wall_thickness - 0.08) + Vector3(0.0, -0.05, 0.0), forward, wall_material)
-		_add_box_with_material(parent, Vector3(0.18, subway_tile_band_height, length), center + right * side * (width * 0.5 - subway_wall_thickness - 0.11) + Vector3(0.0, 0.05, 0.0), forward, tile_material)
-		_add_box(parent, Vector3(0.22, 0.18, length), center + right * side * (width * 0.5 - subway_wall_thickness - 0.14) + Vector3(0.0, 1.24, 0.0), forward, trim_color)
+		_add_box_with_material(parent, Vector3(0.18, tile_band_height, length), center + right * side * (width * 0.5 - subway_wall_thickness - 0.11) + Vector3(0.0, floor_y - center.y + tile_band_height * 0.5 + 0.18, 0.0), forward, tile_material)
+		_add_box(parent, Vector3(0.22, 0.18, length), center + right * side * (width * 0.5 - subway_wall_thickness - 0.14) + Vector3(0.0, floor_y - center.y + tile_band_height + 0.22, 0.0), forward, trim_color)
 		_add_box(parent, Vector3(0.22, 0.18, length), center + right * side * (width * 0.5 - subway_wall_thickness - 0.14) + Vector3(0.0, -0.92, 0.0), forward, trim_color)
+		_add_box(parent, Vector3(0.14, 0.12, length - 1.2), center + right * side * (width * 0.5 - subway_wall_thickness - 0.16) + Vector3(0.0, floor_y - center.y + tile_band_height + 0.58, 0.0), forward, line_color.darkened(0.08))
 	var bay_count := maxi(2, int(round(length / 34.0)))
 	for i in range(bay_count):
 		var t := float(i + 1) / float(bay_count + 1)
@@ -5533,21 +6977,42 @@ func _add_tunnel_ceiling_layers(parent: Node3D, center: Vector3, forward: Vector
 	else:
 		_add_box(parent, Vector3(inner_width * 0.54, 0.14, length), center + Vector3(0.0, roof_offset_y - 0.92, 0.0), forward, Color("8c8377"))
 
-func _add_tunnel_track_details(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, track_offsets: Array[float], length: float) -> void:
+func _style_uses_third_rail(style_id: String) -> bool:
+	return style_id in ["washington", "cambridge", "blue"]
+
+func _add_tunnel_track_details(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, track_offsets: Array[float], length: float, style_id: String = "tremont") -> void:
+	var uses_third_rail := _style_uses_third_rail(style_id)
+	var cover_material := _ensure_period_material("timber")
+	var grate_material := _ensure_period_material("grate_dark")
 	for offset in track_offsets:
-		var wire_y := subway_wire_height
-		_add_box(parent, Vector3(0.08, 0.08, length), center + right * offset + Vector3(0.0, wire_y, 0.0), forward, Color("2a2622"))
-		var hanger_count := maxi(2, int(round(length / 24.0)))
-		for i in range(hanger_count):
-			var t := float(i + 1) / float(hanger_count + 1)
-			var hanger_pos := center - forward * (length * 0.5) + forward * (length * t) + right * offset + Vector3(0.0, wire_y + 0.42, 0.0)
-			_add_box(parent, Vector3(0.06, 0.84, 0.06), hanger_pos, forward, Color("3c352f"))
 		_add_rail_box(parent, Vector3(0.26, 0.12, length), center + right * offset + Vector3(0.0, -1.62, 0.0), forward)
+		if uses_third_rail:
+			var power_side := 1.0 if offset < 0.0 else -1.0
+			var conductor_x := offset + power_side * 1.02
+			_add_rail_box(parent, Vector3(0.12, 0.18, length - 0.8), center + right * conductor_x + Vector3(0.0, -1.42, 0.0), forward)
+			_add_box_with_material(parent, Vector3(0.34, 0.12, length - 0.6), center + right * conductor_x + Vector3(0.0, -1.24, 0.0), forward, cover_material)
+			var insulator_count := maxi(2, int(round(length / 18.0)))
+			for i in range(insulator_count):
+				var t := float(i + 1) / float(insulator_count + 1)
+				var insulator_pos := center - forward * (length * 0.5) + forward * (length * t) + right * conductor_x + Vector3(0.0, -1.34, 0.0)
+				_add_box(parent, Vector3(0.18, 0.14, 0.42), insulator_pos, forward, Color("c8bfaf"))
+		else:
+			var wire_y := subway_wire_height
+			_add_box(parent, Vector3(0.08, 0.08, length), center + right * offset + Vector3(0.0, wire_y, 0.0), forward, Color("2a2622"))
+			var hanger_count := maxi(2, int(round(length / 24.0)))
+			for i in range(hanger_count):
+				var t := float(i + 1) / float(hanger_count + 1)
+				var hanger_pos := center - forward * (length * 0.5) + forward * (length * t) + right * offset + Vector3(0.0, wire_y + 0.42, 0.0)
+				_add_box(parent, Vector3(0.06, 0.84, 0.06), hanger_pos, forward, Color("3c352f"))
 	var drain_count := maxi(2, int(round(length / 22.0)))
 	for i in range(drain_count):
 		var t := float(i + 1) / float(drain_count + 1)
 		var drain_pos := center - forward * (length * 0.5) + forward * (length * t) + Vector3(0.0, -1.98, 0.0)
 		_add_box(parent, Vector3(0.44, 0.08, 0.9), drain_pos, forward, Color("696159"))
+	if uses_third_rail:
+		for side in [-1.0, 1.0]:
+			var conduit_x := width * 0.5 - subway_wall_thickness - 0.56
+			_add_box_with_material(parent, Vector3(0.22, 0.18, length - 0.8), center + right * side * conduit_x + Vector3(0.0, -0.54, 0.0), forward, grate_material)
 
 func _track_offsets(tracks: int) -> Array[float]:
 	if tracks >= 4:
@@ -5608,13 +7073,16 @@ func _corridor_theme(style_id: String) -> Dictionary:
 				"sign_bg": Color("f3e6cf"),
 				"sign_text": Color("30251d"),
 				"surface_material": "cobble",
-				"wall_material": "plaster",
-				"tile_material": "tile",
+				"wall_material": "subway_soot_plaster",
+				"tile_material": "subway_cream_tile",
 				"platform_material": "tile",
 				"headhouse_material": "brick",
 				"roof_material": "steel_dark",
 				"trim_color": Color("5c4838"),
-				"steel_color": Color("61574d")
+				"steel_color": Color("61574d"),
+				"tile_band_height": 1.55,
+				"tunnel_fixture_mode": "center",
+				"station_fixture_mode": "offset"
 			}
 		"orange_elevated":
 			return {
@@ -5636,13 +7104,16 @@ func _corridor_theme(style_id: String) -> Dictionary:
 				"sign_bg": Color("f0e6d4"),
 				"sign_text": Color("281f19"),
 				"surface_material": "asphalt",
-				"wall_material": "plaster",
-				"tile_material": "tile",
+				"wall_material": "subway_white_tile",
+				"tile_material": "subway_cream_tile",
 				"platform_material": "tile",
 				"headhouse_material": "brick",
 				"roof_material": "steel_dark",
 				"trim_color": Color("7a2d2a"),
-				"steel_color": Color("686058")
+				"steel_color": Color("686058"),
+				"tile_band_height": 1.78,
+				"tunnel_fixture_mode": "center",
+				"station_fixture_mode": "center"
 			}
 		"blue":
 			return {
@@ -5650,13 +7121,16 @@ func _corridor_theme(style_id: String) -> Dictionary:
 				"sign_bg": Color("edf1f6"),
 				"sign_text": Color("1f2833"),
 				"surface_material": "asphalt",
-				"wall_material": "plaster",
-				"tile_material": "tile",
+				"wall_material": "subway_white_tile",
+				"tile_material": "subway_blue_tile",
 				"platform_material": "tile",
 				"headhouse_material": "brick",
 				"roof_material": "steel_dark",
 				"trim_color": Color("38618c"),
-				"steel_color": Color("5c646c")
+				"steel_color": Color("5c646c"),
+				"tile_band_height": 1.82,
+				"tunnel_fixture_mode": "center",
+				"station_fixture_mode": "center"
 			}
 		"mattapan":
 			return {
@@ -5685,6 +7159,22 @@ func _corridor_theme(style_id: String) -> Dictionary:
 				"roof_material": "steel_dark",
 				"trim_color": Color("d96a16"),
 				"steel_color": Color("1f1d1a")
+			}
+		"tremont":
+			return {
+				"line_color": Color("2d8f45"),
+				"sign_bg": Color("e7dcc2"),
+				"sign_text": Color("221a14"),
+				"surface_material": "cobble",
+				"wall_material": "tremont_vault",
+				"tile_material": "tremont_tile",
+				"platform_material": "tile",
+				"headhouse_material": "tremont_brick",
+				"roof_material": "steel_dark",
+				"trim_color": Color("635446"),
+				"steel_color": Color("4e4842"),
+				"tunnel_fixture_mode": "wall",
+				"station_fixture_mode": "wall"
 			}
 		_:
 			return {
@@ -5720,16 +7210,65 @@ func _ensure_period_material(material_key: String, tint: Color = Color.WHITE) ->
 			mat.roughness_texture = _load_runtime_texture(BrickRoughnessPath)
 			mat.normal_texture = _load_runtime_texture(BrickNormalPath)
 			mat.roughness = 0.95
+		"tremont_brick":
+			mat.albedo_texture = _load_runtime_texture(BrickAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(BrickRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(BrickNormalPath)
+			mat.albedo_color = tint * Color("aa8f7c")
+			mat.roughness = 0.96
+			mat.uv1_scale = Vector3(1.6, 1.6, 1.6)
 		"plaster":
 			mat.albedo_texture = _load_runtime_texture(PlasterAlbedoPath)
 			mat.roughness_texture = _load_runtime_texture(PlasterRoughnessPath)
 			mat.normal_texture = _load_runtime_texture(PlasterNormalPath)
 			mat.roughness = 0.9
+		"tremont_vault":
+			mat.albedo_texture = _load_runtime_texture(PlasterAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(PlasterRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(PlasterNormalPath)
+			mat.albedo_color = tint * Color("8f8576")
+			mat.roughness = 0.95
+			mat.uv1_scale = Vector3(1.9, 1.7, 1.7)
 		"tile":
 			mat.albedo_texture = _load_runtime_texture(TileAlbedoPath)
 			mat.roughness_texture = _load_runtime_texture(TileRoughnessPath)
 			mat.normal_texture = _load_runtime_texture(TileNormalPath)
 			mat.roughness = 0.8
+		"subway_white_tile":
+			mat.albedo_texture = _load_runtime_texture(TileAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(TileRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(TileNormalPath)
+			mat.albedo_color = tint * Color("f1f2ef")
+			mat.roughness = 0.6
+			mat.uv1_scale = Vector3(2.2, 2.2, 2.2)
+		"subway_blue_tile":
+			mat.albedo_texture = _load_runtime_texture(TileAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(TileRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(TileNormalPath)
+			mat.albedo_color = tint * Color("e8eef2")
+			mat.roughness = 0.58
+			mat.uv1_scale = Vector3(2.2, 2.2, 2.2)
+		"subway_cream_tile":
+			mat.albedo_texture = _load_runtime_texture(TileAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(TileRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(TileNormalPath)
+			mat.albedo_color = tint * Color("f0e4c9")
+			mat.roughness = 0.64
+			mat.uv1_scale = Vector3(2.15, 2.15, 2.15)
+		"tremont_tile":
+			mat.albedo_texture = _load_runtime_texture(TileAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(TileRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(TileNormalPath)
+			mat.albedo_color = tint * Color("f3ead2")
+			mat.roughness = 0.72
+			mat.uv1_scale = Vector3(2.4, 2.1, 2.1)
+		"subway_soot_plaster":
+			mat.albedo_texture = _load_runtime_texture(PlasterAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(PlasterRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(PlasterNormalPath)
+			mat.albedo_color = tint * Color("8d8477")
+			mat.roughness = 0.96
+			mat.uv1_scale = Vector3(1.7, 1.7, 1.7)
 		"cobble":
 			mat.albedo_texture = _load_runtime_texture(CobbleAlbedoPath)
 			mat.roughness_texture = _load_runtime_texture(CobbleRoughnessPath)
@@ -5749,6 +7288,13 @@ func _ensure_period_material(material_key: String, tint: Color = Color.WHITE) ->
 			mat.roughness_texture = _load_runtime_texture(RailRoughnessPath)
 			mat.roughness = 0.32
 			mat.metallic = 0.82
+		"grate_dark":
+			mat.albedo_texture = _load_runtime_texture(RailAlbedoPath)
+			mat.roughness_texture = _load_runtime_texture(RailRoughnessPath)
+			mat.normal_texture = _load_runtime_texture(RailNormalPath)
+			mat.albedo_color = tint * Color("5e5a55")
+			mat.roughness = 0.48
+			mat.metallic = 0.7
 		_:
 			mat.roughness = 0.85
 	_pbr_material_cache[cache_key] = mat
@@ -5761,6 +7307,14 @@ func _add_box_with_material(parent: Node3D, size: Vector3, position: Vector3, fo
 	instance.mesh = mesh
 	instance.set_surface_override_material(0, material)
 	_add_box_instance(parent, instance, position, forward)
+
+func _add_box_with_material_basis(parent: Node3D, size: Vector3, position: Vector3, basis: Basis, material: Material) -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.set_surface_override_material(0, material)
+	_add_box_instance_with_basis(parent, instance, position, basis)
 
 func _push_box_outward_from_center(center: Vector3, position: Vector3, forward: Vector3, amount: float) -> Vector3:
 	var cross := Vector3(-forward.z, 0.0, forward.x).normalized()
@@ -5795,14 +7349,23 @@ func _add_tunnel_shell(parent: Node3D, center: Vector3, forward: Vector3, right:
 		_add_box(parent, Vector3(0.75, clear_height - 0.6, length), center + Vector3(0.0, floor_y + (clear_height - 0.6) * 0.5 - center.y + 0.2, 0.0), forward, Color("6f6961"))
 	elif include_center_divider and tracks == 2:
 		_add_box(parent, Vector3(0.95, clear_height - 0.8, length), center + Vector3(0.0, floor_y + (clear_height - 0.8) * 0.5 - center.y + 0.12, 0.0), forward, Color("625a52"))
-		_add_box(parent, Vector3(subway_bore_inner_width, 0.18, length), center + right * (width * 0.24) + Vector3(0.0, roof_y - center.y - 0.82, 0.0), forward, Color("756d63"))
-		_add_box(parent, Vector3(subway_bore_inner_width, 0.18, length), center - right * (width * 0.24) + Vector3(0.0, roof_y - center.y - 0.82, 0.0), forward, Color("756d63"))
-	var theme := _corridor_theme(style_id)
-	var wall_material := _ensure_period_material(String(theme.get("wall_material", "plaster")))
-	var trim_color: Color = theme.get("trim_color", Color("5f4c3b"))
-	for side in [-1.0, 1.0]:
-		_add_box_with_material(parent, Vector3(0.14, clear_height - 0.6, length - 0.8), center + right * side * (width * 0.5 - subway_wall_thickness - 0.07) + Vector3(0.0, 0.1, 0.0), forward, wall_material)
-		_add_box(parent, Vector3(0.16, 0.14, length - 1.0), center + right * side * (width * 0.5 - subway_wall_thickness - 0.09) + Vector3(0.0, 1.26, 0.0), forward, trim_color)
+		if style_id != "tremont":
+			_add_box(parent, Vector3(subway_bore_inner_width, 0.18, length), center + right * (width * 0.24) + Vector3(0.0, roof_y - center.y - 0.82, 0.0), forward, Color("756d63"))
+			_add_box(parent, Vector3(subway_bore_inner_width, 0.18, length), center - right * (width * 0.24) + Vector3(0.0, roof_y - center.y - 0.82, 0.0), forward, Color("756d63"))
+	if style_id == "tremont":
+		_add_tremont_curved_liner(parent, center, forward, right, width, length, floor_y, roof_y, false)
+	else:
+		var theme := _corridor_theme(style_id)
+		var wall_material := _ensure_period_material(String(theme.get("wall_material", "plaster")))
+		var tile_material := _ensure_period_material(String(theme.get("tile_material", "tile")), theme.get("sign_bg", Color.WHITE))
+		var trim_color: Color = theme.get("trim_color", Color("5f4c3b"))
+		var line_color: Color = theme.get("line_color", Color("2d8f45"))
+		var tile_band_height := float(theme.get("tile_band_height", subway_tile_band_height))
+		for side in [-1.0, 1.0]:
+			_add_box_with_material(parent, Vector3(0.14, clear_height - 0.6, length - 0.8), center + right * side * (width * 0.5 - subway_wall_thickness - 0.07) + Vector3(0.0, 0.1, 0.0), forward, wall_material)
+			_add_box_with_material(parent, Vector3(0.18, tile_band_height, length - 0.8), center + right * side * (width * 0.5 - subway_wall_thickness - 0.1) + Vector3(0.0, floor_y - center.y + tile_band_height * 0.5 + 0.18, 0.0), forward, tile_material)
+			_add_box(parent, Vector3(0.16, 0.14, length - 1.0), center + right * side * (width * 0.5 - subway_wall_thickness - 0.09) + Vector3(0.0, 1.26, 0.0), forward, trim_color)
+			_add_box(parent, Vector3(0.12, 0.12, length - 1.2), center + right * side * (width * 0.5 - subway_wall_thickness - 0.14) + Vector3(0.0, floor_y - center.y + tile_band_height + 0.52, 0.0), forward, line_color.darkened(0.08))
 
 func _add_station_shell(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, _spec: Dictionary = {}, _tracks: int = 2, style_id: String = "tremont", _station_name: String = "") -> void:
 	var clear_height := subway_tunnel_height + 1.0
@@ -5815,9 +7378,10 @@ func _add_station_shell(parent: Node3D, center: Vector3, forward: Vector3, right
 	_add_box(parent, Vector3(width, subway_roof_thickness, length), Vector3(center.x, roof_y + subway_roof_thickness * 0.5, center.z), forward, Color("6e685f"))
 	_add_tunnel_ceiling_layers(parent, center, forward, right, width - 1.4, length, roof_y - center.y - 0.16, false)
 	_add_box(parent, Vector3(width - 1.4, 0.22, length), center + Vector3(0.0, roof_y - center.y - 0.58, 0.0), forward, Color("827b70"))
-	_add_station_wall_finish(parent, center, forward, right, width, length, style_id)
-	_add_station_end_portal(parent, center, forward, right, width, floor_y, clear_height, -(length * 0.5 - 0.5))
-	_add_station_end_portal(parent, center, forward, right, width, floor_y, clear_height, length * 0.5 - 0.5)
+	_add_station_wall_finish(parent, center, forward, right, width, length, style_id, floor_y, roof_y)
+	if subway_station_end_caps_enabled:
+		_add_station_end_portal(parent, center, forward, right, width, floor_y, clear_height, -(length * 0.5 - 0.5))
+		_add_station_end_portal(parent, center, forward, right, width, floor_y, clear_height, length * 0.5 - 0.5)
 
 func _add_station_end_portal(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, floor_y: float, clear_height: float, forward_offset: float) -> void:
 	var opening_width := maxf(8.0, width - 4.4)
@@ -5831,28 +7395,56 @@ func _add_station_end_portal(parent: Node3D, center: Vector3, forward: Vector3, 
 	var lintel_center: Vector3 = end_center + Vector3(0.0, floor_y + clear_height - lintel_height * 0.5 - center.y, 0.0)
 	_add_box(parent, Vector3(opening_width, lintel_height, 1.0), lintel_center, forward, Color("837b70"))
 
-func _add_tunnel_lights(parent: Node3D, center: Vector3, forward: Vector3, length: float) -> void:
+func _add_tunnel_lights(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, width: float, length: float, style_id: String = "tremont") -> void:
+	var theme := _corridor_theme(style_id)
+	var fixture_mode := String(theme.get("tunnel_fixture_mode", "center"))
+	var fixture_material := _ensure_period_material("steel_dark", theme.get("steel_color", Color("5b544b")))
+	var fixture_light_color: Color = Color(1.0, 0.95, 0.86)
 	var count := maxi(2, int(round(length / subway_light_spacing)))
+	if _use_lightweight_subway_visual_mode():
+		count = maxi(1, int(ceil(float(count) * 0.5)))
 	for i in range(count):
 		var t := float(i + 1) / float(count + 1)
-		var light := OmniLight3D.new()
-		light.omni_range = 16.0
-		light.light_energy = 0.22
-		light.light_color = Color(1.0, 0.95, 0.86)
-		light.position = center - forward * (length * 0.5) + forward * (length * t) + Vector3(0.0, 1.2, 0.0)
-		parent.add_child(light)
+		var longitudinal := center - forward * (length * 0.5) + forward * (length * t)
+		if fixture_mode == "wall":
+			for side in [-1.0, 1.0]:
+				var mount_pos: Vector3 = longitudinal + right * side * (width * 0.5 - subway_wall_thickness - 0.18) + Vector3(0.0, 1.18, 0.0)
+				_add_box_with_material(parent, Vector3(0.12, 0.18, 0.62), mount_pos, forward, fixture_material)
+				_add_box(parent, Vector3(0.22, 0.22, 0.42), mount_pos + right * side * -0.34, forward, Color("d7c7a0"))
+				var wall_light := OmniLight3D.new()
+				wall_light.omni_range = 12.0
+				wall_light.light_energy = 0.18
+				wall_light.light_color = fixture_light_color
+				wall_light.position = mount_pos + right * side * -0.44
+				parent.add_child(wall_light)
+		else:
+			_add_box_with_material(parent, Vector3(1.2, 0.12, 0.48), longitudinal + Vector3(0.0, 1.62, 0.0), forward, fixture_material)
+			var light := OmniLight3D.new()
+			light.omni_range = 16.0 if style_id != "blue" else 18.0
+			light.light_energy = 0.22 if style_id != "blue" else 0.26
+			light.light_color = Color(1.0, 0.96, 0.9) if style_id != "blue" else Color(0.97, 0.98, 1.0)
+			light.position = longitudinal + Vector3(0.0, 1.26, 0.0)
+			parent.add_child(light)
 
-func _add_station_lights(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, length: float, width: float) -> void:
+func _add_station_lights(parent: Node3D, center: Vector3, forward: Vector3, right: Vector3, length: float, width: float, style_id: String = "tremont") -> void:
+	var theme := _corridor_theme(style_id)
+	var fixture_mode := String(theme.get("station_fixture_mode", "offset"))
+	var fixture_material := _ensure_period_material("steel_dark", theme.get("steel_color", Color("5b544b")))
 	var count := maxi(3, int(round(length / 38.0)))
+	if _use_lightweight_subway_visual_mode():
+		count = maxi(2, int(ceil(float(count) * 0.6)))
 	for i in range(count):
 		var t := float(i + 1) / float(count + 1)
-		for lateral in [-width * 0.18, width * 0.18]:
-			var anchor: Vector3 = center - forward * (length * 0.5) + forward * (length * t) + right * lateral
-			_add_box(parent, Vector3(1.4, 0.12, 0.6), anchor + Vector3(0.0, 2.18, 0.0), forward, Color("d1c6ae"))
+		var longitudinal := center - forward * (length * 0.5) + forward * (length * t)
+		var laterals := [-width * 0.18, width * 0.18] if fixture_mode == "offset" else [0.0]
+		for lateral_variant in laterals:
+			var lateral := float(lateral_variant)
+			var anchor: Vector3 = longitudinal + right * lateral
+			_add_box_with_material(parent, Vector3(1.4, 0.12, 0.6), anchor + Vector3(0.0, 2.18, 0.0), forward, fixture_material)
 			var light := OmniLight3D.new()
 			light.omni_range = 20.0
-			light.light_energy = 0.35
-			light.light_color = Color(1.0, 0.96, 0.9)
+			light.light_energy = 0.35 if style_id != "blue" else 0.4
+			light.light_color = Color(1.0, 0.96, 0.9) if style_id != "blue" else Color(0.98, 0.98, 1.0)
 			light.position = anchor + Vector3(0.0, 1.8, 0.0)
 			parent.add_child(light)
 
@@ -5956,6 +7548,7 @@ func _add_station_access_shafts(parent: Node3D, center: Vector3, forward: Vector
 		var forward_offset := float(entry.get("forward_offset", 0.0))
 		var shaft_center := center + right * right_offset + forward * forward_offset + Vector3(0.0, shaft_height_local * 0.5 - 0.3 + float(entry.get("up_offset", 0.0)), 0.0)
 		_add_box(parent, Vector3(shaft_width_local, shaft_height_local, shaft_length_local), shaft_center, forward, Color("948a7b"))
+		_add_box_with_material(parent, Vector3(shaft_width_local - 0.6, 0.08, shaft_length_local - 0.6), shaft_center + Vector3(0.0, shaft_height_local * 0.5 - 0.08, 0.0), forward, _ensure_period_material("grate_dark"))
 		var steps := maxi(2, int(entry.get("steps", 5)))
 		var run := float(entry.get("run", 3.2))
 		var landing_offset := float(entry.get("landing_forward_offset", -1.4))
@@ -6009,6 +7602,18 @@ func _add_box(parent: Node3D, size: Vector3, position: Vector3, forward: Vector3
 	instance.set_surface_override_material(0, mat)
 	_add_box_instance(parent, instance, position, forward)
 
+func _add_box_basis(parent: Node3D, size: Vector3, position: Vector3, basis: Basis, color: Color) -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.85
+	mat.metallic = 0.05
+	instance.set_surface_override_material(0, mat)
+	_add_box_instance_with_basis(parent, instance, position, basis)
+
 func _add_track_surface_box(parent: Node3D, size: Vector3, position: Vector3, forward: Vector3) -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = size
@@ -6025,9 +7630,7 @@ func _add_rail_box(parent: Node3D, size: Vector3, position: Vector3, forward: Ve
 	instance.set_surface_override_material(0, _ensure_track_rail_material())
 	_add_box_instance(parent, instance, position, forward)
 
-func _add_box_instance(parent: Node3D, instance: MeshInstance3D, position: Vector3, forward: Vector3) -> void:
-	parent.add_child(instance)
-	instance.global_position = position
+func _basis_from_forward(forward: Vector3) -> Basis:
 	var z_axis := forward.normalized()
 	if z_axis.length() < 0.01:
 		z_axis = Vector3.FORWARD
@@ -6035,7 +7638,15 @@ func _add_box_instance(parent: Node3D, instance: MeshInstance3D, position: Vecto
 	if x_axis.length() < 0.01:
 		x_axis = Vector3.RIGHT
 	var y_axis := z_axis.cross(x_axis).normalized()
-	instance.global_basis = Basis(x_axis, y_axis, z_axis).orthonormalized()
+	return Basis(x_axis, y_axis, z_axis).orthonormalized()
+
+func _add_box_instance(parent: Node3D, instance: MeshInstance3D, position: Vector3, forward: Vector3) -> void:
+	_add_box_instance_with_basis(parent, instance, position, _basis_from_forward(forward))
+
+func _add_box_instance_with_basis(parent: Node3D, instance: MeshInstance3D, position: Vector3, basis: Basis) -> void:
+	parent.add_child(instance)
+	instance.global_position = position
+	instance.global_basis = basis.orthonormalized()
 
 func _ensure_track_surface_material() -> ShaderMaterial:
 	if _track_surface_material != null:
@@ -6044,15 +7655,24 @@ func _ensure_track_surface_material() -> ShaderMaterial:
 	_track_surface_material.shader = TrackBlendShader
 	_track_surface_material.set_shader_parameter("ballast_albedo", _load_runtime_texture(BallastAlbedoPath))
 	_track_surface_material.set_shader_parameter("ballast_roughness", _load_runtime_texture(BallastRoughnessPath))
+	_track_surface_material.set_shader_parameter("ballast_normal", _load_runtime_texture(BallastNormalPath))
+	_track_surface_material.set_shader_parameter("ballast_ao", _load_runtime_texture(BallastAoPath))
 	_track_surface_material.set_shader_parameter("sleeper_albedo", _load_runtime_texture(SleeperAlbedoPath))
 	_track_surface_material.set_shader_parameter("sleeper_roughness", _load_runtime_texture(SleeperRoughnessPath))
+	_track_surface_material.set_shader_parameter("sleeper_normal", _load_runtime_texture(SleeperNormalPath))
+	_track_surface_material.set_shader_parameter("sleeper_ao", _load_runtime_texture(SleeperAoPath))
 	_track_surface_material.set_shader_parameter("rail_albedo", _load_runtime_texture(RailAlbedoPath))
 	_track_surface_material.set_shader_parameter("rail_roughness", _load_runtime_texture(RailRoughnessPath))
+	_track_surface_material.set_shader_parameter("rail_normal", _load_runtime_texture(RailNormalPath))
+	_track_surface_material.set_shader_parameter("rail_ao", _load_runtime_texture(RailAoPath))
 	_track_surface_material.set_shader_parameter("side_color", Vector3(0.31, 0.29, 0.27))
 	_track_surface_material.set_shader_parameter("paint_rails", 0.0)
 	_track_surface_material.set_shader_parameter("ballast_scale_x", 1.8)
 	_track_surface_material.set_shader_parameter("ballast_scale_y", 8.0)
 	_track_surface_material.set_shader_parameter("sleeper_repeat", 14.0)
+	_track_surface_material.set_shader_parameter("normal_strength", 0.62)
+	_track_surface_material.set_shader_parameter("wet_clearcoat_strength", 0.88)
+	_apply_track_surface_weather_state(0.0, float(_weather_payload.get("surface_wetness", 0.0)))
 	return _track_surface_material
 
 func _ensure_track_rail_material() -> StandardMaterial3D:
@@ -6061,14 +7681,22 @@ func _ensure_track_rail_material() -> StandardMaterial3D:
 	_track_rail_material = StandardMaterial3D.new()
 	_track_rail_material.albedo_texture = _load_runtime_texture(RailAlbedoPath)
 	_track_rail_material.roughness_texture = _load_runtime_texture(RailRoughnessPath)
+	_track_rail_material.normal_enabled = true
+	_track_rail_material.normal_texture = _load_runtime_texture(RailNormalPath)
+	_track_rail_material.normal_scale = 0.55
 	_track_rail_material.albedo_color = Color(0.86, 0.86, 0.84, 1.0)
 	_track_rail_material.roughness = 0.28
 	_track_rail_material.metallic = 0.78
+	_apply_track_surface_weather_state(0.0, float(_weather_payload.get("surface_wetness", 0.0)))
 	return _track_rail_material
 
 func _load_runtime_texture(resource_path: String) -> Texture2D:
 	if resource_path == "":
 		return null
+	if ResourceLoader.exists(resource_path):
+		var imported := load(resource_path)
+		if imported is Texture2D:
+			return imported
 	var absolute_path := ProjectSettings.globalize_path(resource_path)
 	if not FileAccess.file_exists(absolute_path):
 		return null

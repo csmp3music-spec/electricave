@@ -18,6 +18,10 @@ var route_text := "Park Street to Kenmore"
 var control_text := "Controller idle"
 var weather_text := "Weather clear"
 var signal_text := "Signal clear"
+var advisory_text := "Approach clear"
+var advisory_level := "OFF"
+var dispatch_text := "Spacing steady"
+var dispatch_level := "OFF"
 var controller_ratio := 0.0
 var brake_ratio := 0.18
 var service_rating := 78.0
@@ -37,6 +41,8 @@ var _controller_bar: ProgressBar
 var _brake_bar: ProgressBar
 var _service_label: Label
 var _service_bar: ProgressBar
+var _advisory_label: Label
+var _dispatch_label: Label
 var _signal_label: Label
 var _signal_detail_label: Label
 var _red_lamp: Panel
@@ -45,6 +51,8 @@ var _green_lamp: Panel
 var _curve_lamp_panel: Panel
 var _weather_lamp_panel: Panel
 var _curve_label: Label
+var _speed_background_style: StyleBoxFlat
+var _speed_fill_style: StyleBoxFlat
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(560.0, 220.0)
@@ -79,6 +87,10 @@ func set_payload(payload: Dictionary) -> void:
 	control_text = String(payload.get("control_text", control_text))
 	weather_text = String(payload.get("weather_text", weather_text))
 	signal_text = String(payload.get("signal_text", signal_text))
+	advisory_text = String(payload.get("advisory_text", advisory_text))
+	advisory_level = String(payload.get("advisory_level", advisory_level)).to_upper()
+	dispatch_text = String(payload.get("dispatch_text", dispatch_text))
+	dispatch_level = String(payload.get("dispatch_level", dispatch_level)).to_upper()
 	controller_ratio = clampf(float(payload.get("controller_ratio", 0.0)), -1.0, 1.0)
 	brake_ratio = clampf(float(payload.get("brake_ratio", brake_ratio)), 0.0, 1.0)
 	service_rating = clampf(float(payload.get("service_rating", service_rating)), 0.0, 100.0)
@@ -132,7 +144,15 @@ func _build_speed_panel() -> Control:
 	_speed_bar.show_percentage = false
 	_speed_bar.custom_minimum_size = Vector2(0.0, 18.0)
 	_speed_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_progress_style(_speed_bar, Color("a66a3f"), Color("d8c4a1"))
+	_speed_background_style = StyleBoxFlat.new()
+	_speed_background_style.bg_color = Color("d8c4a1")
+	_speed_background_style.set_corner_radius_all(8)
+	_speed_fill_style = StyleBoxFlat.new()
+	_speed_fill_style.bg_color = Color("a66a3f")
+	_speed_fill_style.set_corner_radius_all(8)
+	_speed_bar.add_theme_stylebox_override("background", _speed_background_style)
+	_speed_bar.add_theme_stylebox_override("fill", _speed_fill_style)
+	_speed_bar.add_theme_color_override("font_color", TEXT_DARK)
 	content.add_child(_speed_bar)
 	return panel
 
@@ -169,6 +189,11 @@ func _build_center_panel() -> Control:
 	_control_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_control_label.modulate = TEXT_DARK
 	content.add_child(_control_label)
+
+	_advisory_label = Label.new()
+	_advisory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisory_label.modulate = TEXT_SOFT
+	content.add_child(_advisory_label)
 
 	var controller_title := Label.new()
 	controller_title.text = "Controller"
@@ -212,6 +237,11 @@ func _build_center_panel() -> Control:
 	_weather_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_weather_label.modulate = TEXT_SOFT
 	content.add_child(_weather_label)
+
+	_dispatch_label = Label.new()
+	_dispatch_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_dispatch_label.modulate = TEXT_SOFT
+	content.add_child(_dispatch_label)
 	return panel
 
 func _build_signal_panel() -> Control:
@@ -290,13 +320,21 @@ func _make_lamp(size_value: float = 18.0) -> Panel:
 func _apply_payload() -> void:
 	if _speed_value_label == null:
 		return
+	var speed_level := _speed_level()
 	_speed_value_label.text = "%.0f mph" % speed_mph
 	_speed_meta_label.text = "Target %.0f | Limit %.0f" % [target_speed_mph, speed_limit_mph]
+	_speed_meta_label.modulate = _level_color(speed_level, TEXT_SOFT)
+	_speed_bar.max_value = maxf(50.0, speed_limit_mph + 5.0)
 	_speed_bar.value = minf(speed_mph, _speed_bar.max_value)
+	_speed_fill_style.bg_color = _level_fill_color(speed_level)
 	_title_label.text = line_name
 	_route_label.text = route_text
 	_control_label.text = control_text
+	_advisory_label.text = advisory_text
+	_advisory_label.modulate = _level_color(advisory_level, TEXT_SOFT)
 	_weather_label.text = weather_text
+	_dispatch_label.text = dispatch_text
+	_dispatch_label.modulate = _level_color(dispatch_level, TEXT_SOFT)
 	_controller_bar.value = clampf((controller_ratio + 1.0) * 50.0, 0.0, 100.0)
 	_brake_bar.value = brake_ratio * 100.0
 	_service_label.text = "Service %.0f%%" % service_rating
@@ -360,3 +398,32 @@ func _lamp_color(aspect: String) -> Color:
 		"WET":
 			return Color("5f84a0")
 	return BRASS_DARK
+
+func _speed_level() -> String:
+	if speed_mph > speed_limit_mph + 0.5 or advisory_level == "RED":
+		return "RED"
+	if speed_mph > minf(speed_limit_mph, target_speed_mph + 4.0) or advisory_level == "YELLOW":
+		return "YELLOW"
+	if advisory_level == "GREEN":
+		return "GREEN"
+	return "OFF"
+
+func _level_fill_color(level: String) -> Color:
+	match level:
+		"RED":
+			return Color("b55747")
+		"YELLOW":
+			return Color("c49b45")
+		"GREEN":
+			return Color("5f9d59")
+	return Color("a66a3f")
+
+func _level_color(level: String, fallback: Color) -> Color:
+	match level:
+		"RED":
+			return Color("b44d40")
+		"YELLOW":
+			return Color("8e6f2f")
+		"GREEN":
+			return Color("567f45")
+	return fallback
