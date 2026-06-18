@@ -12,6 +12,7 @@ const PineTwigRoughnessPath := "res://assets/textures/tree_materials/pine_tree_0
 @export var route9_backdrop_path: NodePath
 @export var town_manager_path: NodePath
 @export var corridor_path: NodePath
+@export var weather_path: NodePath
 @export var tree_clearance_to_stop_m := 125.0
 @export var tree_clearance_to_route_m := 26.0
 @export var min_tree_spacing_m := 13.0
@@ -25,6 +26,8 @@ const PineTwigRoughnessPath := "res://assets/textures/tree_materials/pine_tree_0
 var _route9_backdrop: Node
 var _town_manager: Node
 var _corridor: Node
+var _weather: Node
+var _weather_payload := {}
 var _rebuild_queued := false
 var _trunk_material_cache: StandardMaterial3D
 var _foliage_material_cache: StandardMaterial3D
@@ -36,6 +39,10 @@ func _ready() -> void:
 	_resolve_dependencies()
 	if _town_manager != null and _town_manager.has_signal("town_created"):
 		_town_manager.town_created.connect(_queue_rebuild)
+	if _weather != null and _weather.has_signal("weather_changed"):
+		_weather.weather_changed.connect(_on_weather_changed)
+	if _weather != null and _weather.has_method("get_weather_payload"):
+		_weather_payload = _weather.call("get_weather_payload")
 	call_deferred("_rebuild_scenery")
 
 func _queue_rebuild(_arg = null) -> void:
@@ -58,6 +65,10 @@ func _resolve_dependencies() -> void:
 		_corridor = get_node_or_null(corridor_path)
 	if _corridor == null and world_root != null:
 		_corridor = world_root.get_node_or_null("CorridorSeed")
+	if weather_path != NodePath(""):
+		_weather = get_node_or_null(weather_path)
+	if _weather == null and world_root != null:
+		_weather = world_root.get_node_or_null("Weather")
 
 func _rebuild_scenery() -> void:
 	_rebuild_queued = false
@@ -79,6 +90,11 @@ func _rebuild_scenery() -> void:
 	for stop_pos in stop_positions:
 		_scatter_stop_trees(stop_pos, accepted_positions, route_points, stop_positions)
 	_build_tree_multimeshes(accepted_positions)
+	_apply_weather_to_materials()
+
+func _on_weather_changed(payload: Dictionary) -> void:
+	_weather_payload = payload.duplicate(true)
+	_apply_weather_to_materials()
 
 func _route_points() -> PackedVector3Array:
 	if _corridor == null or not is_instance_valid(_corridor):
@@ -205,11 +221,17 @@ func _scatter_riverbank_trees(water_variant: Dictionary, accepted_positions: Pac
 func _scatter_stop_trees(stop_pos: Vector3, accepted_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(abs(stop_pos.x * 0.31 + stop_pos.z * 0.17))
+	var cluster_count := 2 if rng.randf() < 0.68 else 3
+	var cluster_angles: Array[float] = []
+	var base_angle := rng.randf_range(0.0, TAU)
+	for i in range(cluster_count):
+		cluster_angles.append(base_angle + TAU * float(i) / float(cluster_count) + rng.randf_range(-0.38, 0.38))
 	for i in range(stop_tree_count):
 		if accepted_positions.size() >= max_tree_instances:
 			return
-		var angle := rng.randf_range(0.0, TAU)
-		var radius := rng.randf_range(tree_clearance_to_stop_m + 28.0, tree_clearance_to_stop_m + 110.0)
+		var cluster_angle := cluster_angles[rng.randi_range(0, cluster_angles.size() - 1)]
+		var angle := cluster_angle + rng.randf_range(-0.56, 0.56)
+		var radius := rng.randf_range(tree_clearance_to_stop_m + 42.0, tree_clearance_to_stop_m + 168.0)
 		var pos := stop_pos + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		if not _can_place_tree(pos, accepted_positions, route_points, stop_positions):
 			continue
@@ -300,6 +322,7 @@ func _tree_trunk_material() -> StandardMaterial3D:
 	_trunk_material_cache.roughness_texture = roughness
 	_trunk_material_cache.roughness = 0.96
 	_trunk_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_trunk_material_cache.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
 	return _trunk_material_cache
 
 func _tree_foliage_material() -> StandardMaterial3D:
@@ -326,6 +349,7 @@ func _tree_foliage_material() -> StandardMaterial3D:
 	_foliage_material_cache.roughness_texture = roughness
 	_foliage_material_cache.roughness = 0.92
 	_foliage_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_foliage_material_cache.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
 	return _foliage_material_cache
 
 func _tree_broadleaf_material() -> StandardMaterial3D:
@@ -440,16 +464,72 @@ func _can_place_tree(pos: Vector3, accepted_positions: PackedVector3Array, route
 	for other in accepted_positions:
 		if pos.distance_to(other) < min_tree_spacing_m:
 			return false
+	if _position_roll(pos, 0.013) > _tree_density_score(pos, stop_positions):
+		return false
 	return true
 
 func _use_broadleaf_variant(pos: Vector3) -> bool:
 	var probability := mixed_forest_ratio
-	if _route9_backdrop != null and _route9_backdrop.has_method("terrain_context_at"):
-		var context: Dictionary = _route9_backdrop.call("terrain_context_at", pos)
-		probability += float(context.get("shore_factor", 0.0)) * shoreline_broadleaf_bonus
-	var seed := int(absf(pos.x * 0.021 + pos.z * 0.037))
-	var roll := float(seed % 1000) / 1000.0
+	var context := _terrain_context_at(pos)
+	probability += float(context.get("shore_factor", 0.0)) * shoreline_broadleaf_bonus
+	probability += float(context.get("river_factor", 0.0)) * 0.16
+	probability -= clampf(inverse_lerp(3.0, 15.0, _grounded(pos).y), 0.0, 1.0) * 0.12
+	var roll := _position_roll(pos, 0.021)
 	return roll < clampf(probability, 0.14, 0.78)
+
+func _apply_weather_to_materials() -> void:
+	var wetness := clampf(float(_weather_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
+	var storminess := clampf(float(_weather_payload.get("storminess", 0.0)), 0.0, 1.0)
+	var snow_cover := clampf(float(_weather_payload.get("snow_cover", 0.0)), 0.0, 1.0)
+	var ground_frost := clampf(float(_weather_payload.get("ground_frost", 0.0)), 0.0, 1.0)
+	if _trunk_material_cache != null:
+		_trunk_material_cache.albedo_color = Color(1.0, 1.0, 1.0, 1.0).lerp(Color(0.90, 0.92, 0.95, 1.0), snow_cover * 0.18 + ground_frost * 0.10)
+		_trunk_material_cache.roughness = lerpf(0.96, 0.74, wetness * 0.66 + storminess * 0.18)
+	if _foliage_material_cache != null:
+		var conifer_tint := Color(1.0, 1.0, 1.0, 1.0)
+		conifer_tint = conifer_tint.lerp(Color(0.86, 0.90, 0.86, 1.0), wetness * 0.12 + storminess * 0.10)
+		conifer_tint = conifer_tint.lerp(Color(0.80, 0.85, 0.90, 1.0), snow_cover * 0.36 + ground_frost * 0.16)
+		_foliage_material_cache.albedo_color = conifer_tint
+		_foliage_material_cache.backlight = Color(0.22, 0.31, 0.18, 1.0).lerp(Color(0.17, 0.22, 0.20, 1.0), storminess * 0.42).lerp(Color(0.26, 0.30, 0.33, 1.0), snow_cover * 0.18)
+		_foliage_material_cache.roughness = lerpf(0.92, 0.66, wetness * 0.68 + storminess * 0.14)
+	if _broadleaf_foliage_material_cache != null:
+		var broadleaf_tint := Color(0.82, 0.92, 0.77, 1.0)
+		broadleaf_tint = broadleaf_tint.lerp(Color(0.78, 0.84, 0.77, 1.0), wetness * 0.14 + storminess * 0.12)
+		broadleaf_tint = broadleaf_tint.lerp(Color(0.82, 0.86, 0.91, 1.0), snow_cover * 0.34 + ground_frost * 0.18)
+		_broadleaf_foliage_material_cache.albedo_color = broadleaf_tint
+		_broadleaf_foliage_material_cache.backlight = Color(0.29, 0.37, 0.22, 1.0).lerp(Color(0.20, 0.25, 0.22, 1.0), storminess * 0.36).lerp(Color(0.28, 0.31, 0.35, 1.0), snow_cover * 0.18)
+		_broadleaf_foliage_material_cache.roughness = lerpf(0.88, 0.62, wetness * 0.70 + storminess * 0.16)
+
+func _tree_density_score(pos: Vector3, stop_positions: PackedVector3Array) -> float:
+	var context := _terrain_context_at(pos)
+	var shore_factor := clampf(float(context.get("shore_factor", 0.0)), 0.0, 1.0)
+	var river_factor := clampf(float(context.get("river_factor", 0.0)), 0.0, 1.0)
+	var coast_factor := clampf(float(context.get("coast_factor", 0.0)), 0.0, 1.0)
+	var nearest_stop := _nearest_distance(pos, stop_positions)
+	var town_pressure := 1.0 - smoothstep(tree_clearance_to_stop_m + 18.0, tree_clearance_to_stop_m + 210.0, nearest_stop)
+	var elevation_factor := clampf(inverse_lerp(2.0, 14.0, _grounded(pos).y), 0.0, 1.0)
+	var score := 0.50
+	score += shore_factor * 0.16 + river_factor * 0.12 + elevation_factor * 0.08
+	score -= coast_factor * 0.12 + town_pressure * 0.44
+	score += (_position_roll(pos, 0.047) - 0.5) * 0.14
+	return clampf(score, 0.08, 0.96)
+
+func _terrain_context_at(pos: Vector3) -> Dictionary:
+	if _route9_backdrop != null and _route9_backdrop.has_method("terrain_context_at"):
+		return _route9_backdrop.call("terrain_context_at", pos)
+	return {}
+
+func _nearest_distance(pos: Vector3, points: PackedVector3Array) -> float:
+	if points.is_empty():
+		return INF
+	var best := INF
+	for point in points:
+		best = minf(best, pos.distance_to(point))
+	return best
+
+func _position_roll(pos: Vector3, scale: float) -> float:
+	var seed := int(absf(pos.x * scale + pos.z * scale * 1.71))
+	return float(seed % 1000) / 1000.0
 
 func _grounded(pos: Vector3) -> Vector3:
 	var ground_y := 0.0

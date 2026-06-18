@@ -29,6 +29,9 @@ const PlankNormalPath := "res://assets/textures/track_materials/weathered_planks
 const SoilAlbedoPath := "res://assets/textures/terrain_materials/forest_ground_04/forest_ground_04_diff_1k.jpg"
 const SoilRoughnessPath := "res://assets/textures/terrain_materials/forest_ground_04/forest_ground_04_rough_1k.jpg"
 const SoilNormalPath := "res://assets/textures/terrain_materials/forest_ground_04/forest_ground_04_nor_gl_1k.jpg"
+const MudAlbedoPath := "res://assets/textures/terrain_materials/brown_mud_leaves_01/brown_mud_leaves_01_diff_1k.jpg"
+const MudRoughnessPath := "res://assets/textures/terrain_materials/brown_mud_leaves_01/brown_mud_leaves_01_rough_1k.jpg"
+const MudNormalPath := "res://assets/textures/terrain_materials/brown_mud_leaves_01/brown_mud_leaves_01_nor_gl_1k.jpg"
 const BOSTON_CORE_STOPS := [
 	"Park Street",
 	"Boylston",
@@ -82,6 +85,7 @@ signal town_updated(town)
 @export var track_builder_path: NodePath
 @export var world_root_path: NodePath
 @export var passenger_manager_path: NodePath
+@export var weather_path: NodePath
 @export var tick_seconds := 2.0
 @export var max_towns := 150
 @export var walk_radius := 600.0
@@ -114,6 +118,9 @@ signal town_updated(town)
 @export var road_edge_width := 1.15
 @export var road_surface_height := 0.18
 @export var road_edge_height := 0.12
+@export var road_grime_patch_spacing_m := 34.0
+@export var road_grime_patch_width_m := 1.35
+@export var station_crossing_width_m := 2.2
 @export var rural_wall_offset_m := 5.3
 @export var rural_wall_height_m := 0.86
 @export var rural_wall_width_m := 0.62
@@ -134,8 +141,12 @@ var _street_gen = StreetGeneratorScript.new()
 var _street_root: Node3D
 var _terrain_backdrop: Node
 var _passenger_manager: Node
+var _weather: Node
+var _weather_payload := {}
 var _texture_cache: Dictionary = {}
 var _material_cache: Dictionary = {}
+var _material_base_tints: Dictionary = {}
+var _material_base_roughness: Dictionary = {}
 
 @onready var _world_root: Node3D = _resolve_world_root()
 
@@ -151,6 +162,11 @@ func _ready() -> void:
 	add_child(_street_root)
 	_terrain_backdrop = _resolve_terrain_backdrop()
 	_resolve_gameplay_nodes()
+	_resolve_weather()
+	if _weather != null and _weather.has_signal("weather_changed"):
+		_weather.weather_changed.connect(_on_weather_changed)
+	if _weather != null and _weather.has_method("get_weather_payload"):
+		_weather_payload = _weather.call("get_weather_payload")
 	if track_builder_path != NodePath(""):
 		var builder := get_node(track_builder_path)
 		if builder and builder.has_signal("segment_added"):
@@ -261,6 +277,12 @@ func _resolve_gameplay_nodes() -> void:
 		_passenger_manager = get_node_or_null(passenger_manager_path)
 	if _passenger_manager == null:
 		_passenger_manager = get_parent().get_node_or_null("PassengerManager")
+
+func _resolve_weather() -> void:
+	if weather_path != NodePath(""):
+		_weather = get_node_or_null(weather_path)
+	if _weather == null and _world_root != null:
+		_weather = _world_root.get_node_or_null("Weather")
 
 func _service_snapshot_for_stop(stop) -> Dictionary:
 	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
@@ -580,6 +602,12 @@ func _material_for_style(style: String) -> Material:
 			_configure_pbr_material(material, AsphaltAlbedoPath, AsphaltRoughnessPath, AsphaltNormalPath, Color(0.73, 0.71, 0.67, 1.0), Vector3(0.19, 0.19, 0.19), 0.92, 0.78)
 		"road_rural":
 			_configure_pbr_material(material, AsphaltAlbedoPath, AsphaltRoughnessPath, AsphaltNormalPath, Color(0.79, 0.76, 0.71, 1.0), Vector3(0.16, 0.16, 0.16), 0.89, 0.68)
+		"road_patch_asphalt":
+			_configure_pbr_material(material, AsphaltAlbedoPath, AsphaltRoughnessPath, AsphaltNormalPath, Color(0.47, 0.46, 0.43, 1.0), Vector3(0.12, 0.12, 0.12), 0.86, 0.82)
+		"road_grime":
+			_configure_pbr_material(material, MudAlbedoPath, MudRoughnessPath, MudNormalPath, Color(0.46, 0.42, 0.35, 1.0), Vector3(0.13, 0.13, 0.13), 0.98, 0.52)
+		"station_cobble_crossing":
+			_configure_pbr_material(material, CobbleAlbedoPath, CobbleRoughnessPath, CobbleNormalPath, Color(0.70, 0.68, 0.63, 1.0), Vector3(0.18, 0.18, 0.18), 0.96, 0.84)
 		"road_edge_urban":
 			_configure_pbr_material(material, CobbleAlbedoPath, CobbleRoughnessPath, CobbleNormalPath, Color(0.78, 0.75, 0.70, 1.0), Vector3(0.28, 0.28, 0.28), 0.97, 0.72)
 		"road_edge_suburban":
@@ -610,6 +638,8 @@ func _material_for_style(style: String) -> Material:
 			_configure_pbr_material(material, TileAlbedoPath, TileRoughnessPath, TileNormalPath, Color(0.36, 0.31, 0.27, 1.0), Vector3(0.28, 0.28, 0.28), 0.91, 0.76)
 		_:
 			material.albedo_color = _color_for_category(style)
+	_remember_material_baseline(style, material)
+	_apply_weather_to_material(style, material)
 	_material_cache[style] = material
 	return material
 
@@ -623,6 +653,44 @@ func _configure_pbr_material(material: StandardMaterial3D, albedo_path: String, 
 	material.normal_texture = normal_texture
 	material.normal_scale = normal_scale
 	material.uv1_scale = uv_scale
+
+func _remember_material_baseline(style: String, material: StandardMaterial3D) -> void:
+	_material_base_tints[style] = material.albedo_color
+	_material_base_roughness[style] = material.roughness
+
+func _on_weather_changed(payload: Dictionary) -> void:
+	_weather_payload = payload.duplicate(true)
+	_apply_weather_to_cached_materials()
+
+func _apply_weather_to_cached_materials() -> void:
+	for style in _material_cache.keys():
+		var material := _material_cache[style] as StandardMaterial3D
+		if material != null:
+			_apply_weather_to_material(String(style), material)
+
+func _apply_weather_to_material(style: String, material: StandardMaterial3D) -> void:
+	if not _material_base_tints.has(style):
+		return
+	var wetness := clampf(float(_weather_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
+	var storminess := clampf(float(_weather_payload.get("storminess", 0.0)), 0.0, 1.0)
+	var snow_cover := clampf(float(_weather_payload.get("snow_cover", 0.0)), 0.0, 1.0)
+	var ground_frost := clampf(float(_weather_payload.get("ground_frost", 0.0)), 0.0, 1.0)
+	var base_tint: Color = _material_base_tints[style]
+	var base_roughness := float(_material_base_roughness.get(style, material.roughness))
+	var wet_factor := clampf(wetness * 0.72 + storminess * 0.18, 0.0, 1.0)
+	var tint := base_tint
+	var roughness := base_roughness
+	if style.begins_with("road") or style == "station_cobble_crossing" or style == "stone_wall":
+		tint = tint.lerp(Color(0.55, 0.56, 0.54, 1.0), wet_factor * 0.30)
+		tint = tint.lerp(Color(0.84, 0.87, 0.90, 1.0), snow_cover * 0.26 + ground_frost * 0.16)
+		roughness = lerpf(base_roughness, 0.52, wet_factor * 0.72)
+		roughness = lerpf(roughness, 0.68, snow_cover * 0.46 + ground_frost * 0.26)
+	elif style.begins_with("building"):
+		tint = tint.lerp(Color(0.70, 0.72, 0.70, 1.0), wet_factor * 0.13)
+		tint = tint.lerp(Color(0.88, 0.90, 0.92, 1.0), snow_cover * 0.14 + ground_frost * 0.08)
+		roughness = lerpf(base_roughness, 0.70, wet_factor * 0.32)
+	material.albedo_color = tint
+	material.roughness = clampf(roughness, 0.18, 1.0)
 
 func _load_runtime_texture(resource_path: String) -> Texture2D:
 	if resource_path == "":
@@ -750,8 +818,46 @@ func _spawn_street_segment(a: Vector3, b: Vector3, style: String = "suburban") -
 	var edge_material_key := "road_edge_%s" % style
 	_spawn_segment_box(mid + side * shoulder_offset + Vector3(0.0, road_edge_height * 0.5, 0.0), forward, Vector3(edge_width, road_edge_height, length), _material_for_style(edge_material_key))
 	_spawn_segment_box(mid - side * shoulder_offset + Vector3(0.0, road_edge_height * 0.5, 0.0), forward, Vector3(edge_width, road_edge_height, length), _material_for_style(edge_material_key))
+	_spawn_road_surface_detail(a, b, forward, side, mid, length, style, center_width, shoulder_offset)
 	if style == "rural":
 		_spawn_rural_stone_walls(a, b, forward, side, mid, length, shoulder_offset)
+
+func _spawn_road_surface_detail(a: Vector3, b: Vector3, forward: Vector3, side: Vector3, mid: Vector3, length: float, style: String, center_width: float, shoulder_offset: float) -> void:
+	var seed := int(absf(a.x * 0.041 + a.z * 0.067 + b.x * 0.083 + b.z * 0.019))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var detail_y := road_surface_height + 0.026
+	var patch_count := clampi(int(length / maxf(12.0, road_grime_patch_spacing_m)), 1, 12)
+	for i in range(patch_count):
+		if rng.randf() < 0.18:
+			continue
+		var t := (float(i) + rng.randf_range(0.24, 0.76)) / float(patch_count)
+		var along := (t - 0.5) * length
+		var lateral := rng.randf_range(-center_width * 0.28, center_width * 0.28)
+		var patch_len := rng.randf_range(4.0, 10.5)
+		var patch_width := rng.randf_range(road_grime_patch_width_m * 0.65, road_grime_patch_width_m * 1.35)
+		var material_key := "road_patch_asphalt" if rng.randf() < 0.46 else "road_grime"
+		if style == "rural":
+			material_key = "road_grime"
+			patch_width *= 1.28
+		var pos := mid + forward * along + side * lateral + Vector3(0.0, detail_y, 0.0)
+		_spawn_segment_box(pos, forward, Vector3(patch_width, 0.024, patch_len), _material_for_style(material_key))
+	var shoulder_grit_len := length * rng.randf_range(0.28, 0.72)
+	if shoulder_grit_len > 20.0:
+		var shoulder_along := rng.randf_range(-length * 0.18, length * 0.18)
+		var shoulder_width := road_grime_patch_width_m * (1.08 if style == "rural" else 0.74)
+		var shoulder_material := _material_for_style("road_grime")
+		var shoulder_y := road_edge_height + 0.024
+		var grit_offset := shoulder_offset + shoulder_width * 0.45
+		if seed % 2 == 0:
+			_spawn_segment_box(mid + forward * shoulder_along + side * grit_offset + Vector3(0.0, shoulder_y, 0.0), forward, Vector3(shoulder_width, 0.022, shoulder_grit_len), shoulder_material)
+		if seed % 3 != 0:
+			_spawn_segment_box(mid + forward * (shoulder_along * -0.55) - side * grit_offset + Vector3(0.0, shoulder_y, 0.0), forward, Vector3(shoulder_width, 0.022, shoulder_grit_len * rng.randf_range(0.55, 0.95)), shoulder_material)
+	if style != "rural" and length > 34.0 and seed % 3 != 1:
+		var crossing_width := center_width + road_edge_width * 2.0
+		var crossing_len := station_crossing_width_m * rng.randf_range(0.82, 1.18)
+		var crossing_pos := mid + forward * rng.randf_range(-length * 0.18, length * 0.18) + Vector3(0.0, detail_y + 0.004, 0.0)
+		_spawn_segment_box(crossing_pos, forward, Vector3(crossing_width, 0.026, crossing_len), _material_for_style("station_cobble_crossing"))
 
 func _register_occupied(pos: Vector3) -> void:
 	_occupied.append(pos)

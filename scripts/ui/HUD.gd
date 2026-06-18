@@ -232,7 +232,11 @@ var _advisor_header_label: Label
 var _advisor_summary_label: Label
 var _advisor_action_label: Label
 var _advisor_goal_label: Label
+var _advisor_goal_bar: ProgressBar
+var _advisor_contract_label: Label
+var _advisor_contract_bar: ProgressBar
 var _advisor_milestone_label: Label
+var _advisor_milestone_bar: ProgressBar
 var _driver_dashboard_panel: PanelContainer
 var _driver_dashboard: Control
 var _help_window: PanelContainer
@@ -552,10 +556,13 @@ func _style_controls() -> void:
 		_apply_button_style(_manual_control_toggle, wood_dark, brass, wood_light)
 	if _driver_dashboard_panel != null:
 		_driver_dashboard_panel.add_theme_stylebox_override("panel", wood_panel)
-	if _advisor_panel != null:
-		_advisor_panel.add_theme_stylebox_override("panel", header_panel)
-	if _help_window != null:
-		_help_window.add_theme_stylebox_override("panel", wood_panel)
+		if _advisor_panel != null:
+			_advisor_panel.add_theme_stylebox_override("panel", header_panel)
+		for bar in [_advisor_goal_bar, _advisor_contract_bar, _advisor_milestone_bar]:
+			if bar != null:
+				_apply_progress_bar_style(bar, brass, parchment_dark)
+		if _help_window != null:
+			_help_window.add_theme_stylebox_override("panel", wood_panel)
 	if _help_close_button != null:
 		_apply_button_style(_help_close_button, wood_dark, brass, wood_light)
 	_apply_control_tooltips()
@@ -610,6 +617,19 @@ func _apply_tool_button_style(button: Button, bg: Color, border: Color) -> void:
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", normal)
 	button.add_theme_stylebox_override("pressed", normal)
+
+func _apply_progress_bar_style(bar: ProgressBar, fill_color: Color, bg_color: Color) -> void:
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = bg_color
+	bg.border_color = fill_color.darkened(0.25)
+	bg.set_border_width_all(1)
+	bg.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("bg", bg)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("fill", fill)
 
 func _make_signal_lamp(fill: Color) -> StyleBoxFlat:
 	var lamp := StyleBoxFlat.new()
@@ -902,10 +922,11 @@ func _ensure_advisor_panel() -> void:
 		return
 	_advisor_panel = PanelContainer.new()
 	_advisor_panel.name = "AdvisorPanel"
-	_advisor_panel.anchor_left = 0.74
+	_advisor_panel.anchor_left = 0.70
 	_advisor_panel.anchor_top = 0.064
 	_advisor_panel.anchor_right = 0.985
-	_advisor_panel.anchor_bottom = 0.274
+	_advisor_panel.anchor_bottom = 0.334
+	_advisor_panel.custom_minimum_size = Vector2(330.0, 188.0)
 	add_child(_advisor_panel)
 
 	var margin := MarginContainer.new()
@@ -924,27 +945,58 @@ func _ensure_advisor_panel() -> void:
 	_advisor_header_label = Label.new()
 	_advisor_header_label.text = "Dispatcher: waiting for orders"
 	_advisor_header_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisor_header_label.max_lines_visible = 2
+	_advisor_header_label.clip_text = true
 	content.add_child(_advisor_header_label)
 
 	_advisor_summary_label = Label.new()
 	_advisor_summary_label.text = "No network summary yet."
 	_advisor_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisor_summary_label.max_lines_visible = 2
+	_advisor_summary_label.clip_text = true
 	content.add_child(_advisor_summary_label)
 
 	_advisor_action_label = Label.new()
 	_advisor_action_label.text = "Do next: build, run, and watch the network."
 	_advisor_action_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisor_action_label.max_lines_visible = 3
+	_advisor_action_label.clip_text = true
 	content.add_child(_advisor_action_label)
 
 	_advisor_goal_label = Label.new()
 	_advisor_goal_label.text = "Goal: waiting for the first report."
 	_advisor_goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisor_goal_label.max_lines_visible = 2
+	_advisor_goal_label.clip_text = true
 	content.add_child(_advisor_goal_label)
+	_advisor_goal_bar = _make_advisor_progress_bar()
+	content.add_child(_advisor_goal_bar)
+
+	_advisor_contract_label = Label.new()
+	_advisor_contract_label.text = "Contract: none"
+	_advisor_contract_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisor_contract_label.max_lines_visible = 2
+	_advisor_contract_label.clip_text = true
+	content.add_child(_advisor_contract_label)
+	_advisor_contract_bar = _make_advisor_progress_bar()
+	content.add_child(_advisor_contract_bar)
 
 	_advisor_milestone_label = Label.new()
 	_advisor_milestone_label.text = "Next milestone: none yet."
 	_advisor_milestone_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_advisor_milestone_label.max_lines_visible = 2
+	_advisor_milestone_label.clip_text = true
 	content.add_child(_advisor_milestone_label)
+	_advisor_milestone_bar = _make_advisor_progress_bar()
+	content.add_child(_advisor_milestone_bar)
+
+func _make_advisor_progress_bar() -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.custom_minimum_size = Vector2(0.0, 8.0)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.show_percentage = false
+	bar.value = 0.0
+	return bar
 
 func _refresh_line_selector_panel() -> void:
 	if _line_selector_option == null or _corridor == null:
@@ -1045,6 +1097,7 @@ func _help_window_text() -> String:
 		"BUILD TOOLS",
 		"Build presets set platform length, track count, signal spacing, and station headway in one click.",
 		"1 Track, 2 Station, 3 Depot, 4 Signal, 5 Bulldoze. G cycles tools. A toggles autorail.",
+		"Green previews can be built; red previews now explain the exact blocker before you click.",
 		"Q and E rotate depots and stations. [ and ] change platform length or signal spacing.",
 		"",
 		"DRIVING",
@@ -1161,11 +1214,17 @@ func _refresh_timetable_window() -> void:
 	if _timetable_control_label != null:
 		_timetable_control_label.text = _active_line_control_text(segments, depots)
 	var line_summary := _line_operations_summary_text()
+	var station_summary := _station_operations_summary_text()
+	var detail_lines := ""
+	if line_summary != "":
+		detail_lines += "\n%s" % line_summary
+	if station_summary != "":
+		detail_lines += "\n%s" % station_summary
 	_timetable_summary_label.text = "Live cars: %d | Timetable segments: %d | Depots: %d%s" % [
 		int(_corridor.call("get_fleet_size")) if _corridor != null and _corridor.has_method("get_fleet_size") else 0,
 		segments.size(),
 		depots.size(),
-		"\n%s" % line_summary if line_summary != "" else ""
+		detail_lines
 	]
 	_clear_container_children(_timetable_segment_rows)
 	_clear_container_children(_timetable_depot_rows)
@@ -1238,6 +1297,24 @@ func _line_operations_summary_text() -> String:
 		int(display_line.get("suggested_cars", 1)),
 		float(display_line.get("average_headway_min", 0.0)),
 		String(display_line.get("recommendation", "Service stable"))
+	]
+
+func _station_operations_summary_text() -> String:
+	if _passenger_manager == null or not _passenger_manager.has_method("get_station_operations_snapshot"):
+		return ""
+	var station_payload: Variant = _passenger_manager.call("get_station_operations_snapshot", 1)
+	if not (station_payload is Array) or station_payload.is_empty():
+		return ""
+	var station_variant: Variant = station_payload[0]
+	if not (station_variant is Dictionary):
+		return ""
+	var station: Dictionary = station_variant
+	return "Station watch: %s | %d waiting | %.0f rating | %.1f min wait | %s" % [
+		String(station.get("stop_name", "")),
+		int(station.get("waiting", 0)),
+		float(station.get("rating", 75.0)),
+		float(station.get("perceived_wait_min", 0.0)),
+		String(station.get("recommendation", "Maintain service"))
 	]
 
 func _add_timetable_segment_row(segment_variant: Variant) -> void:
@@ -1812,8 +1889,8 @@ func _update_status_panel() -> void:
 			return
 	if _corridor and _corridor.has_method("get_driver_station_status"):
 		var station_payload: Dictionary = _corridor.call("get_driver_station_status")
-		var current_name := String(station_payload.get("current", ""))
-		var next_name := String(station_payload.get("next", ""))
+		var current_name := _hud_trim(String(station_payload.get("current", "")), 24)
+		var next_name := _hud_trim(String(station_payload.get("next", "")), 24)
 		var distance_m := float(station_payload.get("distance_m", -1.0))
 		var current_waiting := int(station_payload.get("current_waiting", 0))
 		var next_waiting := int(station_payload.get("next_waiting", 0))
@@ -1822,7 +1899,7 @@ func _update_status_panel() -> void:
 		var last_boarded := int(station_payload.get("last_boarded", 0))
 		var last_alighted := int(station_payload.get("last_alighted", 0))
 		var last_waiting_after := int(station_payload.get("last_waiting_after", 0))
-		var last_service_station := String(station_payload.get("last_service_station", ""))
+		var last_service_station := _hud_trim(String(station_payload.get("last_service_station", "")), 24)
 		var last_service_age_s := float(station_payload.get("last_service_age_s", 999.0))
 		var last_revenue := float(station_payload.get("last_revenue", 0.0))
 		var needs_slowdown := bool(station_payload.get("needs_slowdown", false))
@@ -1852,8 +1929,8 @@ func _update_status_panel() -> void:
 	if _corridor and _corridor.has_method("get_driver_service_status"):
 		var service_payload: Dictionary = _corridor.call("get_driver_service_status")
 		var rating := float(service_payload.get("rating", 78.0))
-		var line_name := String(service_payload.get("line_name", ""))
-		var last_event := String(service_payload.get("last_event", "Line settling"))
+		var line_name := _hud_trim(String(service_payload.get("line_name", "")), 22)
+		var last_event := _hud_trim(String(service_payload.get("last_event", "Line settling")), 40)
 		var event_age_s := float(service_payload.get("last_event_age_s", 999.0))
 		var headway_target := float(service_payload.get("headway_target_m", 0.0))
 		var headway_ahead := float(service_payload.get("headway_ahead_m", -1.0))
@@ -1910,13 +1987,15 @@ func _update_advisor_panel() -> void:
 			severity_prefix = "[WATCH]"
 		"urgent":
 			severity_prefix = "[URGENT]"
-	_advisor_header_label.text = "%s %s" % [severity_prefix, String(payload.get("headline", "Dispatcher"))]
-	_advisor_summary_label.text = String(payload.get("summary_text", ""))
-	_advisor_action_label.text = "Do next: %s" % String(payload.get("recommendation_text", ""))
-	_advisor_goal_label.text = String(payload.get("goal_text", ""))
+	_advisor_header_label.text = _hud_trim("%s %s" % [severity_prefix, String(payload.get("headline", "Dispatcher"))], 54)
+	_advisor_summary_label.text = _hud_trim(String(payload.get("summary_text", "")), 72)
+	_advisor_action_label.text = "Do next: %s" % _hud_trim(String(payload.get("recommendation_text", "")), 118)
+	_advisor_goal_label.text = _hud_trim(String(payload.get("goal_text", "")), 76)
 	var contract_text := String(payload.get("contract_text", ""))
 	var milestone_text := String(payload.get("milestone_text", ""))
-	_advisor_milestone_label.text = "%s\n%s" % [contract_text, milestone_text] if contract_text != "" else milestone_text
+	if _advisor_contract_label != null:
+		_advisor_contract_label.text = _hud_trim(contract_text, 76)
+	_advisor_milestone_label.text = _hud_trim(milestone_text, 76)
 	var header_color := Color("6f8b52")
 	match severity:
 		"setup":
@@ -1926,6 +2005,12 @@ func _update_advisor_panel() -> void:
 		"urgent":
 			header_color = Color("b34a3f")
 	_advisor_header_label.modulate = header_color
+	if _advisor_goal_bar != null:
+		_advisor_goal_bar.value = clampf(float(payload.get("goal_progress_ratio", 0.0)), 0.0, 1.0) * 100.0
+	if _advisor_contract_bar != null:
+		_advisor_contract_bar.value = clampf(float(payload.get("contract_progress_ratio", 0.0)), 0.0, 1.0) * 100.0
+	if _advisor_milestone_bar != null:
+		_advisor_milestone_bar.value = clampf(float(payload.get("milestone_progress_ratio", 0.0)), 0.0, 1.0) * 100.0
 
 func _update_driver_dashboard() -> void:
 	if _driver_dashboard_panel == null or _driver_dashboard == null:
@@ -1955,6 +2040,7 @@ func _update_build_panel() -> void:
 	var mode := String(payload.get("mode", "Track"))
 	var cash := float(payload.get("cash", 0.0))
 	var preview_cost := float(payload.get("preview_cost", 0.0))
+	var preview_valid := bool(payload.get("preview_valid", false))
 	var frequency := float(payload.get("frequency", 6.0))
 	var autorail_enabled := bool(payload.get("autorail_enabled", false))
 	var has_anchor := bool(payload.get("has_anchor", false))
@@ -1968,7 +2054,9 @@ func _update_build_panel() -> void:
 	elif preview_cost < 0.0:
 		cost_text = "Refund: $%s" % _money_text(absf(preview_cost))
 	var anchor_text := " | Anchor set" if has_anchor else ""
-	build_info_label.text = "Mode: %s | Cash: $%s | %s%s%s" % [
+	var readiness := "READY" if preview_valid else "AIM"
+	build_info_label.text = "Build: %s | Mode: %s | Cash: $%s | %s%s%s" % [
+		readiness,
 		mode,
 		_money_text(cash),
 		cost_text,
@@ -1976,20 +2064,27 @@ func _update_build_panel() -> void:
 		anchor_text
 	]
 	var status := String(payload.get("status", ""))
-	var tool_hint := "Left click to build, right click to cancel. Hotkeys: 1 Track, 2 Station, 3 Depot, 4 Signal, 5 Bulldoze."
+	var last_result := String(payload.get("last_result", ""))
+	var tool_hint := "Left click builds at the green preview. Red preview explains what is blocking it. 1-5 switch tools."
 	match mode:
 		"Track":
-			tool_hint = "A toggles autorail (%s). Click once to set an anchor, click again to extend track." % ("on" if autorail_enabled else "off")
+			tool_hint = "A toggles autorail (%s). Click once for an anchor, click again to build. Keep clicking to extend from the last endpoint." % ("on" if autorail_enabled else "off")
 			if has_anchor:
 				tool_hint = "Anchor locked. Move and click to extend track from the current endpoint."
 		"Station":
-			tool_hint = "[ ] set platform length (%d tiles). Q/E rotate. %d-track station snaps to live track." % [station_length_tiles, station_track_count]
+			tool_hint = "Stations snap to nearby built or seeded track. [ ] length (%d tiles). Q/E rotate. Current layout: %d track%s." % [station_length_tiles, station_track_count, "" if station_track_count == 1 else "s"]
 		"Depot":
-			tool_hint = "Q/E rotate depot frontage before placing. Depot lead snaps to track."
+			tool_hint = "Depots snap to track and add a carhouse asset. Q/E rotates frontage before placing."
 		"Signal":
-			tool_hint = "Click once to start a signal run, click again to finish. [ ] adjust spacing (%.0fm)." % signal_run_spacing_m
-	var camera_hint := "Top-down build view active. Arrow keys or screen edge pan move the map, mouse wheel zooms, Close restores the previous camera."
+			tool_hint = "Click once to start a signal run, click again to finish. [ ] spacing (%.0fm)." % signal_run_spacing_m
+		"Bulldoze":
+			tool_hint = "Click track, stations, depots, or signals to remove them and recover part of the cost."
+	var camera_hint := "Build camera: edge pan or arrow keys, mouse wheel zoom, Esc/right click cancels, Close exits."
 	var hint_text := status if status != "" else tool_hint
+	if last_result != "" and status != "":
+		hint_text = "%s | Last: %s" % [status, last_result]
+	elif last_result != "":
+		hint_text = "%s | %s" % [last_result, tool_hint]
 	if mode in ["Station", "Depot"]:
 		build_hint_label.text = "%s | Rotation %.0f° | %s" % [hint_text, rotation_deg, camera_hint]
 	else:
@@ -2003,36 +2098,42 @@ func _update_build_panel() -> void:
 func _set_build_button_state(button: Button, active: bool) -> void:
 	if button == null:
 		return
-	button.disabled = active
+	button.disabled = false
+	button.modulate = Color(1.0, 0.90, 0.70, 1.0) if active else Color.WHITE
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func _money_text(amount: float) -> String:
 	return String.num(amount, 0)
+
+func _hud_trim(text: String, max_chars: int = 64) -> String:
+	if max_chars <= 4 or text.length() <= max_chars:
+		return text
+	return text.substr(0, max_chars - 3).strip_edges() + "..."
 
 func _update_announcement_banner() -> void:
 	if announcement_strip == null or announcement_text_label == null:
 		return
 	announcement_strip.visible = false
-	if _corridor == null or not _corridor.has_method("get_driver_announcement_status"):
-		pass
-	else:
+	if _corridor != null and _corridor.has_method("get_driver_announcement_status"):
 		var payload: Dictionary = _corridor.call("get_driver_announcement_status")
 		var text := String(payload.get("text", ""))
 		var age_s := float(payload.get("age_s", 999.0))
 		if text != "" and age_s <= 4.5:
-			announcement_text_label.text = text
+			announcement_text_label.text = _hud_trim(text, 112)
 			announcement_strip.visible = true
 			return
-	if _passenger_manager != null and _passenger_manager.has_method("get_network_gameplay_snapshot"):
-		var network_payload: Dictionary = _passenger_manager.call("get_network_gameplay_snapshot")
-		if int(network_payload.get("severe_stop_count", 0)) > 0:
-			var advisory_text := String(network_payload.get("advisory_text", ""))
-			if advisory_text != "":
-				announcement_text_label.text = advisory_text
-				announcement_strip.visible = true
-				return
 	if _economy != null and _economy.has_method("get_gameplay_banner_payload"):
 		var gameplay_payload: Dictionary = _economy.call("get_gameplay_banner_payload")
 		var gameplay_text := String(gameplay_payload.get("text", ""))
 		if gameplay_text != "":
-			announcement_text_label.text = gameplay_text
+			announcement_text_label.text = _hud_trim(gameplay_text, 112)
 			announcement_strip.visible = true
+			return
+	if _passenger_manager != null and _passenger_manager.has_method("get_network_gameplay_snapshot"):
+		var network_payload: Dictionary = _passenger_manager.call("get_network_gameplay_snapshot")
+		if int(network_payload.get("severe_stop_count", 0)) > 0 or int(network_payload.get("urgent_crowding_alarm_count", 0)) > 0:
+			var advisory_text := String(network_payload.get("advisory_text", ""))
+			if advisory_text != "":
+				announcement_text_label.text = _hud_trim(advisory_text, 112)
+				announcement_strip.visible = true
+				return

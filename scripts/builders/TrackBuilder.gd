@@ -34,6 +34,10 @@ signal segment_removed(curve: Curve3D)
 @export var rail_center_offset_m := 0.78
 @export var rail_width := 0.12
 @export var rail_height := 0.2
+@export var rail_joint_spacing := 11.8
+@export var rail_joint_width := 0.18
+@export var ballast_grime_spacing := 18.0
+@export var ballast_grime_width := 1.15
 @export var track_color := Color("4a4a4a")
 @export var roadbed_color := Color("6b5d4d")
 
@@ -43,6 +47,8 @@ var _roadbed_material: StandardMaterial3D
 var _ballast_material: StandardMaterial3D
 var _sleeper_material: StandardMaterial3D
 var _rail_material: StandardMaterial3D
+var _rail_joint_material: StandardMaterial3D
+var _ballast_grime_material: StandardMaterial3D
 var _weather_controller: Node
 var _weather_payload := {}
 var _surface_snow_override := -1.0
@@ -221,6 +227,7 @@ func _render_curve(curve: Curve3D) -> void:
 			rail_instance.position = Vector3(rail_side * rail_center_offset_m, roadbed_height - roadbed_embed_depth + ballast_height + rail_height * 0.44, 0.0)
 			segment_root.add_child(rail_instance)
 
+		_add_track_surface_details(segment_root, length, _segment_detail_seed(a, b))
 		_render_nodes.append(segment_root)
 
 func _add_sleepers(segment_root: Node3D, length: float) -> void:
@@ -235,13 +242,64 @@ func _add_sleepers(segment_root: Node3D, length: float) -> void:
 	sleeper_multimesh.mesh = sleeper_mesh
 	sleeper_multimesh.instance_count = sleeper_count
 	var sleeper_y := roadbed_height - roadbed_embed_depth + ballast_height * 0.74
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(absf(length * 971.0 + sleeper_count * 37.0))
 	for sleeper_index in range(sleeper_count):
 		var sleeper_ratio := (float(sleeper_index) + 0.5) / float(sleeper_count)
 		var sleeper_z := lerpf(-length * 0.5 + sleeper_length, length * 0.5 - sleeper_length, sleeper_ratio)
-		sleeper_multimesh.set_instance_transform(sleeper_index, Transform3D(Basis.IDENTITY, Vector3(0.0, sleeper_y, sleeper_z)))
+		var yaw := rng.randf_range(-0.018, 0.018)
+		var basis := Basis().rotated(Vector3.UP, yaw).scaled(Vector3(
+			rng.randf_range(0.94, 1.08),
+			1.0,
+			rng.randf_range(0.86, 1.14)
+		))
+		sleeper_multimesh.set_instance_transform(sleeper_index, Transform3D(basis, Vector3(0.0, sleeper_y, sleeper_z)))
 	var sleeper_instance := MultiMeshInstance3D.new()
 	sleeper_instance.multimesh = sleeper_multimesh
 	segment_root.add_child(sleeper_instance)
+
+func _add_track_surface_details(segment_root: Node3D, length: float, seed: int) -> void:
+	if segment_root == null or length < 4.0:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var ballast_top_y := roadbed_height - roadbed_embed_depth + ballast_height + 0.024
+	var rail_top_y := roadbed_height - roadbed_embed_depth + ballast_height + rail_height + 0.026
+	var stain_step := maxf(6.0, ballast_grime_spacing)
+	var stain_count := clampi(int(length / stain_step), 0, 18)
+	for i in range(stain_count):
+		if rng.randf() < 0.28:
+			continue
+		var z := lerpf(-length * 0.5 + 2.0, length * 0.5 - 2.0, (float(i) + rng.randf_range(0.22, 0.78)) / float(maxi(1, stain_count)))
+		var stain_mesh := BoxMesh.new()
+		stain_mesh.size = Vector3(
+			rng.randf_range(ballast_grime_width * 0.65, ballast_grime_width * 1.45),
+			0.028,
+			rng.randf_range(1.2, 3.6)
+		)
+		var stain := MeshInstance3D.new()
+		stain.mesh = stain_mesh
+		stain.set_surface_override_material(0, _ensure_ballast_grime_material())
+		stain.position = Vector3(rng.randf_range(-ballast_width * 0.18, ballast_width * 0.18), ballast_top_y, z)
+		stain.rotation.y = rng.randf_range(-0.08, 0.08)
+		segment_root.add_child(stain)
+	var joint_step := maxf(4.0, rail_joint_spacing)
+	var joint_count := clampi(int(length / joint_step), 0, 36)
+	for i in range(joint_count):
+		var z := -length * 0.5 + float(i + 1) * joint_step
+		if z > length * 0.5 - 0.8:
+			break
+		for rail_side in [-1.0, 1.0]:
+			var joint_mesh := BoxMesh.new()
+			joint_mesh.size = Vector3(rail_width * 1.85, 0.035, rail_joint_width)
+			var joint := MeshInstance3D.new()
+			joint.mesh = joint_mesh
+			joint.set_surface_override_material(0, _ensure_rail_joint_material())
+			joint.position = Vector3(rail_side * rail_center_offset_m, rail_top_y, z + rng.randf_range(-0.08, 0.08))
+			segment_root.add_child(joint)
+
+func _segment_detail_seed(a: Vector3, b: Vector3) -> int:
+	return int(absf(a.x * 0.021 + a.z * 0.037 + b.x * 0.049 + b.z * 0.061) * 1000.0) + 101
 
 func _clear_render_nodes() -> void:
 	for node in _render_nodes:
@@ -314,6 +372,33 @@ func _ensure_rail_material() -> StandardMaterial3D:
 	_apply_weather_material_state()
 	return _rail_material
 
+func _ensure_rail_joint_material() -> StandardMaterial3D:
+	if _rail_joint_material != null:
+		return _rail_joint_material
+	_rail_joint_material = StandardMaterial3D.new()
+	_rail_joint_material.albedo_color = Color(0.20, 0.19, 0.18, 1.0)
+	_rail_joint_material.metallic = 0.68
+	_rail_joint_material.roughness = 0.38
+	_rail_joint_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_apply_weather_material_state()
+	return _rail_joint_material
+
+func _ensure_ballast_grime_material() -> StandardMaterial3D:
+	if _ballast_grime_material != null:
+		return _ballast_grime_material
+	_ballast_grime_material = StandardMaterial3D.new()
+	_ballast_grime_material.albedo_texture = _load_runtime_texture(BallastAlbedoPath)
+	_ballast_grime_material.roughness_texture = _load_runtime_texture(BallastRoughnessPath)
+	_ballast_grime_material.normal_enabled = true
+	_ballast_grime_material.normal_texture = _load_runtime_texture(BallastNormalPath)
+	_ballast_grime_material.normal_scale = 0.36
+	_ballast_grime_material.albedo_color = Color(0.32, 0.30, 0.27, 1.0)
+	_ballast_grime_material.roughness = 0.98
+	_ballast_grime_material.uv1_triplanar = true
+	_ballast_grime_material.uv1_scale = Vector3(1.4, 1.4, 1.4)
+	_apply_weather_material_state()
+	return _ballast_grime_material
+
 func _segment_transform(a: Vector3, b: Vector3) -> Transform3D:
 	var midpoint := (a + b) * 0.5
 	var forward := (b - a).normalized()
@@ -362,6 +447,12 @@ func _apply_weather_material_state() -> void:
 	if _rail_material != null:
 		_rail_material.albedo_color = Color(0.82, 0.81, 0.80, 1.0).lerp(Color(0.90, 0.90, 0.90, 1.0), snow_amount * 0.25).darkened(wetness * 0.08)
 		_rail_material.roughness = clampf(0.28 - wetness * 0.10 + snow_amount * 0.04, 0.08, 0.9)
+	if _rail_joint_material != null:
+		_rail_joint_material.albedo_color = Color(0.20, 0.19, 0.18, 1.0).lerp(Color(0.62, 0.63, 0.62, 1.0), snow_amount * 0.28).darkened(wetness * 0.12)
+		_rail_joint_material.roughness = clampf(0.38 - wetness * 0.12 + snow_amount * 0.06, 0.10, 0.9)
+	if _ballast_grime_material != null:
+		_ballast_grime_material.albedo_color = Color(0.32, 0.30, 0.27, 1.0).lerp(Color(0.72, 0.73, 0.72, 1.0), snow_amount * 0.42).darkened(wetness * 0.24)
+		_ballast_grime_material.roughness = clampf(0.98 - wetness * 0.28 - snow_amount * 0.08, 0.18, 1.0)
 
 func _resolve_weather_controller() -> Node:
 	if weather_path != NodePath(""):

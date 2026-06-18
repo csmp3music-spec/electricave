@@ -25,6 +25,8 @@ signal monthly_report_generated(report: Dictionary)
 @export var service_contract_cooldown_s := 45.0
 @export var service_contract_reward_base := 2600.0
 @export var service_contract_penalty_base := 900.0
+@export var crowding_rescue_reward_base := 650.0
+@export var crowding_rescue_reward_per_boarded := 35.0
 var _monthly_income_categories := {}
 var _monthly_expense_categories := {}
 var _last_month_report := {}
@@ -63,9 +65,12 @@ func _process(delta: float) -> void:
 		_service_contract_cooldown_remaining_s = maxf(0.0, _service_contract_cooldown_remaining_s - delta)
 	if _milestone_check_accum >= maxf(milestone_check_interval_s, 0.2):
 		_milestone_check_accum = 0.0
+		if _current_goal.is_empty():
+			_seed_monthly_goal()
 		_check_progression_milestones()
 	if _service_contract_check_accum >= maxf(service_contract_check_interval_s, 0.2):
 		_service_contract_check_accum = 0.0
+		_check_crowding_rescue_reward()
 		_check_service_contract()
 
 func can_afford(amount: float) -> bool:
@@ -141,6 +146,17 @@ func get_service_contract_payload() -> Dictionary:
 	return payload
 
 func get_gameplay_banner_payload() -> Dictionary:
+	var rescue := _crowding_rescue_payload()
+	if not rescue.is_empty():
+		var urgency := "URGENT" if int(rescue.get("urgent_count", 0)) > 0 else "WATCH"
+		return {
+			"text": "%s crowding rescue: %s | %.0fs left | %d waiting" % [
+				urgency,
+				_compact_name(String(rescue.get("stop_name", "")), 22),
+				float(rescue.get("time_left_s", 0.0)),
+				int(rescue.get("waiting", 0))
+			]
+		}
 	if _goal_banner_text != "" and _goal_banner_age_s <= 16.0:
 		return {"text": _goal_banner_text}
 	var contract: Dictionary = get_service_contract_payload()
@@ -158,7 +174,7 @@ func get_gameplay_banner_payload() -> Dictionary:
 		return {}
 	return {
 		"text": "Monthly goal: %s (%s)" % [
-			String(goal.get("short_text", "Keep the road busy")),
+			_compact_text(String(goal.get("short_text", "Keep the road busy")), 48),
 			String(goal.get("progress_text", ""))
 		]
 	}
@@ -179,6 +195,8 @@ func get_advisor_payload() -> Dictionary:
 	var severe_stop_count := int(snapshot.get("severe_stop_count", 0))
 	var worst_stop_name := String(snapshot.get("worst_stop_name", ""))
 	var line_pressure := _line_capacity_pressure_payload()
+	var station_pressure := _station_pressure_payload()
+	var rescue := _crowding_rescue_payload()
 	var recommendation := "Expand toward new riders or tighten headways on the busiest line."
 	var short_recommendation := "Expand or tighten service"
 	var headline := "Network in good order"
@@ -193,6 +211,14 @@ func get_advisor_payload() -> Dictionary:
 		headline = "No depot in service"
 		recommendation = "Build a depot so you can launch, store, and recover trolleys without hunting around the map."
 		short_recommendation = "Build a depot"
+	elif not rescue.is_empty():
+		severity = "urgent"
+		headline = "Crowding rescue active"
+		recommendation = "Serve %s within %.0f seconds to clear the platform and earn a rescue bonus." % [
+			_compact_name(String(rescue.get("stop_name", "the busiest stop")), 24),
+			float(rescue.get("time_left_s", 0.0))
+		]
+		short_recommendation = "Serve %s now" % _compact_name(String(rescue.get("stop_name", "hotspot")), 18)
 	elif severe_stop_count > 0:
 		severity = "urgent"
 		headline = "Relieve crowding now"
@@ -208,6 +234,17 @@ func get_advisor_payload() -> Dictionary:
 		headline = "Service feels unreliable"
 		recommendation = "Keep pickups closer together and avoid long waits until the average stop rating climbs."
 		short_recommendation = "Raise stop rating"
+	elif not station_pressure.is_empty() and float(station_pressure.get("priority_score", 0.0)) >= 0.42:
+		severity = "watch"
+		headline = "Station service needs attention"
+		recommendation = "%s at %s: %d waiting, %.0f rating, %.1f min perceived wait." % [
+			String(station_pressure.get("recommendation", "Improve service")),
+			_compact_name(String(station_pressure.get("stop_name", "a busy stop")), 24),
+			int(station_pressure.get("waiting", 0)),
+			float(station_pressure.get("rating", 0.0)),
+			float(station_pressure.get("perceived_wait_min", 0.0))
+		]
+		short_recommendation = String(station_pressure.get("recommendation", "Improve service"))
 	elif not line_pressure.is_empty() and float(line_pressure.get("pressure", 0.0)) >= 0.26:
 		severity = "watch"
 		headline = "Line capacity is tight"
@@ -304,7 +341,7 @@ func _start_new_month() -> void:
 	_seed_monthly_goal()
 
 func _ensure_reporting_categories() -> void:
-	for category in ["Urban passenger", "Interurban passenger", "Excursion traffic", "Passenger fares", "Capital refunds", "Operating bonus", "Milestone bonus", "Service contract bonus"]:
+	for category in ["Urban passenger", "Interurban passenger", "Excursion traffic", "Passenger fares", "Capital refunds", "Operating bonus", "Milestone bonus", "Service contract bonus", "Crowding rescue bonus"]:
 		_monthly_income_categories[category] = float(_monthly_income_categories.get(category, 0.0))
 	for category in ["Crew wages", "Power & substations", "Track upkeep", "Car maintenance", "Right-of-way leases", "Debt interest", "Capital spend", "Service claims", "Contract damages"]:
 		_monthly_expense_categories[category] = float(_monthly_expense_categories.get(category, 0.0))
@@ -504,17 +541,37 @@ func _operations_tab_payload(report: Dictionary) -> Dictionary:
 	var contract_text := String(contract.get("progress_text", "No active contract"))
 	var contract_ratio := float(contract.get("progress_ratio", 0.0))
 	var line_pressure := _line_capacity_pressure_payload()
+	var station_pressure := _station_pressure_payload()
+	var rescue_pressure := _crowding_rescue_payload()
 	var line_text := "No line pressure"
 	var line_ratio := 1.0
 	if not line_pressure.is_empty():
 		line_text = "%s | %d/%d cars | %.1f min | %s" % [
-			String(line_pressure.get("line_name", "")),
+			_compact_name(String(line_pressure.get("line_name", "")), 18),
 			int(line_pressure.get("fleet_count", 0)),
 			int(line_pressure.get("suggested_cars", 1)),
 			float(line_pressure.get("average_headway_min", 0.0)),
-			String(line_pressure.get("recommendation", "Stable"))
+			_compact_text(String(line_pressure.get("recommendation", "Stable")), 24)
 		]
 		line_ratio = 1.0 - clampf(float(line_pressure.get("pressure", 0.0)), 0.0, 1.0)
+	var station_text := "No station watch"
+	var station_ratio := 1.0 - crowding_value
+	if not station_pressure.is_empty():
+		station_text = "%s | %d wait | %.0f rating | %.1f min | %s" % [
+			_compact_name(String(station_pressure.get("stop_name", "")), 18),
+			int(station_pressure.get("waiting", 0)),
+			float(station_pressure.get("rating", 75.0)),
+			float(station_pressure.get("perceived_wait_min", 0.0)),
+			_compact_text(String(station_pressure.get("recommendation", "Maintain service")), 24)
+		]
+		station_ratio = 1.0 - clampf(float(station_pressure.get("priority_score", 0.0)), 0.0, 1.0)
+	if not rescue_pressure.is_empty():
+		station_text = "RESCUE %s | %.0fs left | %d wait" % [
+			_compact_name(String(rescue_pressure.get("stop_name", "")), 18),
+			float(rescue_pressure.get("time_left_s", 0.0)),
+			int(rescue_pressure.get("waiting", 0))
+		]
+		station_ratio = clampf(float(rescue_pressure.get("time_left_s", 0.0)) / maxf(1.0, float(rescue_pressure.get("alarm_limit_s", 1.0))), 0.0, 1.0)
 	var severity_color := _advisor_severity_color(severity)
 	var severity_value := _advisor_severity_value(severity)
 	return {
@@ -524,13 +581,30 @@ func _operations_tab_payload(report: Dictionary) -> Dictionary:
 			_entry("Current goal", goal_text, goal_ratio, Color("3f8a8a")),
 			_entry("Service contract", contract_text, contract_ratio, Color("8c6a4a")),
 			_entry("Line capacity", line_text, line_ratio, Color("3f8a8a")),
-			_entry("Crowding hot spots", crowding_text, 1.0 - crowding_value, Color("caa76a"))
+			_entry("Station watch", station_text, station_ratio, Color("caa76a"))
 		],
 		"summary": [
 			_entry("Action", String(advisor.get("short_recommendation", "Expand")), severity_value, severity_color),
 			_entry("Next milestone", milestone_text, milestone_ratio, Color("3f8a8a"))
 		]
 	}
+
+func _station_operations_snapshot() -> Array[Dictionary]:
+	if _passenger_manager != null and _passenger_manager.has_method("get_station_operations_snapshot"):
+		var snapshot: Variant = _passenger_manager.call("get_station_operations_snapshot", 5)
+		if snapshot is Array:
+			var stations: Array[Dictionary] = []
+			for station_variant in snapshot:
+				if station_variant is Dictionary:
+					stations.append(station_variant)
+			return stations
+	return []
+
+func _station_pressure_payload() -> Dictionary:
+	var stations := _station_operations_snapshot()
+	if stations.is_empty():
+		return {}
+	return stations[0].duplicate(true)
 
 func _line_operations_snapshot() -> Array[Dictionary]:
 	if _corridor != null and _corridor.has_method("get_line_operations_snapshot"):
@@ -579,42 +653,81 @@ func _seed_monthly_goal() -> void:
 	if stop_count <= 0:
 		_current_goal = {}
 		return
-	var selector: int = abs(_current_period_label.hash()) % 3
-	match selector:
-		0:
-			var target_rating := clampf(round(maxf(68.0, float(snapshot.get("average_rating", 72.0)) + 4.0)), 70.0, 88.0)
-			_current_goal = {
-				"kind": "service_rating",
-				"short_label": "Stop rating",
-				"short_text": "Average stop rating >= %.0f" % target_rating,
-				"description": "Keep pickup intervals tight and platforms under control.",
-				"target": target_rating,
-				"bonus": monthly_goal_bonus_base + float(stop_count) * 90.0,
-				"penalty": monthly_goal_penalty_base + float(stop_count) * 35.0
-			}
-		1:
-			var current_hotspots := int(snapshot.get("overcrowded_stop_count", 0))
-			var target_hotspots := maxi(0, mini(current_hotspots, maxi(1, stop_count / 6)))
-			_current_goal = {
-				"kind": "crowding",
-				"short_label": "Crowding",
-				"short_text": "Overcrowded stops <= %d" % target_hotspots,
-				"description": "Prevent platform buildup at the busiest stations.",
-				"target": target_hotspots,
-				"bonus": monthly_goal_bonus_base + float(stop_count) * 110.0,
-				"penalty": monthly_goal_penalty_base + float(stop_count) * 42.0
-			}
-		_:
-			var reserve_target := maxf(220000.0 + float(stop_count) * 3500.0, cash * 0.92)
-			_current_goal = {
-				"kind": "cash_reserve",
-				"short_label": "Cash reserve",
-				"short_text": "Cash reserve >= %s" % _money_text(reserve_target),
-				"description": "Finish the month with enough cash to extend and maintain service.",
-				"target": reserve_target,
-				"bonus": monthly_goal_bonus_base + float(int(metrics.get("fleet_count", 0))) * 140.0,
-				"penalty": monthly_goal_penalty_base + float(stop_count) * 28.0
-			}
+	var depot_count := int(metrics.get("depot_count", 0))
+	var fleet_count := int(metrics.get("fleet_count", 0))
+	var current_hotspots := int(snapshot.get("overcrowded_stop_count", 0))
+	var severe_stop_count := int(snapshot.get("severe_stop_count", 0))
+	var average_rating := float(snapshot.get("average_rating", 72.0))
+	if depot_count <= 0:
+		_current_goal = {
+			"kind": "depot_ready",
+			"short_label": "Depot",
+			"short_text": "Build 1 depot",
+			"description": "Open a carhouse so dispatcher orders can launch and recover cars.",
+			"target": 1,
+			"bonus": monthly_goal_bonus_base + 1200.0,
+			"penalty": monthly_goal_penalty_base + float(stop_count) * 30.0
+		}
+		return
+	var target_fleet := maxi(1, int(ceil(float(stop_count) / 3.5)))
+	if fleet_count < target_fleet:
+		_current_goal = {
+			"kind": "fleet_coverage",
+			"short_label": "Fleet",
+			"short_text": "Run %d cars" % target_fleet,
+			"description": "Add enough active cars for the number of stops on the road.",
+			"target": target_fleet,
+			"bonus": monthly_goal_bonus_base + float(target_fleet) * 320.0,
+			"penalty": monthly_goal_penalty_base + float(stop_count) * 32.0
+		}
+		return
+	if current_hotspots > 0:
+		var target_hotspots := 0 if severe_stop_count > 0 else maxi(0, mini(current_hotspots - 1, stop_count / 7))
+		_current_goal = {
+			"kind": "crowding",
+			"short_label": "Crowding",
+			"short_text": "Crowded stops <= %d" % target_hotspots,
+			"description": "Prevent platform buildup at the busiest stations.",
+			"target": target_hotspots,
+			"bonus": monthly_goal_bonus_base + float(stop_count) * 120.0 + float(severe_stop_count) * 450.0,
+			"penalty": monthly_goal_penalty_base + float(stop_count) * 44.0
+		}
+		return
+	if average_rating < 80.0:
+		var target_rating := clampf(round(maxf(72.0, average_rating + 4.0)), 74.0, 84.0)
+		_current_goal = {
+			"kind": "service_rating",
+			"short_label": "Stop rating",
+			"short_text": "Average stop rating >= %.0f" % target_rating,
+			"description": "Keep pickup intervals tight and platforms under control.",
+			"target": target_rating,
+			"bonus": monthly_goal_bonus_base + float(stop_count) * 95.0,
+			"penalty": monthly_goal_penalty_base + float(stop_count) * 35.0
+		}
+		return
+	var selector: int = abs(_current_period_label.hash()) % 2
+	if selector == 0:
+		var farebox_target := maxf(monthly_expenses * 0.72, float(stop_count * fleet_count) * 42.0)
+		_current_goal = {
+			"kind": "farebox",
+			"short_label": "Farebox",
+			"short_text": "Earn %s fares" % _money_text(farebox_target),
+			"description": "Keep cars moving with enough riders to cover the operating plan.",
+			"target": farebox_target,
+			"bonus": monthly_goal_bonus_base + float(fleet_count) * 180.0,
+			"penalty": monthly_goal_penalty_base + float(stop_count) * 30.0
+		}
+		return
+	var reserve_target := maxf(220000.0 + float(stop_count) * 3500.0, cash * 0.92)
+	_current_goal = {
+		"kind": "cash_reserve",
+		"short_label": "Cash reserve",
+		"short_text": "Cash reserve >= %s" % _money_text(reserve_target),
+		"description": "Finish the month with enough cash to extend and maintain service.",
+		"target": reserve_target,
+		"bonus": monthly_goal_bonus_base + float(fleet_count) * 140.0,
+		"penalty": monthly_goal_penalty_base + float(stop_count) * 28.0
+	}
 
 func _evaluate_monthly_goal() -> void:
 	if _current_goal.is_empty():
@@ -657,7 +770,33 @@ func _evaluate_goal_progress(goal: Dictionary) -> Dictionary:
 			return {
 				"achieved": value <= target,
 				"progress_ratio": clampf(1.0 - float(maxi(0, value - target)) / range_scale, 0.0, 1.0),
-				"progress_text": "%d / %d hot spots" % [value, target]
+				"progress_text": "%d / %d crowded" % [value, target]
+			}
+		"depot_ready":
+			var metrics := _network_metrics()
+			var value := int(metrics.get("depot_count", 0))
+			var target := int(goal.get("target", 1))
+			return {
+				"achieved": value >= target,
+				"progress_ratio": clampf(float(value) / maxf(float(target), 1.0), 0.0, 1.0),
+				"progress_text": "%d / %d depots" % [value, target]
+			}
+		"fleet_coverage":
+			var metrics := _network_metrics()
+			var value := int(metrics.get("fleet_count", 0))
+			var target := int(goal.get("target", 1))
+			return {
+				"achieved": value >= target,
+				"progress_ratio": clampf(float(value) / maxf(float(target), 1.0), 0.0, 1.0),
+				"progress_text": "%d / %d cars" % [value, target]
+			}
+		"farebox":
+			var value := monthly_revenue
+			var target := float(goal.get("target", 1.0))
+			return {
+				"achieved": value >= target,
+				"progress_ratio": clampf(value / maxf(target, 1.0), 0.0, 1.0),
+				"progress_text": "%s / %s" % [_money_text(value), _money_text(target)]
 			}
 		"cash_reserve":
 			var value := cash
@@ -668,6 +807,43 @@ func _evaluate_goal_progress(goal: Dictionary) -> Dictionary:
 				"progress_text": "%s / %s" % [_money_text(value), _money_text(target)]
 			}
 	return {}
+
+func _crowding_rescue_payload() -> Dictionary:
+	var snapshot := _passenger_snapshot()
+	if int(snapshot.get("crowding_alarm_count", 0)) <= 0:
+		return {}
+	var stop_name := String(snapshot.get("rescue_stop_name", ""))
+	if stop_name == "":
+		return {}
+	var time_left := float(snapshot.get("rescue_time_left_s", 0.0))
+	var alarm_limit := maxf(1.0, float(snapshot.get("rescue_alarm_limit_s", 1.0)))
+	var urgent_count := int(snapshot.get("urgent_crowding_alarm_count", 0))
+	if urgent_count <= 0 and time_left > alarm_limit * 0.67:
+		return {}
+	return {
+		"stop_name": stop_name,
+		"time_left_s": time_left,
+		"alarm_limit_s": alarm_limit,
+		"waiting": int(snapshot.get("rescue_waiting", 0)),
+		"urgent_count": urgent_count,
+		"alarm_count": int(snapshot.get("crowding_alarm_count", 0))
+	}
+
+func _check_crowding_rescue_reward() -> void:
+	_resolve_world_nodes()
+	if _passenger_manager == null or not _passenger_manager.has_method("claim_recent_rescue_event"):
+		return
+	var event: Dictionary = _passenger_manager.call("claim_recent_rescue_event", service_contract_check_interval_s + 3.0)
+	if event.is_empty():
+		return
+	var boarded := int(event.get("boarded", 0))
+	var waiting_before := int(event.get("waiting_before", 0))
+	var reward := crowding_rescue_reward_base + float(boarded) * crowding_rescue_reward_per_boarded + maxf(0.0, float(waiting_before - 14)) * 12.0
+	apply_revenue(reward, "Crowding rescue bonus")
+	_show_gameplay_banner("Crowding rescue cleared: %s (+%s)" % [
+		String(event.get("stop_name", "Platform")),
+		_money_text(reward)
+	])
 
 func _check_service_contract() -> void:
 	_resolve_world_nodes()
@@ -864,13 +1040,13 @@ func _evaluate_service_contract_progress(contract: Dictionary, metrics: Dictiona
 			var target_depots := int(contract.get("target_depots", 1))
 			result["achieved"] = depot_count >= target_depots
 			result["progress_ratio"] = clampf(float(depot_count) / maxf(float(target_depots), 1.0), 0.0, 1.0)
-			result["progress_text"] = "%d / %d depots | %.0fs" % [depot_count, target_depots, time_left]
+			result["progress_text"] = "%d/%d depots | %s" % [depot_count, target_depots, _time_left_text(time_left)]
 		"build_capacity":
 			var fleet_count := int(metrics.get("fleet_count", 0))
 			var target_fleet := int(contract.get("target_fleet", 1))
 			result["achieved"] = fleet_count >= target_fleet
 			result["progress_ratio"] = clampf(float(fleet_count) / maxf(float(target_fleet), 1.0), 0.0, 1.0)
-			result["progress_text"] = "%d / %d cars | %.0fs" % [fleet_count, target_fleet, time_left]
+			result["progress_text"] = "%d/%d cars | %s" % [fleet_count, target_fleet, _time_left_text(time_left)]
 		"relieve_hotspot":
 			var stop_name := String(contract.get("target_stop", ""))
 			var stop_snapshot := {}
@@ -885,7 +1061,7 @@ func _evaluate_service_contract_progress(contract: Dictionary, metrics: Dictiona
 			var rating_ratio := clampf(rating / maxf(target_rating, 1.0), 0.0, 1.0)
 			result["achieved"] = waiting <= target_waiting and rating >= target_rating
 			result["progress_ratio"] = clampf((wait_ratio + rating_ratio) * 0.5, 0.0, 1.0)
-			result["progress_text"] = "%s %d/%d waiting | %.0fs" % [stop_name, waiting, target_waiting, time_left]
+			result["progress_text"] = "%s %d/%d wait | %s" % [_compact_name(stop_name, 16), waiting, target_waiting, _time_left_text(time_left)]
 		"quality_service":
 			var average_rating := float(snapshot.get("average_rating", 75.0))
 			var overcrowded_stop_count := int(snapshot.get("overcrowded_stop_count", 0))
@@ -895,7 +1071,7 @@ func _evaluate_service_contract_progress(contract: Dictionary, metrics: Dictiona
 			var hotspot_ratio := clampf(1.0 - float(maxi(0, overcrowded_stop_count - max_hotspots)) / 4.0, 0.0, 1.0)
 			result["achieved"] = average_rating >= target_rating and overcrowded_stop_count <= max_hotspots
 			result["progress_ratio"] = clampf((rating_ratio + hotspot_ratio) * 0.5, 0.0, 1.0)
-			result["progress_text"] = "%.0f/%.0f rating | %d/%d hot spots | %.0fs" % [average_rating, target_rating, overcrowded_stop_count, max_hotspots, time_left]
+			result["progress_text"] = "%.0f/%.0f rating | %d/%d crowded | %s" % [average_rating, target_rating, overcrowded_stop_count, max_hotspots, _time_left_text(time_left)]
 		"link_service":
 			var origin_stop := String(contract.get("origin_stop", ""))
 			var destination_stop := String(contract.get("destination_stop", ""))
@@ -912,7 +1088,7 @@ func _evaluate_service_contract_progress(contract: Dictionary, metrics: Dictiona
 			result["progress_ratio"] = (0.5 if origin_served else 0.0) + (0.5 if destination_served else 0.0)
 			var origin_text := "done" if origin_served else "start"
 			var destination_text := "done" if destination_served else "target"
-			result["progress_text"] = "%s %s -> %s %s | %.0fs" % [origin_stop, origin_text, destination_stop, destination_text, time_left]
+			result["progress_text"] = "%s %s -> %s %s | %s" % [_compact_name(origin_stop, 12), origin_text, _compact_name(destination_stop, 12), destination_text, _time_left_text(time_left)]
 	return result
 
 func _recent_driver_service_station(max_age_s: float = 8.0) -> String:
@@ -951,6 +1127,7 @@ func _build_milestone_payloads(metrics: Dictionary, snapshot: Dictionary) -> Arr
 	var baseline_track_length_m := float(_baseline_metrics.get("track_length_m", 0.0))
 	var stop_count := int(metrics.get("stop_count", 0))
 	var depot_count := int(metrics.get("depot_count", 0))
+	var fleet_count := int(metrics.get("fleet_count", 0))
 	var track_length_m := float(metrics.get("track_length_m", 0.0))
 	var new_stops := maxi(0, stop_count - baseline_stop_count)
 	var new_depots := maxi(0, depot_count - baseline_depot_count)
@@ -987,6 +1164,18 @@ func _build_milestone_payloads(metrics: Dictionary, snapshot: Dictionary) -> Arr
 		"progress_ratio": clampf(new_track_m / 500.0, 0.0, 1.0),
 		"progress_text": "%.0f / 500m new track" % new_track_m
 	})
+	var target_fleet := maxi(1, int(ceil(float(maxi(stop_count, 1)) / 3.5)))
+	var fleet_ratio := clampf(float(fleet_count) / maxf(float(target_fleet), 1.0), 0.0, 1.0)
+	milestones.append({
+		"id": "balanced_fleet",
+		"label": "Balance the fleet",
+		"short_text": "Run %d cars" % target_fleet,
+		"guidance": "Use Operations to launch enough cars for the stop count before queues become the whole game.",
+		"bonus": 4200.0,
+		"achieved": stop_count >= 2 and fleet_count >= target_fleet,
+		"progress_ratio": fleet_ratio if stop_count >= 2 else 0.0,
+		"progress_text": "%d / %d cars" % [fleet_count, target_fleet]
+	})
 	var service_ratio := clampf(average_rating / 80.0, 0.0, 1.0)
 	var hotspot_ratio := clampf(1.0 - float(maxi(0, overcrowded_stop_count - 1)) / 4.0, 0.0, 1.0)
 	milestones.append({
@@ -1002,12 +1191,30 @@ func _build_milestone_payloads(metrics: Dictionary, snapshot: Dictionary) -> Arr
 	return milestones
 
 func _next_milestone_payload(metrics: Dictionary, snapshot: Dictionary) -> Dictionary:
+	var best := {}
+	var best_score := -INF
 	for milestone_variant in _build_milestone_payloads(metrics, snapshot):
 		var milestone: Dictionary = milestone_variant
 		if _earned_milestones.has(String(milestone.get("id", ""))):
 			continue
-		return milestone
-	return {}
+		var score := _milestone_display_score(milestone, metrics, snapshot)
+		if score > best_score:
+			best_score = score
+			best = milestone
+	return best
+
+func _milestone_display_score(milestone: Dictionary, metrics: Dictionary, snapshot: Dictionary) -> float:
+	var id := String(milestone.get("id", ""))
+	var score := float(milestone.get("progress_ratio", 0.0))
+	if id == "new_depot" and int(metrics.get("depot_count", 0)) <= 0:
+		score += 2.0
+	if id == "new_stop" and int(metrics.get("stop_count", 0)) <= 0:
+		score += 2.0
+	if id == "balanced_fleet" and int(metrics.get("stop_count", 0)) >= 2:
+		score += 0.4
+	if id == "steady_service" and int(snapshot.get("overcrowded_stop_count", 0)) > 0:
+		score += 0.5
+	return score
 
 func _show_gameplay_banner(text: String) -> void:
 	if text == "":
@@ -1036,6 +1243,19 @@ func _advisor_severity_value(severity: String) -> float:
 			return 0.92
 		_:
 			return 0.84
+
+func _compact_name(text: String, max_chars: int = 20) -> String:
+	return _compact_text(text, max_chars)
+
+func _compact_text(text: String, max_chars: int = 40) -> String:
+	if max_chars <= 4 or text.length() <= max_chars:
+		return text
+	return text.substr(0, max_chars - 3).strip_edges() + "..."
+
+func _time_left_text(seconds: float) -> String:
+	if seconds >= 90.0:
+		return "%.1fm" % (seconds / 60.0)
+	return "%.0fs" % seconds
 
 func _entry(label: String, amount: String, value: float, color: Color) -> Dictionary:
 	return {

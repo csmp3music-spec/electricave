@@ -393,6 +393,10 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var automated_station_stop_radius_m := 16.0
 @export var automated_station_slow_speed_mps := 4.8
 @export var automated_station_dwell_seconds := 3.4
+@export var automated_passenger_capacity := 36
+@export var automated_crowding_dwell_bonus_seconds := 1.2
+@export var automated_headway_hold_max_seconds := 5.0
+@export var automated_headway_hold_trigger_ratio := 0.72
 @export var driver_headway_hold_max_seconds := 4.5
 @export var driver_passenger_capacity := 42
 @export var average_fare_per_passenger := 0.10
@@ -401,6 +405,8 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var driver_skip_penalty_base := 3.0
 @export var driver_headway_bonus_good := 1.6
 @export var driver_headway_penalty_bad := 2.4
+@export var driver_crowding_rescue_rating_bonus := 3.2
+@export var driver_crowding_rescue_waiting_threshold := 14
 @export var station_announcement_approach_distance_m := 260.0
 @export var station_announcement_voice := "Samantha"
 @export var station_system_tts_enabled := true
@@ -3987,6 +3993,13 @@ func _driver_stop_advisory_payload(station_payload: Dictionary, speed_mps: float
 func _driver_dispatch_advisory_payload(station_payload: Dictionary, service_payload: Dictionary) -> Dictionary:
 	if bool(station_payload.get("hold_for_headway", false)):
 		return {"level": "YELLOW", "text": "Dispatch hold for headway"}
+	var next_name := String(station_payload.get("next", ""))
+	if next_name != "":
+		var next_snapshot := _stop_service_snapshot_for_map(next_name)
+		if bool(next_snapshot.get("crowding_urgent", false)):
+			return {"level": "RED", "text": "Rescue next stop: %s" % next_name}
+		if bool(next_snapshot.get("crowding_alarm", false)):
+			return {"level": "YELLOW", "text": "Crowding ahead: %s" % next_name}
 	var headway_target_m := float(service_payload.get("headway_target_m", 0.0))
 	var headway_ahead_m := float(service_payload.get("headway_ahead_m", -1.0))
 	var headway_behind_m := float(service_payload.get("headway_behind_m", -1.0))
@@ -4480,11 +4493,19 @@ func _update_automated_trolley(trolley: TrolleyMover, route_stops: Array, delta:
 		return
 	var gap_m := float(next_stop.get("gap_m", INF))
 	var motion_sign := _trolley_motion_direction(trolley)
+	var stop_name := String(next_stop.get("name", ""))
+	var last_auto_stop := String(trolley.get_meta("auto_last_stop", ""))
+	if last_auto_stop != "" and stop_name != last_auto_stop and gap_m > automated_station_stop_radius_m:
+		trolley.set_meta("auto_last_stop", "")
 	if gap_m <= automated_station_stop_radius_m and absf(trolley.speed_mps) <= automated_station_slow_speed_mps + 0.75:
-		trolley.set_meta("auto_dwell_s", automated_station_dwell_seconds)
-		trolley.speed_mps = 0.0
-		trolley.target_speed_mps = 0.0
-		return
+		if stop_name == "" or last_auto_stop != stop_name:
+			var boarded := _service_automated_station(trolley, stop_name)
+			trolley.set_meta("auto_last_boarded", boarded)
+			trolley.set_meta("auto_last_stop", stop_name)
+			trolley.set_meta("auto_dwell_s", _automated_station_dwell_seconds(trolley, next_stop, boarded))
+			trolley.speed_mps = 0.0
+			trolley.target_speed_mps = 0.0
+			return
 	if gap_m <= automated_station_approach_radius_m:
 		var target := automated_station_slow_speed_mps * motion_sign
 		trolley.speed_mps = move_toward(trolley.speed_mps, target, 7.0 * delta)
@@ -4499,6 +4520,46 @@ func _update_automated_trolley(trolley: TrolleyMover, route_stops: Array, delta:
 	var speed_limit := _line_speed_limit_mps(_line_id_for_trolley(trolley))
 	if speed_limit < INF:
 		_enforce_trolley_speed_limit(trolley, speed_limit, delta)
+
+func _automated_station_dwell_seconds(trolley: TrolleyMover, stop_entry: Dictionary, boarded: int) -> float:
+	var stop_name := String(stop_entry.get("name", ""))
+	var dwell := automated_station_dwell_seconds
+	var snapshot := _stop_service_snapshot_for_map(stop_name)
+	var waiting := int(snapshot.get("waiting", 0))
+	var crowding_pressure := clampf(float(snapshot.get("crowding_pressure", 0.0)), 0.0, 1.0)
+	dwell += maxf(crowding_pressure, clampf(float(boarded + waiting) / maxf(1.0, float(automated_passenger_capacity)), 0.0, 1.0)) * automated_crowding_dwell_bonus_seconds
+	if not bool(snapshot.get("crowding_urgent", false)):
+		var line_id := _line_id_for_trolley(trolley)
+		var target := _line_headway_target_m(line_id)
+		var ahead := _nearest_trolley_from_progress(trolley.progress, _trolley_motion_direction(trolley), trolley, line_id)
+		var ahead_gap := float(ahead.get("gap_m", target))
+		if target > 0.0 and ahead_gap < target * automated_headway_hold_trigger_ratio:
+			var bunch_ratio := 1.0 - clampf(ahead_gap / maxf(target * automated_headway_hold_trigger_ratio, 1.0), 0.0, 1.0)
+			dwell += automated_headway_hold_max_seconds * bunch_ratio
+	return clampf(dwell, automated_station_dwell_seconds, automated_station_dwell_seconds + automated_crowding_dwell_bonus_seconds + automated_headway_hold_max_seconds)
+
+func _service_automated_station(trolley: TrolleyMover, stop_name: String) -> int:
+	if stop_name == "":
+		return 0
+	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
+		_resolve_gameplay_dependencies()
+	if _passenger_manager == null or not _passenger_manager.has_method("service_stop_by_name"):
+		return 0
+	var result: Dictionary = _passenger_manager.call("service_stop_by_name", stop_name, automated_passenger_capacity)
+	var boarded := int(result.get("boarded", 0))
+	if boarded > 0 and _economy != null and _economy.has_method("apply_revenue"):
+		_economy.call("apply_revenue", float(boarded) * average_fare_per_passenger * 0.96, _revenue_category_for_station(stop_name))
+	return boarded
+
+func _line_headway_target_m(line_id: String) -> float:
+	var fleet := _line_fleet(line_id)
+	var entry := _service_line_entry(line_id)
+	var path := entry.get("path", null) as Path3D
+	if path != null and path.curve != null and fleet.size() > 0:
+		return maxf(120.0, float(path.curve.get_baked_length()) / float(fleet.size()))
+	if line_id == _driver_line_id:
+		return _route_headway_target_m()
+	return maxf(200.0, signal_block_spacing_m * 1.5)
 
 func _next_route_stop_for_trolley(trolley: TrolleyMover, route_stops: Array) -> Dictionary:
 	if trolley == null or not is_instance_valid(trolley) or route_stops.is_empty():
@@ -4657,6 +4718,7 @@ func _update_driver_station_gameplay(delta: float) -> void:
 func _service_driver_station(station_name: String) -> void:
 	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
 		_resolve_gameplay_dependencies()
+	var station_snapshot_before := _stop_service_snapshot_for_map(station_name)
 	var alighted := _estimate_driver_alighting(station_name)
 	_driver_onboard_passengers = maxi(0, _driver_onboard_passengers - alighted)
 	var headway_score := _score_driver_headway()
@@ -4673,8 +4735,10 @@ func _service_driver_station(station_name: String) -> void:
 		_economy.call("apply_revenue", revenue, _revenue_category_for_station(station_name))
 	var boarding_bonus := minf(2.0, float(boarded) * 0.10)
 	var waiting_penalty := minf(1.8, float(waiting_after) * 0.06)
-	var rating_delta := float(headway_score.get("delta", 0.0)) + boarding_bonus - waiting_penalty
-	_apply_driver_service_rating_delta(rating_delta, String(headway_score.get("message", "Platform served")))
+	var rescue_bonus := _driver_rescue_service_bonus(station_snapshot_before, boarded, waiting_after)
+	var rating_delta := float(headway_score.get("delta", 0.0)) + boarding_bonus + rescue_bonus - waiting_penalty
+	var service_message := _driver_service_event_message(station_name, station_snapshot_before, boarded, waiting_after, String(headway_score.get("message", "Platform served")))
+	_apply_driver_service_rating_delta(rating_delta, service_message)
 	_driver_last_boarded = boarded
 	_driver_last_alighted = alighted
 	_driver_last_waiting_after = waiting_after
@@ -4707,6 +4771,28 @@ func _handle_driver_station_departure(station_name: String) -> void:
 	_driver_service_streak = 0
 	var penalty := driver_skip_penalty_base + minf(4.0, float(waiting) * 0.25)
 	_apply_driver_service_rating_delta(-penalty, "Skipped %s" % station_name)
+
+func _driver_rescue_service_bonus(snapshot: Dictionary, boarded: int, waiting_after: int) -> float:
+	if snapshot.is_empty() or boarded <= 0:
+		return 0.0
+	var waiting_before := int(snapshot.get("waiting", 0))
+	var was_alarm := bool(snapshot.get("crowding_alarm", false)) or waiting_before >= driver_crowding_rescue_waiting_threshold
+	if not was_alarm:
+		return 0.0
+	var urgency := clampf(float(snapshot.get("crowding_pressure", 0.0)), 0.0, 1.0)
+	var boarded_ratio := clampf(float(boarded) / maxf(1.0, float(waiting_before)), 0.0, 1.0)
+	var cleared_pressure := waiting_after < driver_crowding_rescue_waiting_threshold
+	return driver_crowding_rescue_rating_bonus * (0.45 + urgency * 0.35 + boarded_ratio * 0.20 + (0.18 if cleared_pressure else 0.0))
+
+func _driver_service_event_message(station_name: String, snapshot: Dictionary, boarded: int, waiting_after: int, fallback: String) -> String:
+	if snapshot.is_empty() or boarded <= 0:
+		return fallback
+	var waiting_before := int(snapshot.get("waiting", 0))
+	if bool(snapshot.get("crowding_urgent", false)):
+		return "Rescue cleared at %s: %d boarded, %d remain" % [station_name, boarded, waiting_after]
+	if bool(snapshot.get("crowding_alarm", false)) or waiting_before >= driver_crowding_rescue_waiting_threshold:
+		return "Crowding relieved at %s" % station_name
+	return fallback
 
 func _apply_driver_service_rating_delta(delta: float, event_message: String) -> void:
 	_driver_service_rating = clampf(_driver_service_rating + delta, 0.0, 100.0)

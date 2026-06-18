@@ -32,8 +32,11 @@ var _payload := {
 	"closed_lines": {},
 	"flooded_portals": [],
 	"cloud_cover": 0.08,
+	"overcast": 0.08,
+	"mist_amount": 0.0,
 	"surface_wetness": 0.0,
 	"snow_cover": 0.0,
+	"ground_frost": 0.0,
 	"storminess": 0.0,
 	"wind_speed_mps": 0.0,
 	"temperature_c": 14.0,
@@ -222,6 +225,9 @@ func _build_live_payload() -> Dictionary:
 	var surface_wetness := clampf(humidity * 0.28 + precip_probability * 0.72 + storminess * 0.24, 0.0, 1.0)
 	if live_state == "CLEAR":
 		surface_wetness = humidity * 0.18
+	var overcast := clampf(maxf(cloud_cover, storminess * 0.72), 0.0, 1.0)
+	var mist_amount := _mist_amount_for(live_state, humidity, cloud_cover, surface_wetness, wind_speed_mps)
+	var ground_frost := _ground_frost_amount(temperature_c, snow_cover, surface_wetness)
 	var portal_flooding := coastal_flood_alert or hurricane_alert or (live_state == "COASTAL STORM" and rare_storm and intensity >= 0.84)
 	var closed_lines := {}
 	var flooded_portals := []
@@ -242,8 +248,11 @@ func _build_live_payload() -> Dictionary:
 		"closed_lines": closed_lines,
 		"flooded_portals": flooded_portals,
 		"cloud_cover": cloud_cover,
+		"overcast": overcast,
+		"mist_amount": mist_amount,
 		"surface_wetness": surface_wetness,
 		"snow_cover": snow_cover,
+		"ground_frost": ground_frost,
 		"storminess": storminess,
 		"wind_speed_mps": wind_speed_mps,
 		"temperature_c": temperature_c,
@@ -279,10 +288,16 @@ func _resample_weather(calendar_payload: Dictionary) -> void:
 		elif base_noise > 0.42:
 			state = "RAIN"
 			intensity = 0.25 + intensity_noise * 0.45
+		elif base_noise > 0.24:
+			state = "CLOUDY"
+			intensity = 0.12 + intensity_noise * 0.16
 	elif month in [4, 5, 10, 11]:
 		if base_noise > 0.68:
 			state = "RAIN"
 			intensity = 0.35 + intensity_noise * 0.55
+		elif base_noise > 0.44:
+			state = "CLOUDY"
+			intensity = 0.14 + intensity_noise * 0.16
 	elif month in [6, 7, 8, 9] and storm_noise > 1.0 - rare_coastal_storm_chance:
 		state = "COASTAL STORM"
 		intensity = 0.82 + intensity_noise * 0.18
@@ -290,8 +305,20 @@ func _resample_weather(calendar_payload: Dictionary) -> void:
 	elif base_noise > 0.74:
 		state = "RAIN"
 		intensity = 0.25 + intensity_noise * 0.5
+	elif base_noise > 0.48:
+		state = "CLOUDY"
+		intensity = 0.10 + intensity_noise * 0.16
+	elif base_noise > 0.30 and intensity_noise > 0.66:
+		state = "MIST"
+		intensity = 0.10 + intensity_noise * 0.12
 	var cloud_cover := clampf(0.10 + intensity * 0.82 + (0.08 if state == "CLEAR" and base_noise > 0.36 else 0.0), 0.0, 1.0)
+	cloud_cover = maxf(cloud_cover, 0.54 if state == "CLOUDY" else 0.0)
+	cloud_cover = maxf(cloud_cover, 0.66 if state == "MIST" else 0.0)
 	var surface_wetness := 0.0 if state == "CLEAR" else clampf(0.24 + intensity * 0.72, 0.0, 1.0)
+	if state == "CLOUDY":
+		surface_wetness = clampf(0.08 + intensity * 0.16, 0.0, 1.0)
+	elif state == "MIST":
+		surface_wetness = clampf(0.14 + intensity * 0.24, 0.0, 1.0)
 	var snow_cover := clampf((0.22 + intensity * 0.7) if state == "SNOW" else 0.0, 0.0, 1.0)
 	var portal_flooding := state in ["COASTAL STORM", "HURRICANE"]
 	var closed_lines := {}
@@ -306,6 +333,30 @@ func _resample_weather(calendar_payload: Dictionary) -> void:
 		closed_lines["atlantic"] = "Atlantic Avenue Elevated disabled by 1938 hurricane damage"
 		flooded_portals.append({"line_id": "blue", "name": "North Shore seawall washout and tunnel damage"})
 		flooded_portals.append({"line_id": "atlantic", "name": "Atlantic Avenue structural storm damage"})
+	var temperature_c := _seasonal_temperature_c(month, intensity_noise)
+	if state == "SNOW":
+		temperature_c = minf(temperature_c, -0.6 + intensity_noise * 1.2)
+	elif state == "RAIN" and month in [12, 1, 2, 3]:
+		temperature_c = maxf(temperature_c, 2.4)
+	elif state == "MIST":
+		temperature_c = minf(temperature_c, 6.0 + intensity_noise * 3.0)
+	var humidity := clampf(
+		0.38 +
+		(0.08 if month in [4, 5, 10, 11] else 0.0) +
+		(0.06 if month in [6, 7, 8, 9] else 0.0) +
+		intensity * 0.5 +
+		(0.12 if state in ["CLOUDY", "MIST"] else 0.0),
+		0.0,
+		1.0
+	)
+	var wind_speed_mps := lerpf(1.6, 22.0, intensity if rare_storm else intensity * 0.55)
+	if state == "CLOUDY":
+		wind_speed_mps = lerpf(1.8, 6.8, intensity_noise)
+	elif state == "MIST":
+		wind_speed_mps = lerpf(0.4, 2.1, intensity_noise)
+	var overcast := clampf(maxf(cloud_cover, intensity * 0.62 if state in ["CLOUDY", "MIST"] else 0.0), 0.0, 1.0)
+	var mist_amount := _mist_amount_for(state, humidity, cloud_cover, surface_wetness, wind_speed_mps)
+	var ground_frost := _ground_frost_amount(temperature_c, snow_cover, surface_wetness)
 	_payload = {
 		"state": state,
 		"intensity": intensity,
@@ -318,12 +369,15 @@ func _resample_weather(calendar_payload: Dictionary) -> void:
 		"closed_lines": closed_lines,
 		"flooded_portals": flooded_portals,
 		"cloud_cover": cloud_cover,
+		"overcast": overcast,
+		"mist_amount": mist_amount,
 		"surface_wetness": surface_wetness,
 		"snow_cover": snow_cover,
+		"ground_frost": ground_frost,
 		"storminess": intensity if state in ["COASTAL STORM", "HURRICANE"] else 0.0,
-		"wind_speed_mps": lerpf(2.0, 22.0, intensity if rare_storm else intensity * 0.55),
-		"temperature_c": 8.0 if month in [12, 1, 2, 3] else 18.0,
-		"humidity": clampf(0.38 + intensity * 0.5, 0.0, 1.0),
+		"wind_speed_mps": wind_speed_mps,
+		"temperature_c": temperature_c,
+		"humidity": humidity,
 		"alert_names": [],
 		"source": "simulated"
 	}
@@ -348,6 +402,10 @@ func _hud_text_for_state(state: String, intensity: float, portal_flooding: bool,
 			return "Weather: Snow %.0f%%%s" % [int(round(intensity * 100.0)), suffix]
 		"RAIN":
 			return "Weather: Rain %.0f%%%s" % [int(round(intensity * 100.0)), suffix]
+		"CLOUDY":
+			return "Weather: Overcast%s" % suffix
+		"MIST":
+			return "Weather: Mist%s" % suffix
 		"COASTAL STORM":
 			return "Weather: Coastal storm%s" % suffix
 		"HURRICANE":
@@ -363,6 +421,7 @@ func _apply_environment_weather() -> void:
 	var cloud_cover := float(_payload.get("cloud_cover", 0.0))
 	var wetness := clampf(float(_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
 	var humidity := clampf(float(_payload.get("humidity", 0.45)), 0.0, 1.0)
+	var mist_amount := clampf(float(_payload.get("mist_amount", 0.0)), 0.0, 1.0)
 	var storminess := clampf(float(_payload.get("storminess", 0.0)), 0.0, 1.0)
 	var base_density := 0.0012 + humidity * 0.0018 + cloud_cover * 0.0014
 	var volumetric_density := 0.00055 + humidity * 0.0014 + cloud_cover * 0.0009
@@ -393,6 +452,16 @@ func _apply_environment_weather() -> void:
 		height_density = 0.07
 		sun_scatter = 0.14
 		env.background_color = env.background_color.lerp(Color(0.44, 0.48, 0.56, 1.0), 0.28)
+	elif state == "MIST":
+		base_density = 0.010 + mist_amount * 0.010 + humidity * 0.004
+		volumetric_density = 0.008 + mist_amount * 0.006
+		fog_color = Color(0.70, 0.74, 0.79, 1.0)
+		fog_depth_begin = 55.0
+		fog_depth_end = 900.0
+		aerial_perspective = 0.52
+		height_density = 0.12
+		sun_scatter = 0.22
+		env.background_color = env.background_color.lerp(Color(0.58, 0.62, 0.68, 1.0), 0.24)
 	elif state == "COASTAL STORM":
 		base_density = 0.020 + intensity * 0.01
 		volumetric_density = 0.015 + intensity * 0.009
@@ -413,15 +482,15 @@ func _apply_environment_weather() -> void:
 		height_density = 0.16
 		sun_scatter = 0.05
 		env.background_color = env.background_color.lerp(Color(0.16, 0.18, 0.23, 1.0), 0.58)
-	elif cloud_cover > 0.42:
-		base_density = 0.004 + cloud_cover * 0.004
-		volumetric_density = 0.0015 + cloud_cover * 0.002
+	elif state == "CLOUDY" or cloud_cover > 0.42:
+		base_density = 0.004 + cloud_cover * 0.004 + mist_amount * 0.0015
+		volumetric_density = 0.0015 + cloud_cover * 0.002 + mist_amount * 0.0025
 		fog_color = Color(0.63, 0.68, 0.74, 1.0)
 		fog_depth_begin = 120.0
-		fog_depth_end = 2200.0
-		aerial_perspective = 0.31 + cloud_cover * 0.12
-		height_density = 0.04
-		sun_scatter = 0.26
+		fog_depth_end = lerpf(2000.0, 1400.0, mist_amount)
+		aerial_perspective = 0.31 + cloud_cover * 0.12 + mist_amount * 0.10
+		height_density = 0.04 + mist_amount * 0.03
+		sun_scatter = lerpf(0.26, 0.18, mist_amount)
 	else:
 		base_density = maxf(base_density, 0.001)
 		volumetric_density = maxf(volumetric_density, 0.00045)
@@ -542,6 +611,8 @@ func _live_state_from_terms(weather_text: String, temperature_c: float, alert_na
 		return "COASTAL STORM"
 	if _contains_any(combined, PackedStringArray(["snow", "flurries", "sleet", "ice pellets", "wintry mix", "blizzard"])):
 		return "SNOW"
+	if _contains_any(combined, PackedStringArray(["fog", "mist", "haze"])) and not _contains_any(combined, PackedStringArray(["rain", "showers", "drizzle"])):
+		return "MIST"
 	if _contains_any(combined, PackedStringArray(["rain", "showers", "drizzle", "mist", "sprinkles"])) and temperature_c > -3.5:
 		return "RAIN"
 	if _contains_any(combined, PackedStringArray(["cloudy", "overcast", "mostly cloudy", "partly cloudy"])):
@@ -576,6 +647,38 @@ func _daily_noise(year: int, month: int, day: int, salt: String) -> float:
 	var key := "%d-%d-%d-%s" % [year, month, day, salt]
 	var hash_value: int = abs(key.hash()) % 10000
 	return float(hash_value) / 9999.0
+
+func _mist_amount_for(state: String, humidity: float, cloud_cover: float, surface_wetness: float, wind_speed_mps: float) -> float:
+	var calm_factor := 1.0 - clampf(wind_speed_mps / 9.0, 0.0, 1.0)
+	var amount := humidity * 0.42 + cloud_cover * 0.22 + surface_wetness * 0.24 + calm_factor * 0.26
+	if state == "MIST":
+		amount = maxf(amount, 0.72)
+	elif state in ["RAIN", "SNOW"]:
+		amount *= 0.62
+	elif state in ["COASTAL STORM", "HURRICANE"]:
+		amount *= 0.34
+	return clampf(amount, 0.0, 1.0)
+
+func _ground_frost_amount(temperature_c: float, snow_cover: float, surface_wetness: float) -> float:
+	if snow_cover > 0.08:
+		return 0.0
+	var cold_factor := clampf((4.0 - temperature_c) / 8.0, 0.0, 1.0)
+	return clampf(cold_factor * (0.35 + surface_wetness * 0.55), 0.0, 1.0)
+
+func _seasonal_temperature_c(month: int, noise: float) -> float:
+	match month:
+		12, 1, 2:
+			return lerpf(-2.5, 6.0, noise)
+		3, 4, 11:
+			return lerpf(2.0, 13.0, noise)
+		5, 10:
+			return lerpf(8.0, 18.0, noise)
+		6, 7, 8:
+			return lerpf(17.0, 28.0, noise)
+		9:
+			return lerpf(13.0, 24.0, noise)
+		_:
+			return lerpf(8.0, 18.0, noise)
 
 func _resolve_node(path: NodePath) -> Node:
 	if path == NodePath(""):

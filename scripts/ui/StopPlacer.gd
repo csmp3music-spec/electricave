@@ -21,7 +21,7 @@ enum ToolMode {
 @export var max_frequency := 12.0
 @export var frequency_step := 1.0
 @export var tool_mode: ToolMode = ToolMode.TRACK
-@export var snap_radius := 28.0
+@export var snap_radius := 36.0
 @export var min_track_length := 18.0
 @export var preview_height := 0.18
 @export var track_preview_width := 4.4
@@ -32,9 +32,9 @@ enum ToolMode {
 @export var signal_cost := 3500.0
 @export var bulldoze_refund_ratio := 0.35
 @export var bulldoze_radius := 26.0
-@export var station_spacing_m := 110.0
-@export var depot_spacing_m := 120.0
-@export var signal_spacing_m := 70.0
+@export var station_spacing_m := 72.0
+@export var depot_spacing_m := 86.0
+@export var signal_spacing_m := 36.0
 @export var autorail_enabled := true
 @export var asset_rotation_step_deg := 90.0
 @export var asset_rotation_deg := 0.0
@@ -44,9 +44,9 @@ enum ToolMode {
 @export var station_platform_width_m := 4.8
 @export var station_track_spacing_m := 5.0
 @export var signal_run_spacing_m := 70.0
-@export var station_track_snap_radius := 18.0
-@export var depot_track_snap_radius := 24.0
-@export var signal_track_snap_radius := 12.0
+@export var station_track_snap_radius := 42.0
+@export var depot_track_snap_radius := 48.0
+@export var signal_track_snap_radius := 30.0
 @export var max_station_grade_delta_m := 0.72
 @export var max_depot_grade_delta_m := 0.95
 @export var max_signal_grade_delta_m := 1.15
@@ -72,6 +72,7 @@ var _preview_cost := 0.0
 var _preview_valid := false
 var _preview_message := ""
 var _preview_target: Variant = null
+var _last_build_result := ""
 
 func _ready() -> void:
 	if town_manager_path != NodePath(""):
@@ -181,6 +182,7 @@ func set_active(value: bool) -> void:
 	if not active:
 		_anchor_point = null
 		_preview_target = null
+		_last_build_result = ""
 	_preview_cost = 0.0
 	_preview_valid = false
 	_preview_message = ""
@@ -188,11 +190,14 @@ func set_active(value: bool) -> void:
 	_emit_tool_state()
 
 func set_tool_mode(mode: ToolMode, activate_tool := true) -> void:
+	var changed_mode := tool_mode != mode
 	tool_mode = mode
 	if activate_tool:
 		active = true
 	if tool_mode != ToolMode.TRACK and tool_mode != ToolMode.SIGNAL:
 		_anchor_point = null
+	if changed_mode:
+		_last_build_result = ""
 	_update_preview()
 	_emit_tool_state()
 
@@ -323,6 +328,7 @@ func get_tycoon_build_state() -> Dictionary:
 		"preview_cost": _preview_cost,
 		"preview_valid": _preview_valid,
 		"status": _preview_message,
+		"last_result": _last_build_result,
 		"has_anchor": _anchor_point is Vector3,
 		"autorail_enabled": autorail_enabled,
 		"rotation_deg": asset_rotation_deg,
@@ -392,13 +398,16 @@ func get_manual_depots() -> Array[Dictionary]:
 
 func _handle_track_click(screen_pos: Vector2) -> void:
 	if _track_builder == null:
+		_set_build_result("Track builder unavailable.")
 		return
 	var world_pos: Variant = _mouse_world_point(screen_pos)
 	if world_pos == null:
+		_set_build_result("Aim at the ground to start building track.")
 		return
 	var snapped := _snap_world_point(world_pos, true)
 	if _anchor_point == null:
 		_anchor_point = snapped
+		_set_build_result("Track anchor set. Click a second point to build.")
 		_update_preview()
 		_emit_tool_state()
 		return
@@ -407,28 +416,43 @@ func _handle_track_click(screen_pos: Vector2) -> void:
 	var length := _polyline_length(points)
 	var cost := _track_cost(length)
 	if length < min_track_length:
+		_set_build_result("Track is too short: %.0fm built, %.0fm required." % [length, min_track_length])
+		_update_preview()
 		return
 	if not _track_builder.can_place_segment(points):
+		_set_build_result(_track_block_reason(points))
+		_update_preview()
 		return
 	if not _try_spend(cost):
+		_set_build_result(_funds_block_reason(cost))
+		_update_preview()
 		return
 	var curve = _track_builder.add_segment(points)
 	if curve != null:
 		_anchor_point = snapped
+		_set_build_result("Built %.0fm of track. Click again to continue from the endpoint." % length)
+	else:
+		_set_build_result("Track could not be built here.")
 	_update_preview()
 	_emit_tool_state()
 
 func _place_station_at_mouse(screen_pos: Vector2) -> void:
 	if _town_manager == null:
+		_set_build_result("Town manager unavailable; stations cannot be registered.")
 		return
 	var pos: Variant = _mouse_snapped_point(screen_pos)
 	if pos == null:
+		_set_build_result("Aim at the ground beside existing track.")
 		return
 	pos = _aligned_network_position(pos, station_track_snap_radius)
 	if not _can_place_station_at(pos):
+		_set_build_result(_placement_block_reason(pos, "station", _station_build_cost()))
+		_update_preview()
 		return
 	var build_cost := _station_build_cost()
 	if not _try_spend(build_cost):
+		_set_build_result(_funds_block_reason(build_cost))
+		_update_preview()
 		return
 	var forward := _placement_forward(pos)
 	var stop = _town_manager.call("AddTransitStop", pos, frequency, "", "station")
@@ -437,40 +461,56 @@ func _place_station_at_mouse(screen_pos: Vector2) -> void:
 		stop_id = String(stop.get("stop_id"))
 	var station_node := _build_station_node(pos, forward, stop_id, build_cost)
 	_placed_root.add_child(station_node)
+	var station_label := " %s" % stop_id if stop_id != "" else ""
+	_set_build_result("Built station%s. Passengers and town growth now recognize it." % station_label)
 	_update_preview()
 
 func _place_depot_at_mouse(screen_pos: Vector2) -> void:
 	var pos: Variant = _mouse_snapped_point(screen_pos)
 	if pos == null:
+		_set_build_result("Aim at the ground beside existing track.")
 		return
 	pos = _aligned_network_position(pos, depot_track_snap_radius)
 	if not _can_place_depot_at(pos):
+		_set_build_result(_placement_block_reason(pos, "depot", depot_cost))
+		_update_preview()
 		return
 	if not _try_spend(depot_cost):
+		_set_build_result(_funds_block_reason(depot_cost))
+		_update_preview()
 		return
 	var forward := _placement_forward(pos)
 	var depot := _build_depot_node(pos, forward)
 	_placed_root.add_child(depot)
+	_set_build_result("Built depot. Fleet upkeep and service capacity can use this carhouse.")
 	_update_preview()
 
 func _place_signal_at_mouse(screen_pos: Vector2) -> void:
 	var pos: Variant = _mouse_snapped_point(screen_pos)
 	if pos == null:
+		_set_build_result("Aim at track to start a signal run.")
 		return
 	pos = _aligned_network_position(pos, signal_track_snap_radius)
 	if _anchor_point == null:
 		if not _can_place_signal_at(pos):
+			_set_build_result(_placement_block_reason(pos, "signal", signal_cost))
+			_update_preview()
 			return
 		_anchor_point = pos
+		_set_build_result("Signal run anchor set. Click the end point to place posts.")
 		_update_preview()
 		_emit_tool_state()
 		return
 	var anchor: Vector3 = _anchor_point
 	var run := _build_signal_run(anchor, pos)
 	if run.is_empty():
+		_set_build_result("Signal run must stay close to built or seeded track and respect spacing.")
+		_update_preview()
 		return
 	var cost := signal_cost * float(run.size())
 	if not _try_spend(cost):
+		_set_build_result(_funds_block_reason(cost))
+		_update_preview()
 		return
 	for entry in run:
 		var signal_pos: Vector3 = entry.get("position", pos)
@@ -478,26 +518,33 @@ func _place_signal_at_mouse(screen_pos: Vector2) -> void:
 		var signal_node := _build_signal_node(signal_pos, forward)
 		_placed_root.add_child(signal_node)
 	_anchor_point = pos
+	_set_build_result("Placed %d signal post%s." % [run.size(), "" if run.size() == 1 else "s"])
 	_update_preview()
 	_emit_tool_state()
 
 func _bulldoze_at_mouse(screen_pos: Vector2) -> void:
 	var pos: Variant = _mouse_snapped_point(screen_pos)
 	if pos == null:
+		_set_build_result("Aim at track, station, depot, or signal to bulldoze.")
 		return
 	var target := _find_bulldoze_target(pos)
 	if target.is_empty():
+		_set_build_result("Nothing removable within %.0fm." % bulldoze_radius)
+		_update_preview()
 		return
+	var result_text := ""
 	match String(target.get("kind", "")):
 		"track":
 			var removed: Dictionary = _track_builder.remove_segment_near(pos, bulldoze_radius)
 			var removed_length := float(removed.get("length", 0.0))
 			_apply_refund(_track_cost(removed_length) * bulldoze_refund_ratio)
+			result_text = "Bulldozed %.0fm of track." % removed_length
 		"stop":
 			var stop = target.get("stop")
 			if stop != null and _town_manager != null:
 				_town_manager.call("RemoveTransitStop", String(stop.stop_id))
 				_apply_refund(station_cost * bulldoze_refund_ratio)
+				result_text = "Bulldozed stop %s." % String(stop.stop_id)
 		"placed":
 			var node := target.get("node") as Node3D
 			if node != null and is_instance_valid(node):
@@ -505,7 +552,10 @@ func _bulldoze_at_mouse(screen_pos: Vector2) -> void:
 				if stop_id != "" and _town_manager != null:
 					_town_manager.call("RemoveTransitStop", stop_id)
 				_apply_refund(float(node.get_meta("build_cost", 0.0)) * bulldoze_refund_ratio)
+				result_text = "Bulldozed %s." % String(node.get_meta("build_kind", "asset")).capitalize()
 				node.queue_free()
+	if result_text != "":
+		_set_build_result(result_text)
 	_update_preview()
 	_emit_tool_state()
 
@@ -707,13 +757,16 @@ func _update_track_preview(snapped: Vector3) -> void:
 	_preview_cost = _track_cost(length)
 	var valid: bool = length >= min_track_length and _track_builder != null and _track_builder.can_place_segment(points) and _can_afford(_preview_cost)
 	_preview_valid = valid
-	_preview_message = "%s track %.0fm" % ["Autorail" if autorail_enabled else "Direct", length] if valid else "Track too short, too steep, or unaffordable"
+	_preview_message = "%s track %.0fm" % ["Autorail" if autorail_enabled else "Direct", length] if valid else _track_preview_block_reason(points, length, _preview_cost)
 	_apply_polyline_preview(points, valid)
 
 func _update_fixed_asset_preview(pos: Vector3, cost: float, size: Vector3, valid: bool, label: String) -> void:
 	_preview_cost = cost
 	_preview_valid = valid and _can_afford(cost)
-	_preview_message = "%s ready" % label if _preview_valid else "%s needs track access, spacing, and funds" % label
+	if _preview_valid:
+		_preview_message = "%s ready" % label
+	else:
+		_preview_message = _placement_block_reason(pos, label.to_lower(), cost)
 	_set_marker_size(size)
 	_preview_marker.global_position = pos + Vector3(0.0, size.y * 0.5 + 0.04, 0.0)
 	_preview_marker.set_surface_override_material(0, _preview_material_valid if _preview_valid else _preview_material_invalid)
@@ -737,7 +790,7 @@ func _update_signal_preview(snapped: Vector3) -> void:
 	var valid := not run.is_empty() and _can_afford(cost)
 	_preview_cost = cost
 	_preview_valid = valid
-	_preview_message = "Signal run %d posts | %.0fm spacing" % [run.size(), signal_run_spacing_m] if valid else "Signal run needs a straighter, accessible track segment"
+	_preview_message = "Signal run %d posts | %.0fm spacing" % [run.size(), signal_run_spacing_m] if valid else _signal_run_block_reason(anchor, snapped, cost)
 	_apply_polyline_preview(points, valid)
 
 func _update_bulldoze_preview(pos: Vector3) -> void:
@@ -763,6 +816,119 @@ func _set_marker_size(size: Vector3) -> void:
 	var anchor_mesh := _anchor_marker.mesh as BoxMesh
 	if anchor_mesh != null:
 		anchor_mesh.size = marker_size
+
+func _track_preview_block_reason(points: PackedVector3Array, length: float, cost: float) -> String:
+	if length < min_track_length:
+		return "Track too short: %.0fm built, %.0fm required" % [length, min_track_length]
+	if _track_builder == null:
+		return "Track builder unavailable"
+	if not _track_builder.can_place_segment(points):
+		return _track_block_reason(points)
+	if not _can_afford(cost):
+		return _funds_block_reason(cost)
+	return "Track blocked here"
+
+func _track_block_reason(points: PackedVector3Array) -> String:
+	if points.size() < 2:
+		return "Track needs two points"
+	var max_grade := 0.06
+	if _track_builder != null and _has_property(_track_builder, "max_grade"):
+		max_grade = float(_track_builder.get("max_grade"))
+	var grade := _path_max_grade(points)
+	if grade > max_grade:
+		return "Grade too steep: %.1f%%, max %.1f%%" % [grade * 100.0, max_grade * 100.0]
+	return "Track conflicts with the terrain or route rules"
+
+func _signal_run_block_reason(anchor: Vector3, snapped: Vector3, cost: float) -> String:
+	var points := _build_track_points(anchor, snapped)
+	var length := _polyline_length(points)
+	if length < 8.0:
+		return "Signal run is too short"
+	if not _has_existing_signal_near(anchor):
+		var start_reason := _placement_block_reason(anchor, "signal", signal_cost)
+		if start_reason != "Signal ready":
+			return start_reason
+	var end_reason := _placement_block_reason(snapped, "signal", signal_cost)
+	if end_reason != "Signal ready":
+		return end_reason
+	if cost > 0.0 and not _can_afford(cost):
+		return _funds_block_reason(cost)
+	return "Signal run must follow existing track and spacing"
+
+func _placement_block_reason(pos: Vector3, kind: String, cost: float) -> String:
+	var label := kind.capitalize()
+	var snap_radius_for_kind := _track_snap_radius_for_kind(kind)
+	var spacing_for_kind := _spacing_for_kind(kind)
+	if _is_water(pos):
+		return "%s blocked: water or shoreline" % label
+	var grade_delta := _ground_grade_delta(pos)
+	var max_grade_delta := _max_grade_delta_for_kind(kind)
+	if grade_delta > max_grade_delta:
+		return "%s blocked: ground changes %.1fm, max %.1fm" % [label, grade_delta, max_grade_delta]
+	var track_distance := _distance_to_track_network(pos)
+	if track_distance == INF:
+		return "%s blocked: build or select nearby track first" % label
+	if track_distance > snap_radius_for_kind:
+		return "%s blocked: %.0fm from track, needs %.0fm or less" % [label, track_distance, snap_radius_for_kind]
+	if kind == "station":
+		var minimum_stop_spacing := spacing_for_kind + float(station_platform_length_tiles - 1) * 12.0
+		var nearest_stop := _nearest_stop_distance(pos)
+		if nearest_stop < minimum_stop_spacing:
+			return "Station blocked: %.0fm from another stop, needs %.0fm" % [nearest_stop, minimum_stop_spacing]
+	elif kind == "depot":
+		var nearest_depot := _nearest_placed_distance(pos, "depot")
+		if nearest_depot < spacing_for_kind:
+			return "Depot blocked: %.0fm from another depot, needs %.0fm" % [nearest_depot, spacing_for_kind]
+	elif kind == "signal":
+		var nearest_signal := _nearest_placed_distance(pos, "signal")
+		if nearest_signal < spacing_for_kind:
+			return "Signal blocked: %.0fm from another signal, needs %.0fm" % [nearest_signal, spacing_for_kind]
+	if not _can_afford(cost):
+		return _funds_block_reason(cost)
+	return "%s ready" % label
+
+func _track_snap_radius_for_kind(kind: String) -> float:
+	match kind:
+		"station":
+			return station_track_snap_radius
+		"depot":
+			return depot_track_snap_radius
+		"signal":
+			return signal_track_snap_radius
+		_:
+			return snap_radius
+
+func _spacing_for_kind(kind: String) -> float:
+	match kind:
+		"station":
+			return station_spacing_m
+		"depot":
+			return depot_spacing_m
+		"signal":
+			return signal_spacing_m
+		_:
+			return 0.0
+
+func _max_grade_delta_for_kind(kind: String) -> float:
+	match kind:
+		"station":
+			return max_station_grade_delta_m
+		"depot":
+			return max_depot_grade_delta_m
+		"signal":
+			return max_signal_grade_delta_m
+		_:
+			return INF
+
+func _funds_block_reason(cost: float) -> String:
+	var shortfall := maxf(0.0, cost - _available_cash())
+	return "Need $%s more cash" % _money_text(shortfall) if shortfall > 0.01 else "Not enough cash"
+
+func _set_build_result(message: String) -> void:
+	_last_build_result = message
+
+func _has_existing_signal_near(pos: Vector3) -> bool:
+	return _nearest_placed_distance(pos, "signal") < signal_spacing_m * 0.5
 
 func _can_place_station_at(pos: Vector3) -> bool:
 	if _is_water(pos):
@@ -989,6 +1155,8 @@ func _build_signal_run(anchor: Vector3, snapped: Vector3) -> Array[Dictionary]:
 		return run
 	var spacing := maxf(signal_spacing_m, signal_run_spacing_m)
 	var sample_distance := 0.0
+	if _has_existing_signal_near(anchor):
+		sample_distance = spacing
 	while sample_distance <= total_length + 0.01:
 		var pos := _sample_polyline(points, minf(sample_distance, total_length))
 		if not _can_place_signal_at(pos):
@@ -998,10 +1166,15 @@ func _build_signal_run(anchor: Vector3, snapped: Vector3) -> Array[Dictionary]:
 			"forward": _polyline_direction_at_distance(points, sample_distance)
 		})
 		sample_distance += spacing
-	if run.is_empty():
-		return []
-	var last_pos: Vector3 = run[run.size() - 1].get("position", Vector3.ZERO)
 	var end_pos := _sample_polyline(points, total_length)
+	if run.is_empty():
+		if end_pos.distance_to(anchor) > spacing * 0.45 and _can_place_signal_at(end_pos):
+			run.append({
+				"position": end_pos,
+				"forward": _polyline_direction_at_distance(points, total_length)
+			})
+		return run
+	var last_pos: Vector3 = run[run.size() - 1].get("position", Vector3.ZERO)
 	if last_pos.distance_to(end_pos) > spacing * 0.45:
 		if not _can_place_signal_at(end_pos):
 			return []

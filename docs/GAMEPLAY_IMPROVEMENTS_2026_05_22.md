@@ -12,6 +12,8 @@
 - Added a line operations snapshot from `CorridorSeed`: fleet count, stop count, route length, weighted average headway, active vs suggested car count, capacity pressure, worst segment, and recommendation.
 - Added line-capacity pressure to the Economy advisor and Finance > Operations tab so the game can recommend adding cars, tightening headways, or rebalancing a named segment.
 - Added live line stats to the Operations & Timetable window so the user sees the problem and the controls to fix it in the same panel.
+- Added a station operations watchlist from `PassengerSim`, ranked by waiting riders, service rating, perceived wait, crowding pressure, and rider loss.
+- Added station-watch recommendations to the Economy advisor, Finance > Operations, and Operations & Timetable window so the user gets named-stop instructions like "Shorten headway" or "Send a car soon."
 
 ## Sources
 

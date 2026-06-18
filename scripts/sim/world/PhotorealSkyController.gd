@@ -130,8 +130,11 @@ func _apply_sky() -> void:
 	var noonness := clampf(1.0 - absf((day_phase - 0.5) * 2.0), 0.0, 1.0)
 	var warmness := daylight * (1.0 - noonness)
 	var cloud_cover := clampf(float(_weather_payload.get("cloud_cover", 0.12)), 0.0, 1.0)
+	var overcast := clampf(float(_weather_payload.get("overcast", cloud_cover)), 0.0, 1.0)
+	var mist_amount := clampf(float(_weather_payload.get("mist_amount", 0.0)), 0.0, 1.0)
 	var storminess := clampf(float(_weather_payload.get("storminess", 0.0)), 0.0, 1.0)
 	var wetness := clampf(float(_weather_payload.get("surface_wetness", 0.0)), 0.0, 1.0)
+	var wind_speed := clampf(float(_weather_payload.get("wind_speed_mps", 4.0)), 0.0, 24.0)
 	var top_day := Color(0.31, 0.50, 0.72, 1.0)
 	var top_dusk := Color(0.86, 0.55, 0.30, 1.0)
 	var top_night := Color(0.05, 0.08, 0.15, 1.0)
@@ -140,38 +143,47 @@ func _apply_sky() -> void:
 	var horizon_night := Color(0.10, 0.13, 0.21, 1.0)
 	var sky_top := top_night.lerp(top_day.lerp(top_dusk, warmness), daylight)
 	var sky_horizon := horizon_night.lerp(horizon_day.lerp(horizon_dusk, warmness), daylight)
-	sky_top = sky_top.lerp(Color(0.18, 0.22, 0.28, 1.0), storminess * 0.72 + cloud_cover * 0.16)
+	sky_top = sky_top.lerp(Color(0.22, 0.26, 0.31, 1.0), overcast * 0.38 + mist_amount * 0.12)
+	sky_top = sky_top.lerp(Color(0.18, 0.22, 0.28, 1.0), storminess * 0.72 + cloud_cover * 0.12)
+	sky_horizon = sky_horizon.lerp(Color(0.52, 0.56, 0.60, 1.0), overcast * 0.16 + mist_amount * 0.28)
 	sky_horizon = sky_horizon.lerp(Color(0.28, 0.30, 0.34, 1.0), storminess * 0.62 + wetness * 0.18)
 	_sky_material.sky_top_color = sky_top
 	_sky_material.sky_horizon_color = sky_horizon
 	_sky_material.ground_horizon_color = sky_horizon.darkened(0.24)
 	_sky_material.ground_bottom_color = Color(0.12, 0.11, 0.10, 1.0).lerp(Color(0.20, 0.17, 0.13, 1.0), daylight * 0.55)
-	_sky_material.sky_energy_multiplier = lerpf(0.10, 1.08, daylight) * lerpf(0.92, 0.72, storminess)
-	_sky_material.ground_energy_multiplier = lerpf(0.28, 0.88, daylight)
+	_sky_material.sky_energy_multiplier = lerpf(0.10, 1.08, daylight) * lerpf(1.0, 0.82, overcast * 0.65 + storminess * 0.35)
+	_sky_material.ground_energy_multiplier = lerpf(0.28, 0.88, daylight) * lerpf(1.0, 0.92, mist_amount * 0.55)
 	_sky_material.sky_cover_modulate = Color(
-		lerpf(0.55, 1.0, daylight),
-		lerpf(0.58, 1.0, daylight),
-		lerpf(0.64, 1.0, daylight),
-		clampf(0.10 + cloud_cover * 0.82 + storminess * 0.12, 0.0, 1.0)
+		lerpf(0.55, 1.0, daylight) * lerpf(1.0, 0.92, overcast * 0.35),
+		lerpf(0.58, 1.0, daylight) * lerpf(1.0, 0.93, overcast * 0.28),
+		lerpf(0.64, 1.0, daylight) * lerpf(1.0, 0.95, mist_amount * 0.24),
+		clampf(0.10 + cloud_cover * 0.72 + overcast * 0.16 + storminess * 0.12, 0.0, 1.0)
 	)
 	var env := _world_environment.environment
-	var haze_mix := clampf(cloud_cover * 0.34 + storminess * 0.46 + wetness * 0.24, 0.0, 1.0)
+	var haze_mix := clampf(cloud_cover * 0.22 + overcast * 0.26 + storminess * 0.46 + wetness * 0.18 + mist_amount * 0.34, 0.0, 1.0)
 	var ambient_color := sky_horizon.lerp(Color(0.96, 0.95, 0.92, 1.0), daylight * 0.18)
 	env.ambient_light_color = ambient_color
 	env.ambient_light_energy = lerpf(0.18, 1.28, daylight) * lerpf(1.0, 0.86, haze_mix)
-	env.ambient_light_sky_contribution = lerpf(0.22, 0.68, daylight) * lerpf(1.0, 0.9, storminess)
-	env.tonemap_exposure = lerpf(0.88, 1.08, daylight) * lerpf(1.0, 0.94, haze_mix)
-	env.adjustment_brightness = lerpf(0.70, 1.06, daylight) * lerpf(1.0, 0.9, storminess)
-	env.adjustment_contrast = lerpf(1.0, 1.12, daylight) * lerpf(1.0, 0.96, haze_mix)
-	env.adjustment_saturation = lerpf(0.74, 1.0, daylight) * lerpf(1.0, 0.84, storminess + cloud_cover * 0.18)
+	env.ambient_light_sky_contribution = lerpf(0.22, 0.68, daylight) * lerpf(1.0, 0.92, overcast * 0.4 + storminess * 0.6)
+	env.tonemap_exposure = lerpf(0.88, 1.08, daylight) * lerpf(1.0, 0.93, haze_mix)
+	env.adjustment_brightness = lerpf(0.70, 1.06, daylight) * lerpf(1.0, 0.92, overcast * 0.3 + storminess * 0.7)
+	env.adjustment_contrast = lerpf(1.0, 1.12, daylight) * lerpf(1.0, 0.94, haze_mix)
+	env.adjustment_saturation = lerpf(0.74, 1.0, daylight) * lerpf(1.0, 0.80, storminess + overcast * 0.22 + mist_amount * 0.18)
+	env.glow_intensity = lerpf(0.028, 0.05, daylight) * lerpf(1.0, 0.74, overcast * 0.45 + storminess * 0.35)
+	env.glow_mix = lerpf(0.06, 0.1, clampf(mist_amount + overcast * 0.22, 0.0, 1.0))
+	_set_env_property(env, "ssil_intensity", lerpf(0.82, 0.56, haze_mix))
+	_set_env_property(env, "ssil_radius", lerpf(6.2, 4.9, clampf(mist_amount * 0.55 + wind_speed / 40.0, 0.0, 1.0)))
 
 func _rebuild_cloud_texture() -> void:
 	if _sky_material == null:
 		return
 	var coverage := clampf(float(_weather_payload.get("cloud_cover", 0.12)), 0.0, 1.0)
+	var overcast := clampf(float(_weather_payload.get("overcast", coverage)), 0.0, 1.0)
+	var mist_amount := clampf(float(_weather_payload.get("mist_amount", 0.0)), 0.0, 1.0)
 	var storminess := clampf(float(_weather_payload.get("storminess", 0.0)), 0.0, 1.0)
+	var wind_speed := clampf(float(_weather_payload.get("wind_speed_mps", 4.0)), 0.0, 24.0)
 	var image := Image.create(cloud_texture_width, cloud_texture_height, false, Image.FORMAT_RGBA8)
-	var threshold := lerpf(0.92, 0.38, coverage)
+	var threshold := lerpf(0.92, 0.34, maxf(coverage, overcast * 0.94))
 	for y in range(cloud_texture_height):
 		var v := float(y) / float(maxi(1, cloud_texture_height - 1))
 		for x in range(cloud_texture_width):
@@ -179,11 +191,16 @@ func _rebuild_cloud_texture() -> void:
 			var primary := _noise_primary.get_noise_2d((u + _cloud_phase.x) * cloud_noise_scale * 100.0, (v + _cloud_phase.y) * cloud_noise_scale * 100.0)
 			var detail := _noise_detail.get_noise_2d((u - _cloud_phase.x * 0.4) * cloud_detail_scale * 100.0, (v + _cloud_phase.y * 0.7) * cloud_detail_scale * 100.0)
 			var bands := sin((u + _cloud_phase.x) * TAU * 2.2) * 0.08 + cos((v - _cloud_phase.y) * TAU * 3.1) * 0.06
-			var density := primary * 0.72 + detail * 0.28 + bands
-			var mask := smoothstep(threshold, threshold + 0.18 - storminess * 0.06, density)
-			var brightness := lerpf(0.70, 1.0, clampf(density * 0.5 + 0.5, 0.0, 1.0))
-			var storm_tint := Color(0.72, 0.75, 0.80, 1.0).lerp(Color(0.52, 0.55, 0.60, 1.0), storminess)
-			image.set_pixel(x, y, Color(storm_tint.r * brightness * mask, storm_tint.g * brightness * mask, storm_tint.b * brightness * mask, mask))
+			var shear := sin((u * TAU * 1.45) + _cloud_phase.x * (0.8 + wind_speed * 0.028) + v * 1.6) * (0.03 + storminess * 0.05)
+			var ceiling := smoothstep(0.18, 0.94, v) * (overcast * 0.16 + mist_amount * 0.06)
+			var density := primary * 0.60 + detail * 0.24 + bands + shear + ceiling
+			var softness := mist_amount * 0.08 + overcast * 0.05
+			var mask := smoothstep(threshold, threshold + 0.18 + softness - storminess * 0.05, density)
+			var brightness := lerpf(0.68, 1.0, clampf(density * 0.5 + 0.5, 0.0, 1.0))
+			brightness *= lerpf(1.0, 0.9, overcast * 0.32 + storminess * 0.26)
+			var storm_tint := Color(0.76, 0.78, 0.82, 1.0).lerp(Color(0.52, 0.55, 0.60, 1.0), storminess)
+			storm_tint = storm_tint.lerp(Color(0.70, 0.72, 0.76, 1.0), overcast * 0.22 + mist_amount * 0.18)
+			image.set_pixel(x, y, Color(storm_tint.r * brightness * mask, storm_tint.g * brightness * mask, storm_tint.b * brightness * mask, mask * lerpf(0.92, 1.0, overcast)))
 	image.generate_mipmaps()
 	_sky_material.sky_cover = ImageTexture.create_from_image(image)
 

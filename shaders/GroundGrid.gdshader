@@ -34,8 +34,19 @@ uniform float normal_strength = 0.55;
 uniform float detail_normal_strength = 0.18;
 uniform float leaf_litter_strength = 0.22;
 uniform float shoreline_grit_strength = 0.20;
+uniform float puddle_strength = 0.34;
+uniform float frost_tint_strength = 0.42;
+uniform float upland_dryness_strength = 0.18;
+uniform float duff_variation_strength = 0.20;
+uniform float damp_stain_strength = 0.26;
+uniform float route_disturbance_strength = 0.42;
+uniform float urban_grit_strength = 0.36;
 uniform float rain_wetness = 0.0;
 uniform float snow_cover = 0.0;
+uniform float humidity_amount = 0.0;
+uniform float storminess_amount = 0.0;
+uniform float mist_amount = 0.0;
+uniform float ground_frost = 0.0;
 uniform float macro_albedo_strength = 1.0;
 uniform float terrain_scale = 0.000045;
 uniform float ridge_scale = 0.00011;
@@ -53,6 +64,7 @@ varying float v_slope;
 varying float v_macro_noise;
 varying vec2 v_world_xz;
 varying vec4 v_context;
+varying vec2 v_landuse;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -144,6 +156,7 @@ void vertex() {
 	v_macro_noise = fbm(p * detail_scale * 0.42);
 	v_world_xz = p;
 	v_context = COLOR;
+	v_landuse = UV2;
 }
 
 void fragment() {
@@ -151,18 +164,26 @@ void fragment() {
 	float shoreline_mask = clamp(v_context.g, 0.0, 1.0);
 	float floodplain_mask = clamp(v_context.b, 0.0, 1.0);
 	float coast_mask = clamp(v_context.a, 0.0, 1.0);
+	float route_disturbance = clamp(v_landuse.x, 0.0, 1.0);
+	float station_grit = clamp(v_landuse.y, 0.0, 1.0);
+	float corridor_grit = clamp(route_disturbance * route_disturbance_strength + station_grit * urban_grit_strength, 0.0, 1.0);
 	float raw_elevation = clamp((v_height - terrain_low_hint) / max(0.001, terrain_high_hint - terrain_low_hint), 0.0, 1.0);
 	float elevation = mix(smoothstep(-height_scale * 0.42, height_scale * 0.82, v_height), raw_elevation, 0.55);
 	elevation = mix(elevation, dataset_elevation, 0.65);
+	float valley_bias = clamp((1.0 - elevation) * 0.74 + floodplain_mask * 0.35 + shoreline_mask * 0.18, 0.0, 1.0);
 	float grass_mask = smoothstep(0.12, 0.78, elevation) * (1.0 - smoothstep(0.18, 0.55, v_slope));
+	grass_mask *= 1.0 - corridor_grit * 0.48;
 	float dry_mask = smoothstep(0.30, 0.92, elevation + v_macro_noise * 0.18);
+	dry_mask = max(dry_mask, smoothstep(0.56, 0.96, elevation) * upland_dryness_strength * (1.0 - humidity_amount * 0.58));
+	dry_mask *= 1.0 - clamp(humidity_amount * 0.42 + storminess_amount * 0.18 + valley_bias * 0.16, 0.0, 0.78);
 	float sand_mask = smoothstep(0.0, 0.22, 1.0 - elevation) * (1.0 - smoothstep(0.08, 0.28, v_slope));
 	sand_mask = max(sand_mask, coast_mask * (0.30 + shoreline_mask * 0.70));
 	float rock_mask = smoothstep(0.16, 0.52, v_slope) * (0.55 + 0.45 * smoothstep(0.28, 0.92, elevation));
 	rock_mask = max(rock_mask, smoothstep(0.72, 1.0, elevation) * 0.22);
 	float wet_mask = smoothstep(0.0, 0.34, 1.0 - elevation) * (1.0 - rock_mask) * valley_wetness;
 	wet_mask = max(wet_mask, shoreline_mask * (0.28 + coast_mask * 0.14) + floodplain_mask * 0.20);
-	wet_mask = clamp(wet_mask + rain_wetness * (0.30 + (1.0 - v_slope) * 0.55), 0.0, 1.0);
+	wet_mask = clamp(wet_mask + humidity_amount * 0.16 * valley_bias + mist_amount * 0.10 * valley_bias, 0.0, 1.0);
+	wet_mask = clamp(wet_mask + rain_wetness * (0.30 + (1.0 - v_slope) * 0.55) + storminess_amount * 0.12, 0.0, 1.0);
 
 	vec3 albedo = mix(soil_color.rgb, meadow_color.rgb, grass_mask);
 	albedo = mix(albedo, dry_grass_color.rgb, dry_mask * (0.45 + 0.35 * grass_mask));
@@ -172,14 +193,18 @@ void fragment() {
 	albedo = mix(albedo, floodplain_color.rgb, floodplain_mask * (1.0 - rock_mask) * 0.42);
 	albedo = mix(albedo, silt_color.rgb, shoreline_mask * 0.34 + coast_mask * 0.22);
 	albedo = mix(albedo, upland_color.rgb, smoothstep(0.76, 1.0, elevation) * rock_mask * 0.24);
+	vec3 base_compacted_earth = mix(vec3(0.25, 0.23, 0.19), vec3(0.39, 0.37, 0.31), fbm(v_world_xz * 0.0046 + vec2(37.0, 15.0)));
+	albedo = mix(albedo, base_compacted_earth, corridor_grit * 0.20);
 
 	float roughness = mix(0.98, 0.78, rock_mask);
 	roughness = mix(roughness, 0.72, wet_mask * 0.65);
 
 	if (use_texture_layers) {
 		float mud_mask = clamp(max(wet_mask * 1.45, shoreline_mask * 0.75 + floodplain_mask * 0.35), 0.0, 1.0);
+		mud_mask = max(mud_mask, route_disturbance * rain_wetness * 0.38);
 		float soil_mask = clamp(1.0 - max(max(grass_mask, mud_mask), rock_mask), 0.0, 1.0);
 		soil_mask = max(soil_mask, sand_mask * 0.75 + floodplain_mask * 0.18);
+		soil_mask = max(soil_mask, corridor_grit * 0.52);
 		float weight_sum = max(0.001, grass_mask + soil_mask + mud_mask + rock_mask);
 		float grass_w = grass_mask / weight_sum;
 		float soil_w = soil_mask / weight_sum;
@@ -243,11 +268,18 @@ void fragment() {
 
 		float litter_noise = fbm(v_world_xz * 0.00115 + vec2(23.7, 9.2));
 		float grit_noise = ridge_noise(v_world_xz * 0.0026 + vec2(3.1, 41.0));
+		float duff_noise = fbm(v_world_xz * 0.0046 + vec2(37.0, 15.0));
 		float litter_mask = clamp((soil_w + mud_w * 0.35) * (1.0 - shoreline_mask) * (1.0 - rock_mask), 0.0, 1.0);
 		float grit_mask = clamp((shoreline_mask + coast_mask * 0.7 + rock_mask * 0.35) * shoreline_grit_strength, 0.0, 1.0);
+		vec3 compacted_earth = mix(vec3(0.25, 0.23, 0.19), vec3(0.42, 0.39, 0.32), duff_noise);
+		vec3 ballast_dust = mix(vec3(0.36, 0.35, 0.31), vec3(0.60, 0.58, 0.51), grit_noise);
 		albedo = mix(albedo, albedo * mix(0.74, 1.08, litter_noise), litter_mask * leaf_litter_strength);
+		albedo = mix(albedo, albedo * mix(0.86, 1.10, duff_noise), litter_mask * duff_variation_strength);
 		albedo = mix(albedo, mix(vec3(0.48, 0.46, 0.39), vec3(0.74, 0.71, 0.62), grit_noise), grit_mask);
+		albedo = mix(albedo, compacted_earth, corridor_grit * (0.34 + rain_wetness * 0.16));
+		albedo = mix(albedo, ballast_dust, corridor_grit * station_grit * 0.26);
 		roughness = clamp(roughness + litter_mask * leaf_litter_strength * 0.06 + grit_mask * 0.12, 0.18, 1.0);
+		roughness = clamp(mix(roughness, 0.86, corridor_grit * 0.24), 0.12, 1.0);
 
 		vec3 blended_normal = normalize(
 			grass_n * grass_w +
@@ -266,16 +298,32 @@ void fragment() {
 	}
 
 	float micro = fbm(v_world_xz * micro_scale + vec2(v_macro_noise * 4.0, v_height * 0.06));
+	float damp_stain = clamp((wet_mask * 0.55 + humidity_amount * 0.22 + rain_wetness * 0.35 + shoreline_mask * 0.16) * (1.0 - rock_mask), 0.0, 1.0);
+	float puddle_noise = fbm(v_world_xz * 0.0022 + vec2(11.0, 7.0));
+	float puddle_mask = clamp((rain_wetness * 0.72 + storminess_amount * 0.34 + humidity_amount * 0.16) * puddle_strength, 0.0, 1.0);
+	puddle_mask *= 1.0 - smoothstep(0.06, 0.24, v_slope);
+	puddle_mask *= 1.0 - smoothstep(0.52, 0.92, elevation);
+	puddle_mask *= smoothstep(0.38, 0.68, puddle_noise + floodplain_mask * 0.28 + shoreline_mask * 0.16);
 	albedo *= mix(0.80, 1.16, micro) * macro_albedo_strength;
+	albedo = mix(albedo, albedo * vec3(0.72, 0.75, 0.70), damp_stain * damp_stain_strength);
+	albedo = mix(albedo, mix(albedo * 0.72, vec3(0.20, 0.23, 0.24), 0.42), puddle_mask * 0.55);
+	roughness = mix(roughness, 0.12, puddle_mask * 0.72);
+	float frost_noise = fbm(v_world_xz * 0.0038 + vec2(71.0, 19.0));
+	float frost_mask = ground_frost * (1.0 - snow_cover) * (1.0 - smoothstep(0.24, 0.58, v_slope));
+	frost_mask *= smoothstep(0.08, 0.42, humidity_amount + wet_mask * 0.5 + puddle_mask * 0.4);
+	frost_mask *= smoothstep(-0.12, 0.48, elevation + micro * 0.10);
+	frost_mask *= mix(0.55, 1.0, frost_noise);
+	albedo = mix(albedo, mix(albedo * 0.88, vec3(0.86, 0.90, 0.94), 0.72), frost_mask * frost_tint_strength);
+	roughness = mix(roughness, 0.58, frost_mask * 0.58);
 	float snow_mask = snow_cover * (1.0 - smoothstep(0.18, 0.52, v_slope)) * smoothstep(-0.25, 0.55, elevation + micro * 0.12);
 	albedo = mix(albedo, vec3(0.90, 0.92, 0.94), snow_mask);
 	roughness = mix(roughness, 0.66, snow_mask);
 	roughness = mix(roughness, max(0.18, roughness * 0.72), rain_wetness * 0.65);
-	float wet_clearcoat = clamp((wet_mask * 0.72 + rain_wetness * 0.64) * (1.0 - snow_mask) * (1.0 - smoothstep(0.22, 0.82, v_slope)), 0.0, 1.0);
+	float wet_clearcoat = clamp((wet_mask * 0.72 + rain_wetness * 0.64 + puddle_mask * 0.55) * (1.0 - snow_mask) * (1.0 - smoothstep(0.22, 0.82, v_slope)), 0.0, 1.0);
 
 	ALBEDO = albedo;
 	ROUGHNESS = roughness;
-	SPECULAR = mix(0.03, 0.18, wet_mask + rain_wetness * 0.55 + rock_mask * 0.35);
+	SPECULAR = mix(0.03, 0.22, wet_mask + rain_wetness * 0.55 + rock_mask * 0.35 + puddle_mask * 0.45 + frost_mask * 0.18);
 	CLEARCOAT = wet_clearcoat * wet_clearcoat_strength;
-	AO = mix(0.82, 1.0, micro) * mix(0.9, 1.0, elevation);
+	AO = mix(0.82, 1.0, micro) * mix(0.9, 1.0, elevation) * mix(1.0, 0.88, corridor_grit);
 }

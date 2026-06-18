@@ -34,6 +34,9 @@ class PassengerAgent:
 @export var station_amenity_rating_bonus := 10.0
 @export var uncertainty_rating_penalty := 16.0
 @export var lost_rider_pressure_threshold := 0.55
+@export var overcrowding_alarm_seconds := 42.0
+@export var severe_overcrowding_alarm_seconds := 20.0
+@export var overcrowding_recovery_rate := 2.4
 
 var agents: Array[PassengerAgent] = []
 var _town_manager: Node
@@ -44,6 +47,8 @@ var _crowd_nodes := {}
 var _waiting_counts := {}
 var _last_service_age_s := {}
 var _stop_service_ratings := {}
+var _overcrowding_age_s := {}
+var _last_rescue_event := {}
 var _calendar_payload := {
 	"year": 1900,
 	"month": 5,
@@ -67,6 +72,8 @@ func seed_population(count: int) -> void:
 
 func _process(delta: float) -> void:
 	_refresh_accum += delta
+	if not _last_rescue_event.is_empty():
+		_last_rescue_event["age_s"] = float(_last_rescue_event.get("age_s", 0.0)) + maxf(delta, 0.0)
 	if _refresh_accum < crowd_refresh_seconds:
 		return
 	_refresh_accum = 0.0
@@ -85,6 +92,28 @@ func get_stop_service_snapshot(stop_name: String) -> Dictionary:
 	var stop = _find_stop_by_name(stop_name)
 	return _build_stop_service_snapshot(stop)
 
+func get_station_operations_snapshot(limit: int = 6) -> Array[Dictionary]:
+	if _town_manager == null or not is_instance_valid(_town_manager):
+		_resolve_dependencies()
+	var rows: Array[Dictionary] = []
+	for stop in _stop_list():
+		var snapshot: Dictionary = _build_stop_service_snapshot(stop)
+		if snapshot.is_empty():
+			continue
+		var priority_score := _station_priority_score(snapshot)
+		var row: Dictionary = snapshot.duplicate(true)
+		row["priority_score"] = priority_score
+		row["status"] = _station_status_label(snapshot, priority_score)
+		row["recommendation"] = _station_recommendation(snapshot)
+		rows.append(row)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("priority_score", 0.0)) > float(b.get("priority_score", 0.0))
+	)
+	var max_rows := maxi(1, limit)
+	while rows.size() > max_rows:
+		rows.remove_at(rows.size() - 1)
+	return rows
+
 func get_network_gameplay_snapshot() -> Dictionary:
 	if _town_manager == null or not is_instance_valid(_town_manager):
 		_resolve_dependencies()
@@ -98,6 +127,12 @@ func get_network_gameplay_snapshot() -> Dictionary:
 	var worst_stop_waiting := 0
 	var perceived_wait_total := 0.0
 	var lost_riders_total := 0
+	var crowding_alarm_count := 0
+	var urgent_crowding_alarm_count := 0
+	var rescue_stop_name := ""
+	var rescue_time_left_s := INF
+	var rescue_alarm_limit_s := 0.0
+	var rescue_waiting := 0
 	for stop in _stop_list():
 		var snapshot: Dictionary = _build_stop_service_snapshot(stop)
 		if snapshot.is_empty():
@@ -117,6 +152,16 @@ func get_network_gameplay_snapshot() -> Dictionary:
 			worst_stop_waiting = waiting
 			worst_stop_name = String(snapshot.get("stop_name", ""))
 		highest_pressure = maxf(highest_pressure, pressure)
+		if bool(snapshot.get("crowding_alarm", false)):
+			crowding_alarm_count += 1
+			var time_left := float(snapshot.get("overcrowding_time_left_s", INF))
+			if time_left <= rescue_time_left_s:
+				rescue_time_left_s = time_left
+				rescue_stop_name = String(snapshot.get("stop_name", ""))
+				rescue_alarm_limit_s = float(snapshot.get("overcrowding_limit_s", 0.0))
+				rescue_waiting = waiting
+		if bool(snapshot.get("crowding_urgent", false)):
+			urgent_crowding_alarm_count += 1
 	if stop_count <= 0:
 		return {
 			"stop_count": 0,
@@ -124,8 +169,14 @@ func get_network_gameplay_snapshot() -> Dictionary:
 			"average_rating": 75.0,
 			"overcrowded_stop_count": 0,
 			"severe_stop_count": 0,
+			"crowding_alarm_count": 0,
+			"urgent_crowding_alarm_count": 0,
 			"worst_stop_name": "",
 			"worst_stop_waiting": 0,
+			"rescue_stop_name": "",
+			"rescue_time_left_s": 0.0,
+			"rescue_alarm_limit_s": 0.0,
+			"rescue_waiting": 0,
 			"average_perceived_wait_min": 0.0,
 			"lost_riders": 0,
 			"highest_pressure": 0.0,
@@ -134,14 +185,16 @@ func get_network_gameplay_snapshot() -> Dictionary:
 	var average_rating := rating_total / float(stop_count)
 	var average_perceived_wait := perceived_wait_total / float(stop_count)
 	var advisory_text := ""
-	if severe_stop_count > 0 and worst_stop_name != "":
-		advisory_text = "Crowding alert: %s has %d waiting" % [worst_stop_name, worst_stop_waiting]
+	if urgent_crowding_alarm_count > 0 and rescue_stop_name != "":
+		advisory_text = "Dispatch rescue to %s: %d waiting, %.0fs left" % [rescue_stop_name, rescue_waiting, rescue_time_left_s]
+	elif severe_stop_count > 0 and worst_stop_name != "":
+		advisory_text = "Crowding alert: %s has %d waiting; add cars or cut headway" % [worst_stop_name, worst_stop_waiting]
 	elif lost_riders_total > 0:
-		advisory_text = "Riders walking away: %d lost this cycle" % lost_riders_total
+		advisory_text = "Riders walked away: %d lost this cycle" % lost_riders_total
 	elif average_perceived_wait >= 7.5:
 		advisory_text = "Long perceived waits: %.1f min average" % average_perceived_wait
 	elif overcrowded_stop_count >= 3:
-		advisory_text = "System pressure rising: %d overcrowded stops" % overcrowded_stop_count
+		advisory_text = "System pressure rising: %d crowded stops" % overcrowded_stop_count
 	return {
 		"stop_count": stop_count,
 		"total_waiting": total_waiting,
@@ -150,8 +203,14 @@ func get_network_gameplay_snapshot() -> Dictionary:
 		"lost_riders": lost_riders_total,
 		"overcrowded_stop_count": overcrowded_stop_count,
 		"severe_stop_count": severe_stop_count,
+		"crowding_alarm_count": crowding_alarm_count,
+		"urgent_crowding_alarm_count": urgent_crowding_alarm_count,
 		"worst_stop_name": worst_stop_name,
 		"worst_stop_waiting": worst_stop_waiting,
+		"rescue_stop_name": rescue_stop_name,
+		"rescue_time_left_s": 0.0 if rescue_time_left_s == INF else rescue_time_left_s,
+		"rescue_alarm_limit_s": rescue_alarm_limit_s,
+		"rescue_waiting": rescue_waiting,
 		"highest_pressure": highest_pressure,
 		"advisory_text": advisory_text
 	}
@@ -162,17 +221,43 @@ func service_stop_by_name(stop_name: String, capacity_hint: int = 12) -> Diction
 		return {}
 	var stop_id := String(stop.stop_id)
 	var current_waiting := get_waiting_count_for_stop(stop_name)
+	var rescue_candidate := _is_rescue_candidate(stop_id, current_waiting)
+	var rescue_age_s := float(_overcrowding_age_s.get(stop_id, 0.0))
 	var boarded := 0
 	if capacity_hint > 0:
 		boarded = mini(current_waiting, capacity_hint)
 	_waiting_counts[stop_id] = maxi(0, current_waiting - boarded)
 	_last_service_age_s[stop_id] = 0.0
+	if int(_waiting_counts[stop_id]) < overcrowding_threshold:
+		_overcrowding_age_s.erase(stop_id)
+	elif current_waiting != int(_waiting_counts[stop_id]):
+		_update_overcrowding_timer(stop, int(_waiting_counts[stop_id]), 0.0)
 	_stop_service_ratings[stop_id] = _service_rating_for_stop(stop, int(_waiting_counts[stop_id]), 0.0)
+	if rescue_candidate and boarded > 0 and int(_waiting_counts[stop_id]) < overcrowding_threshold:
+		_last_rescue_event = {
+			"stop_id": stop_id,
+			"stop_name": String(stop.town_name),
+			"boarded": boarded,
+			"waiting_before": current_waiting,
+			"waiting_after": int(_waiting_counts[stop_id]),
+			"rescue_age_s": rescue_age_s,
+			"age_s": 0.0
+		}
 	_sync_stop_visuals(stop, int(_waiting_counts[stop_id]))
 	return {
 		"boarded": boarded,
 		"waiting": int(_waiting_counts[stop_id])
 	}
+
+func claim_recent_rescue_event(max_age_s: float = 8.0) -> Dictionary:
+	if _last_rescue_event.is_empty():
+		return {}
+	if float(_last_rescue_event.get("age_s", 999.0)) > max_age_s:
+		_last_rescue_event.clear()
+		return {}
+	var payload := _last_rescue_event.duplicate(true)
+	_last_rescue_event.clear()
+	return payload
 
 func _refresh_station_crowds() -> void:
 	if _town_manager == null or not is_instance_valid(_town_manager):
@@ -202,6 +287,7 @@ func _refresh_station_crowds() -> void:
 			current = maxi(0, current - lost_riders)
 			rating = _service_rating_for_stop(stop, current, service_age_s)
 		_waiting_counts[stop_id] = current
+		_update_overcrowding_timer(stop, current, crowd_refresh_seconds)
 		_stop_service_ratings[stop_id] = rating
 		_sync_stop_visuals(stop, current, int(imported_budgets.get(stop_id, 0)))
 	_prune_missing_crowds(live_stop_ids)
@@ -272,6 +358,11 @@ func _build_stop_service_snapshot(stop) -> Dictionary:
 	var perceived_wait := _perceived_wait_minutes(stop, waiting_count, service_age_s)
 	var amenity_score := _amenity_score_for_stop(stop)
 	var lost_riders := _lost_riders_for_stop(stop, waiting_count, perceived_wait, rating)
+	var overcrowding_age := _overcrowding_age_for_stop(stop_id)
+	var overcrowding_limit := _overcrowding_alarm_limit(waiting_count)
+	var overcrowding_time_left := maxf(0.0, overcrowding_limit - overcrowding_age) if waiting_count >= overcrowding_threshold else overcrowding_limit
+	var crowding_alarm := waiting_count >= overcrowding_threshold
+	var crowding_urgent := crowding_alarm and (waiting_count >= severe_overcrowding_threshold or overcrowding_time_left <= overcrowding_limit * 0.34)
 	return {
 		"stop_id": stop_id,
 		"stop_name": String(stop.town_name),
@@ -284,7 +375,12 @@ func _build_stop_service_snapshot(stop) -> Dictionary:
 		"perceived_wait_min": perceived_wait,
 		"amenity_score": amenity_score,
 		"lost_riders": lost_riders,
-		"demand_multiplier": _stop_demand_multiplier(stop)
+		"demand_multiplier": _stop_demand_multiplier(stop),
+		"overcrowding_age_s": overcrowding_age,
+		"overcrowding_time_left_s": overcrowding_time_left,
+		"overcrowding_limit_s": overcrowding_limit,
+		"crowding_alarm": crowding_alarm,
+		"crowding_urgent": crowding_urgent
 	}
 
 func _target_waiting_count(stop) -> int:
@@ -327,6 +423,32 @@ func _crowding_pressure(waiting_count: int) -> float:
 		0.0,
 		1.0
 	)
+
+func _overcrowding_alarm_limit(waiting_count: int) -> float:
+	var severity := _crowding_pressure(waiting_count)
+	return lerpf(overcrowding_alarm_seconds, severe_overcrowding_alarm_seconds, severity)
+
+func _overcrowding_age_for_stop(stop_id: String) -> float:
+	return float(_overcrowding_age_s.get(stop_id, 0.0))
+
+func _update_overcrowding_timer(stop, waiting_count: int, elapsed_s: float) -> void:
+	var stop_id := String(stop.stop_id)
+	if waiting_count >= overcrowding_threshold:
+		var limit := _overcrowding_alarm_limit(waiting_count)
+		var age := minf(limit * 1.25, _overcrowding_age_for_stop(stop_id) + maxf(elapsed_s, 0.0))
+		_overcrowding_age_s[stop_id] = age
+		return
+	var age := maxf(0.0, _overcrowding_age_for_stop(stop_id) - maxf(elapsed_s, 0.0) * overcrowding_recovery_rate)
+	if age <= 0.01:
+		_overcrowding_age_s.erase(stop_id)
+	else:
+		_overcrowding_age_s[stop_id] = age
+
+func _is_rescue_candidate(stop_id: String, waiting_count: int) -> bool:
+	if waiting_count < overcrowding_threshold:
+		return false
+	var alarm_limit := _overcrowding_alarm_limit(waiting_count)
+	return _overcrowding_age_for_stop(stop_id) >= alarm_limit * 0.25
 
 func _scheduled_headway_minutes(stop) -> float:
 	return 60.0 / maxf(1.0, float(stop.frequency))
@@ -377,6 +499,51 @@ func _lost_riders_for_stop(stop, waiting_count: int, perceived_wait_min: float, 
 		return 0
 	var demand := float(stop.ridership_demand) * _stop_demand_multiplier(stop)
 	return clampi(int(round(demand * pressure * 0.18)), 0, waiting_count)
+
+func _station_priority_score(snapshot: Dictionary) -> float:
+	var waiting := int(snapshot.get("waiting", 0))
+	var rating := float(snapshot.get("rating", 75.0))
+	var perceived_wait := float(snapshot.get("perceived_wait_min", 0.0))
+	var pressure := float(snapshot.get("crowding_pressure", 0.0))
+	var lost_riders := int(snapshot.get("lost_riders", 0))
+	var waiting_score := clampf(float(waiting) / maxf(1.0, float(severe_overcrowding_threshold)), 0.0, 1.0)
+	var wait_score := clampf(perceived_wait / 10.0, 0.0, 1.0)
+	var rating_score := clampf((82.0 - rating) / 62.0, 0.0, 1.0)
+	var loss_score := clampf(float(lost_riders) / 10.0, 0.0, 1.0)
+	var alarm_limit := maxf(1.0, float(snapshot.get("overcrowding_limit_s", overcrowding_alarm_seconds)))
+	var alarm_score := clampf(float(snapshot.get("overcrowding_age_s", 0.0)) / alarm_limit, 0.0, 1.0) if bool(snapshot.get("crowding_alarm", false)) else 0.0
+	return clampf(pressure * 0.32 + wait_score * 0.22 + rating_score * 0.18 + alarm_score * 0.16 + waiting_score * 0.08 + loss_score * 0.04, 0.0, 1.0)
+
+func _station_status_label(snapshot: Dictionary, priority_score: float) -> String:
+	if bool(snapshot.get("crowding_urgent", false)):
+		return "Rescue"
+	if bool(snapshot.get("severe_overcrowding", false)) or priority_score >= 0.72:
+		return "Critical"
+	if bool(snapshot.get("overcrowded", false)) or priority_score >= 0.48:
+		return "Watch"
+	if float(snapshot.get("rating", 75.0)) >= 84.0:
+		return "Strong"
+	return "Stable"
+
+func _station_recommendation(snapshot: Dictionary) -> String:
+	var waiting := int(snapshot.get("waiting", 0))
+	var rating := float(snapshot.get("rating", 75.0))
+	var perceived_wait := float(snapshot.get("perceived_wait_min", 0.0))
+	var service_age_s := float(snapshot.get("service_age_s", 0.0))
+	var time_left := float(snapshot.get("overcrowding_time_left_s", 999.0))
+	if bool(snapshot.get("crowding_urgent", false)):
+		return "Dispatch car now (%.0fs)" % time_left
+	if bool(snapshot.get("severe_overcrowding", false)):
+		return "Add cars or cut headway"
+	if waiting >= overcrowding_threshold:
+		return "Shorten headway"
+	if perceived_wait >= 7.0:
+		return "Reduce wait uncertainty"
+	if rating < 64.0:
+		return "Improve pickup reliability"
+	if service_age_s >= service_memory_seconds * 0.85:
+		return "Send a car soon"
+	return "Maintain service"
 
 func _stop_demand_multiplier(stop) -> float:
 	var multiplier := 1.0
@@ -549,6 +716,13 @@ func _prune_missing_crowds(live_stop_ids: Dictionary) -> void:
 		if live_stop_ids.has(stop_id):
 			next_ratings[stop_id] = _stop_service_ratings[stop_id]
 	_stop_service_ratings = next_ratings
+	var next_overcrowding_ages := {}
+	for stop_id in _overcrowding_age_s.keys():
+		if live_stop_ids.has(stop_id):
+			next_overcrowding_ages[stop_id] = _overcrowding_age_s[stop_id]
+	_overcrowding_age_s = next_overcrowding_ages
+	if not _last_rescue_event.is_empty() and not live_stop_ids.has(String(_last_rescue_event.get("stop_id", ""))):
+		_last_rescue_event.clear()
 	var next_nodes := {}
 	for stop_id in _crowd_nodes.keys():
 		if live_stop_ids.has(stop_id):
