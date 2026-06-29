@@ -22,6 +22,12 @@ const PineTwigRoughnessPath := "res://assets/textures/tree_materials/pine_tree_0
 @export var max_tree_instances := 1600
 @export var mixed_forest_ratio := 0.34
 @export var shoreline_broadleaf_bonus := 0.28
+@export var max_ground_detail_instances := 2800
+@export var grass_detail_density := 0.016
+@export var reed_detail_density := 0.010
+@export var rock_detail_density := 0.006
+@export var ground_detail_clearance_to_route_m := 8.0
+@export var ground_detail_clearance_to_stop_m := 30.0
 
 var _route9_backdrop: Node
 var _town_manager: Node
@@ -32,8 +38,12 @@ var _rebuild_queued := false
 var _trunk_material_cache: StandardMaterial3D
 var _foliage_material_cache: StandardMaterial3D
 var _broadleaf_foliage_material_cache: StandardMaterial3D
+var _grass_detail_material_cache: StandardMaterial3D
+var _reed_detail_material_cache: StandardMaterial3D
+var _rock_detail_material_cache: StandardMaterial3D
 var _foliage_mesh_cache: Mesh
 var _broadleaf_foliage_mesh_cache: Mesh
+var _grass_detail_mesh_cache: Mesh
 
 func _ready() -> void:
 	_resolve_dependencies()
@@ -90,6 +100,7 @@ func _rebuild_scenery() -> void:
 	for stop_pos in stop_positions:
 		_scatter_stop_trees(stop_pos, accepted_positions, route_points, stop_positions)
 	_build_tree_multimeshes(accepted_positions)
+	_build_ground_detail_multimeshes(route_points, stop_positions)
 	_apply_weather_to_materials()
 
 func _on_weather_changed(payload: Dictionary) -> void:
@@ -307,6 +318,138 @@ func _build_tree_variant(positions: PackedVector3Array, broadleaf: bool) -> void
 	canopy_instance.material_override = canopy_material
 	add_child(canopy_instance)
 
+func _build_ground_detail_multimeshes(route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var grass_positions := PackedVector3Array()
+	var reed_positions := PackedVector3Array()
+	var rock_positions := PackedVector3Array()
+	var water_markers: Array = _route9_backdrop.call("get_water_markers") if _route9_backdrop.has_method("get_water_markers") else []
+	for water_variant in water_markers:
+		_scatter_shore_detail(water_variant, grass_positions, reed_positions, route_points, stop_positions)
+	var hill_markers: Array = _route9_backdrop.call("get_hill_markers") if _route9_backdrop.has_method("get_hill_markers") else []
+	for hill_variant in hill_markers:
+		_scatter_upland_detail(hill_variant, grass_positions, rock_positions, route_points, stop_positions)
+	for stop_pos in stop_positions:
+		_scatter_corridor_detail(stop_pos, grass_positions, route_points, stop_positions)
+	_trim_detail_positions(grass_positions, max_ground_detail_instances)
+	_trim_detail_positions(reed_positions, int(max_ground_detail_instances * 0.38))
+	_trim_detail_positions(rock_positions, int(max_ground_detail_instances * 0.24))
+	_build_grass_or_reed_detail(grass_positions, false)
+	_build_grass_or_reed_detail(reed_positions, true)
+	_build_rock_detail(rock_positions)
+
+func _scatter_shore_detail(water_variant: Dictionary, grass_positions: PackedVector3Array, reed_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = abs(String(water_variant.get("name", "water_detail")).hash()) + 9091
+	var perimeter_hint := _water_perimeter_hint(water_variant)
+	var grass_count := clampi(int(perimeter_hint * grass_detail_density * 0.18), 10, 220)
+	var reed_count := clampi(int(perimeter_hint * reed_detail_density * 0.16), 8, 180)
+	for i in range(grass_count):
+		if grass_positions.size() >= max_ground_detail_instances:
+			break
+		var pos := _random_water_edge_position(water_variant, rng, 22.0, 150.0)
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			grass_positions.append(_grounded(pos))
+	for i in range(reed_count):
+		if reed_positions.size() >= int(max_ground_detail_instances * 0.38):
+			break
+		var pos := _random_water_edge_position(water_variant, rng, 4.0, 42.0)
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			reed_positions.append(_grounded(pos))
+
+func _scatter_upland_detail(hill_variant: Dictionary, grass_positions: PackedVector3Array, rock_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var center := _hill_or_water_center(hill_variant)
+	var radius_m := maxf(260.0, float(hill_variant.get("radius_m", 950.0)))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = abs(String(hill_variant.get("name", "upland_detail")).hash()) + 5303
+	var grass_count := clampi(int(radius_m * grass_detail_density * 0.30), 8, 160)
+	var rock_count := clampi(int(radius_m * rock_detail_density * 0.26), 4, 90)
+	for i in range(grass_count):
+		if grass_positions.size() >= max_ground_detail_instances:
+			break
+		var angle := rng.randf_range(0.0, TAU)
+		var radial := radius_m * sqrt(rng.randf_range(0.08, 0.92))
+		var pos := center + Vector3(cos(angle) * radial, 0.0, sin(angle) * radial)
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			grass_positions.append(_grounded(pos))
+	for i in range(rock_count):
+		if rock_positions.size() >= int(max_ground_detail_instances * 0.24):
+			break
+		var angle := rng.randf_range(0.0, TAU)
+		var radial := radius_m * sqrt(rng.randf_range(0.15, 0.98))
+		var pos := center + Vector3(cos(angle) * radial, 0.0, sin(angle) * radial)
+		var context := _terrain_context_at(pos)
+		if float(context.get("shore_factor", 0.0)) > 0.42:
+			continue
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			rock_positions.append(_grounded(pos))
+
+func _scatter_corridor_detail(stop_pos: Vector3, grass_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(absf(stop_pos.x * 0.19 + stop_pos.z * 0.23)) + 771
+	for i in range(22):
+		if grass_positions.size() >= max_ground_detail_instances:
+			return
+		var angle := rng.randf_range(0.0, TAU)
+		var radius := rng.randf_range(ground_detail_clearance_to_stop_m + 12.0, ground_detail_clearance_to_stop_m + 96.0)
+		var pos := stop_pos + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			grass_positions.append(_grounded(pos))
+
+func _build_grass_or_reed_detail(positions: PackedVector3Array, reeds: bool) -> void:
+	if positions.is_empty():
+		return
+	var mesh := _build_grass_detail_mesh()
+	var material := _reed_detail_material() if reeds else _grass_detail_material()
+	if mesh == null or material == null:
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = positions.size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31153 + (977 if reeds else 0)
+	for i in range(positions.size()):
+		var pos := positions[i]
+		var height := rng.randf_range(1.15, 2.35) if reeds else rng.randf_range(0.28, 0.82)
+		var width := rng.randf_range(0.26, 0.58) if reeds else rng.randf_range(0.36, 0.92)
+		var yaw := rng.randf_range(0.0, TAU)
+		var lean := rng.randf_range(-0.08, 0.08)
+		var basis := Basis().rotated(Vector3.UP, yaw).rotated(Vector3.RIGHT, lean).scaled(Vector3(width, height, width))
+		mm.set_instance_transform(i, Transform3D(basis, pos))
+	var instance := MultiMeshInstance3D.new()
+	instance.name = "ShoreReeds" if reeds else "GroundGrassClumps"
+	instance.multimesh = mm
+	instance.material_override = material
+	add_child(instance)
+
+func _build_rock_detail(positions: PackedVector3Array) -> void:
+	if positions.is_empty():
+		return
+	var mesh := SphereMesh.new()
+	mesh.radial_segments = 8
+	mesh.rings = 4
+	mesh.radius = 0.5
+	mesh.height = 0.65
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = positions.size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 62011
+	for i in range(positions.size()):
+		var pos := positions[i]
+		var sx := rng.randf_range(0.55, 1.85)
+		var sy := rng.randf_range(0.18, 0.58)
+		var sz := rng.randf_range(0.42, 1.35)
+		var yaw := rng.randf_range(0.0, TAU)
+		var basis := Basis().rotated(Vector3.UP, yaw).scaled(Vector3(sx, sy, sz))
+		mm.set_instance_transform(i, Transform3D(basis, pos + Vector3(0.0, sy * 0.34, 0.0)))
+	var instance := MultiMeshInstance3D.new()
+	instance.name = "UplandStoneScatter"
+	instance.multimesh = mm
+	instance.material_override = _rock_detail_material()
+	add_child(instance)
+
 func _tree_trunk_material() -> StandardMaterial3D:
 	if _trunk_material_cache != null:
 		return _trunk_material_cache
@@ -364,6 +507,35 @@ func _tree_broadleaf_material() -> StandardMaterial3D:
 	_broadleaf_foliage_material_cache.roughness = 0.88
 	return _broadleaf_foliage_material_cache
 
+func _grass_detail_material() -> StandardMaterial3D:
+	if _grass_detail_material_cache != null:
+		return _grass_detail_material_cache
+	_grass_detail_material_cache = StandardMaterial3D.new()
+	_grass_detail_material_cache.albedo_color = Color(0.37, 0.46, 0.25, 1.0)
+	_grass_detail_material_cache.roughness = 0.96
+	_grass_detail_material_cache.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_grass_detail_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return _grass_detail_material_cache
+
+func _reed_detail_material() -> StandardMaterial3D:
+	if _reed_detail_material_cache != null:
+		return _reed_detail_material_cache
+	_reed_detail_material_cache = StandardMaterial3D.new()
+	_reed_detail_material_cache.albedo_color = Color(0.48, 0.43, 0.24, 1.0)
+	_reed_detail_material_cache.roughness = 0.94
+	_reed_detail_material_cache.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_reed_detail_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return _reed_detail_material_cache
+
+func _rock_detail_material() -> StandardMaterial3D:
+	if _rock_detail_material_cache != null:
+		return _rock_detail_material_cache
+	_rock_detail_material_cache = StandardMaterial3D.new()
+	_rock_detail_material_cache.albedo_color = Color(0.37, 0.36, 0.32, 1.0)
+	_rock_detail_material_cache.roughness = 0.98
+	_rock_detail_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return _rock_detail_material_cache
+
 func _build_foliage_card_mesh() -> Mesh:
 	if _foliage_mesh_cache != null:
 		return _foliage_mesh_cache
@@ -390,6 +562,34 @@ func _build_broadleaf_foliage_mesh() -> Mesh:
 	st.generate_normals()
 	_broadleaf_foliage_mesh_cache = st.commit()
 	return _broadleaf_foliage_mesh_cache
+
+func _build_grass_detail_mesh() -> Mesh:
+	if _grass_detail_mesh_cache != null:
+		return _grass_detail_mesh_cache
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_append_ground_blade_card(st, 0.0, 0.18, 1.0, 0.06)
+	_append_ground_blade_card(st, PI * 0.33, 0.14, 0.82, 0.04)
+	_append_ground_blade_card(st, PI * 0.66, 0.16, 0.92, 0.08)
+	_append_ground_blade_card(st, PI * 0.12, 0.11, 0.70, -0.03)
+	st.generate_normals()
+	_grass_detail_mesh_cache = st.commit()
+	return _grass_detail_mesh_cache
+
+func _append_ground_blade_card(st: SurfaceTool, angle: float, half_width: float, height: float, lean: float) -> void:
+	var basis := Basis().rotated(Vector3.UP, angle)
+	var right := basis.x * half_width
+	var lean_vec := basis.z * lean
+	var a := -right
+	var b := right
+	var c := right * 0.34 + Vector3(0.0, height, 0.0) + lean_vec
+	var d := -right * 0.34 + Vector3(0.0, height, 0.0) + lean_vec
+	_emit_tree_vertex(st, a, Vector2(0.0, 1.0))
+	_emit_tree_vertex(st, b, Vector2(1.0, 1.0))
+	_emit_tree_vertex(st, c, Vector2(1.0, 0.0))
+	_emit_tree_vertex(st, a, Vector2(0.0, 1.0))
+	_emit_tree_vertex(st, c, Vector2(1.0, 0.0))
+	_emit_tree_vertex(st, d, Vector2(0.0, 0.0))
 
 func _append_tree_card(st: SurfaceTool, angle: float, width: float, height: float, y_offset: float) -> void:
 	var basis := Basis().rotated(Vector3.UP, angle)
@@ -499,6 +699,23 @@ func _apply_weather_to_materials() -> void:
 		_broadleaf_foliage_material_cache.albedo_color = broadleaf_tint
 		_broadleaf_foliage_material_cache.backlight = Color(0.29, 0.37, 0.22, 1.0).lerp(Color(0.20, 0.25, 0.22, 1.0), storminess * 0.36).lerp(Color(0.28, 0.31, 0.35, 1.0), snow_cover * 0.18)
 		_broadleaf_foliage_material_cache.roughness = lerpf(0.88, 0.62, wetness * 0.70 + storminess * 0.16)
+	if _grass_detail_material_cache != null:
+		var grass_tint := Color(0.37, 0.46, 0.25, 1.0)
+		grass_tint = grass_tint.lerp(Color(0.28, 0.34, 0.22, 1.0), wetness * 0.34 + storminess * 0.16)
+		grass_tint = grass_tint.lerp(Color(0.74, 0.78, 0.78, 1.0), snow_cover * 0.42 + ground_frost * 0.24)
+		_grass_detail_material_cache.albedo_color = grass_tint
+		_grass_detail_material_cache.roughness = lerpf(0.96, 0.64, wetness * 0.62 + storminess * 0.18)
+	if _reed_detail_material_cache != null:
+		var reed_tint := Color(0.48, 0.43, 0.24, 1.0)
+		reed_tint = reed_tint.lerp(Color(0.36, 0.34, 0.22, 1.0), wetness * 0.30 + storminess * 0.18)
+		reed_tint = reed_tint.lerp(Color(0.76, 0.77, 0.72, 1.0), snow_cover * 0.36 + ground_frost * 0.18)
+		_reed_detail_material_cache.albedo_color = reed_tint
+		_reed_detail_material_cache.roughness = lerpf(0.94, 0.66, wetness * 0.54 + storminess * 0.18)
+	if _rock_detail_material_cache != null:
+		var rock_tint := Color(0.37, 0.36, 0.32, 1.0).darkened(wetness * 0.18)
+		rock_tint = rock_tint.lerp(Color(0.72, 0.74, 0.74, 1.0), snow_cover * 0.32 + ground_frost * 0.16)
+		_rock_detail_material_cache.albedo_color = rock_tint
+		_rock_detail_material_cache.roughness = lerpf(0.98, 0.48, wetness * 0.68 + storminess * 0.12)
 
 func _tree_density_score(pos: Vector3, stop_positions: PackedVector3Array) -> float:
 	var context := _terrain_context_at(pos)
@@ -513,6 +730,100 @@ func _tree_density_score(pos: Vector3, stop_positions: PackedVector3Array) -> fl
 	score -= coast_factor * 0.12 + town_pressure * 0.44
 	score += (_position_roll(pos, 0.047) - 0.5) * 0.14
 	return clampf(score, 0.08, 0.96)
+
+func _water_perimeter_hint(water_variant: Dictionary) -> float:
+	var shape := String(water_variant.get("shape", "ellipse"))
+	match shape:
+		"river":
+			return maxf(100.0, float(water_variant.get("path_length_m", 1000.0)))
+		"polygon":
+			var polygon: PackedVector2Array = water_variant.get("world_polygon_xz", PackedVector2Array())
+			if polygon.size() < 3:
+				return 600.0
+			var perimeter := 0.0
+			for i in range(polygon.size()):
+				perimeter += polygon[i].distance_to(polygon[(i + 1) % polygon.size()])
+			return maxf(100.0, perimeter)
+		_:
+			var rx := maxf(80.0, float(water_variant.get("radius_x_m", 450.0)))
+			var rz := maxf(80.0, float(water_variant.get("radius_z_m", 350.0)))
+			return PI * (3.0 * (rx + rz) - sqrt((3.0 * rx + rz) * (rx + 3.0 * rz)))
+
+func _random_water_edge_position(water_variant: Dictionary, rng: RandomNumberGenerator, offset_min: float, offset_max: float) -> Vector3:
+	var shape := String(water_variant.get("shape", "ellipse"))
+	match shape:
+		"river":
+			var path: PackedVector2Array = water_variant.get("world_points_xz", PackedVector2Array())
+			if path.size() < 2:
+				return _hill_or_water_center(water_variant)
+			var seg_index := rng.randi_range(0, path.size() - 2)
+			var a := path[seg_index]
+			var b := path[seg_index + 1]
+			var tangent := (b - a).normalized()
+			if tangent.length() <= 0.001:
+				return Vector3(a.x, 0.0, a.y)
+			var normal := Vector2(-tangent.y, tangent.x)
+			var side := -1.0 if rng.randf() < 0.5 else 1.0
+			var width := maxf(28.0, float(water_variant.get("width_m", 120.0)))
+			var center := a.lerp(b, rng.randf())
+			var offset := width * 0.5 + rng.randf_range(offset_min, offset_max)
+			return Vector3(center.x + normal.x * offset * side, 0.0, center.y + normal.y * offset * side)
+		"polygon":
+			var polygon: PackedVector2Array = water_variant.get("world_polygon_xz", PackedVector2Array())
+			if polygon.size() < 3:
+				return _hill_or_water_center(water_variant)
+			var seg_index := rng.randi_range(0, polygon.size() - 1)
+			var a := polygon[seg_index]
+			var b := polygon[(seg_index + 1) % polygon.size()]
+			var tangent := (b - a).normalized()
+			if tangent.length() <= 0.001:
+				return Vector3(a.x, 0.0, a.y)
+			var normal := Vector2(-tangent.y, tangent.x)
+			var side := -1.0 if rng.randf() < 0.5 else 1.0
+			var edge_point := a.lerp(b, rng.randf())
+			var offset := rng.randf_range(offset_min, offset_max)
+			return Vector3(edge_point.x + normal.x * offset * side, 0.0, edge_point.y + normal.y * offset * side)
+		_:
+			var center := _hill_or_water_center(water_variant)
+			var rx := maxf(80.0, float(water_variant.get("radius_x_m", 450.0)))
+			var rz := maxf(80.0, float(water_variant.get("radius_z_m", 350.0)))
+			var angle_offset := deg_to_rad(float(water_variant.get("rotation_deg", 0.0)))
+			var angle := rng.randf_range(0.0, TAU)
+			var ring_offset := rng.randf_range(offset_min, offset_max)
+			var local := Vector2(cos(angle) * (rx + ring_offset), sin(angle) * (rz + ring_offset)).rotated(angle_offset)
+			return center + Vector3(local.x, 0.0, local.y)
+
+func _can_place_ground_detail(pos: Vector3, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> bool:
+	if _route9_backdrop.has_method("is_water_at") and bool(_route9_backdrop.call("is_water_at", pos)):
+		return false
+	for stop_pos in stop_positions:
+		if pos.distance_to(stop_pos) < ground_detail_clearance_to_stop_m:
+			return false
+	if _distance_to_route(pos, route_points) < ground_detail_clearance_to_route_m:
+		return false
+	if _position_roll(pos, 0.037) < 0.08:
+		return false
+	return true
+
+func _distance_to_route(pos: Vector3, route_points: PackedVector3Array) -> float:
+	if route_points.size() < 2:
+		return INF
+	var sample := Vector2(pos.x, pos.z)
+	var best := INF
+	for i in range(route_points.size() - 1):
+		var a := Vector2(route_points[i].x, route_points[i].z)
+		var b := Vector2(route_points[i + 1].x, route_points[i + 1].z)
+		var ab := b - a
+		var len_sq := ab.length_squared()
+		if len_sq <= 0.001:
+			continue
+		var t := clampf((sample - a).dot(ab) / len_sq, 0.0, 1.0)
+		best = minf(best, sample.distance_to(a + ab * t))
+	return best
+
+func _trim_detail_positions(positions: PackedVector3Array, max_count: int) -> void:
+	while positions.size() > max_count:
+		positions.remove_at(positions.size() - 1)
 
 func _terrain_context_at(pos: Vector3) -> Dictionary:
 	if _route9_backdrop != null and _route9_backdrop.has_method("terrain_context_at"):

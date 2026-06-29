@@ -310,7 +310,7 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 	6.50,   # Chestnut Hill
 	9.00,   # Newton Centre
 	14.50,  # Wellesley Center
-	17.50,  # Natick Center
+	17.50,  # Natick Junction
 	19.10,  # Framingham Junction / Hastingsville
 	21.00,  # Framingham Center
 	25.00,  # Fayville (Southborough)
@@ -333,7 +333,7 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 	Vector2(-71.1647, 42.3265), # Chestnut Hill
 	Vector2(-71.1937, 42.3301), # Newton Centre
 	Vector2(-71.2925, 42.2965), # Wellesley Center
-	Vector2(-71.3466, 42.2850), # Natick Center
+	Vector2(-71.3459, 42.3007), # Natick Junction / branch split toward Natick Common
 	Vector2(-71.3839, 42.2864), # Framingham Junction / Hastingsville
 	Vector2(-71.4162, 42.2793), # Framingham Center
 	Vector2(-71.5211, 42.3023), # Fayville (Southborough)
@@ -482,7 +482,7 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 	"Chestnut Hill",
 	"Newton Centre",
 	"Wellesley Center",
-	"Natick Center",
+	"Natick Junction",
 	"Framingham Junction",
 	"Framingham Center",
 	"Fayville",
@@ -495,8 +495,8 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 	"Lincoln Square"
 ])
 @export var branch_from := PackedStringArray([
-	"Natick Center",
 	"Framingham Junction",
+	"Framingham Center",
 	"Grafton Center",
 	"Whites Corner"
 ])
@@ -506,7 +506,7 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 	"Upton",
 	"Marlborough"
 ])
-@export var branch_distance_m := PackedFloat32Array([5200.0, 2600.0, 9500.0, 12000.0])
+@export var branch_distance_m := PackedFloat32Array([3100.0, 2300.0, 9500.0, 12000.0])
 @export var branch_side := PackedFloat32Array([1.0, -1.0, -1.0, 1.0])
 @export var branch_kind := PackedStringArray([
 	"regular",
@@ -728,6 +728,7 @@ func _seed_corridor() -> void:
 		if i < branch_kind.size():
 			kind = branch_kind[i]
 		town_manager.AddTransitStop(end_pos, frequency, to_name, kind)
+	_build_framingham_natick_local_detail(town_positions, track_builder, town_manager)
 
 	for i in range(park_to.size()):
 		if i >= park_from.size():
@@ -808,6 +809,55 @@ func _build_service_path(path_node_name: String, points: PackedVector3Array, tra
 	parent.add_child(path)
 	return path
 
+func _build_framingham_natick_local_detail(town_positions: Dictionary, track_builder: Node, town_manager: Node) -> void:
+	_build_local_branch_from_geo(
+		town_positions,
+		track_builder,
+		town_manager,
+		PackedVector2Array([
+			Vector2(-71.3459, 42.3007), # Natick Junction
+			Vector2(-71.3488, 42.2956), # private way toward Highland Street
+			Vector2(-71.3500, 42.2909), # Middle / Sawin streets
+			Vector2(-71.3484, 42.2866), # North Avenue / Washington Street
+			Vector2(-71.3471, 42.2839)  # Natick Common
+		]),
+		PackedStringArray(["Natick Center", "Natick Common"]),
+		PackedVector2Array([
+			Vector2(-71.3478, 42.2862),
+			Vector2(-71.3471, 42.2839)
+		]),
+		"regular"
+	)
+	if track_builder == null or not track_builder.has_method("add_segment"):
+		return
+	if town_positions.has("Framingham Junction") and town_positions.has("South Framingham"):
+		var junction: Vector3 = town_positions.get("Framingham Junction", Vector3.ZERO)
+		var south: Vector3 = town_positions.get("South Framingham", Vector3.ZERO)
+		var via_concord := PackedVector3Array()
+		via_concord.append(junction)
+		via_concord.append(junction.lerp(south, 0.46) + Vector3(18.0, 0.0, -12.0))
+		via_concord.append(south)
+		track_builder.add_segment(via_concord)
+
+func _build_local_branch_from_geo(town_positions: Dictionary, track_builder: Node, town_manager: Node, route_geo: PackedVector2Array, stop_names: PackedStringArray, stop_geo: PackedVector2Array, stop_kind: String) -> void:
+	if track_builder == null or town_manager == null:
+		return
+	if route_geo.size() < 2 or stop_names.size() != stop_geo.size():
+		return
+	var route_points := _project_geo_points(route_geo)
+	if route_points.size() < 2:
+		return
+	if track_builder.has_method("add_segment"):
+		track_builder.add_segment(route_points)
+	var stop_points := _project_geo_points(stop_geo)
+	for i in range(min(stop_names.size(), stop_points.size())):
+		var stop_name := String(stop_names[i])
+		if stop_name == "" or town_positions.has(stop_name):
+			continue
+		var stop_pos := stop_points[i]
+		town_positions[stop_name] = stop_pos
+		town_manager.AddTransitStop(stop_pos, frequency, stop_name, stop_kind)
+
 func _build_framingham_landmarks(town_positions: Dictionary, track_builder: Node) -> void:
 	var parent := _get_path_parent(track_builder)
 	if parent == null:
@@ -822,9 +872,11 @@ func _build_framingham_landmarks(town_positions: Dictionary, track_builder: Node
 	parent.add_child(root)
 	var junction: Vector3 = town_positions.get("Framingham Junction", Vector3.ZERO)
 	var framingham_center: Vector3 = town_positions.get("Framingham Center", junction)
-	var natick_center: Vector3 = town_positions.get("Natick Center", framingham_center)
+	var natick_junction: Vector3 = town_positions.get("Natick Junction", framingham_center)
+	var natick_center: Vector3 = town_positions.get("Natick Center", natick_junction)
+	var natick_common: Vector3 = town_positions.get("Natick Common", natick_center)
 	var south_framingham: Vector3 = town_positions.get("South Framingham", framingham_center + Vector3(0.0, 0.0, 120.0))
-	var main_forward := (framingham_center - natick_center).normalized()
+	var main_forward := (framingham_center - natick_junction).normalized()
 	if main_forward.length() < 0.01:
 		main_forward = (framingham_center - junction).normalized()
 	if main_forward.length() < 0.01:
@@ -857,6 +909,21 @@ func _build_framingham_landmarks(town_positions: Dictionary, track_builder: Node
 	var barn_anchor := junction.lerp(south_framingham, 0.36) + branch_right * 24.0 + Vector3(0.0, 0.2, 0.0)
 	_add_historic_carhouse(root, "Trolley Square Car Barn", barn_anchor, branch_forward, "framingham")
 
+	var center_barn_anchor := framingham_center + main_right * 42.0 - main_forward * 16.0 + Vector3(0.0, 0.2, 0.0)
+	_add_historic_carhouse(root, "Framingham Center Car Barn", center_barn_anchor, main_forward, "framingham_center")
+
+	var natick_branch_forward := (natick_common - natick_junction).normalized()
+	if natick_branch_forward.length() < 0.01:
+		natick_branch_forward = -main_right
+	var natick_branch_right := Vector3(-natick_branch_forward.z, 0.0, natick_branch_forward.x).normalized()
+	var natick_terminal := natick_common + natick_branch_right * 18.0 + Vector3(0.0, 0.2, 0.0)
+	_add_box_with_material(root, Vector3(18.0, 4.8, 9.0), natick_terminal + Vector3(0.0, 2.4, 0.0), natick_branch_forward, plaster)
+	_add_box_with_material(root, Vector3(19.2, 0.58, 10.4), natick_terminal + Vector3(0.0, 5.2, 0.0), natick_branch_forward, steel)
+	_add_landmark_label(root, "Natick Common Terminal", natick_terminal + Vector3(0.0, 6.4, 0.0), -natick_branch_forward, 0.72)
+	_add_landmark_label(root, "Natick Junction Branch", natick_junction + natick_branch_right * 28.0 + Vector3(0.0, 5.8, 0.0), -natick_branch_forward, 0.68)
+	_add_landmark_label(root, "Saxonville Branch", junction + main_right * 48.0 + Vector3(0.0, 6.2, 0.0), -main_forward, 0.68)
+	_add_landmark_label(root, "South Framingham Transfer", south_framingham + branch_right * 34.0 + Vector3(0.0, 6.0, 0.0), -branch_forward, 0.68)
+
 func _build_historic_carhouse_landmarks(town_positions: Dictionary, track_builder: Node) -> void:
 	var parent := _get_path_parent(track_builder)
 	if parent == null:
@@ -883,6 +950,12 @@ func _build_historic_carhouse_landmarks(town_positions: Dictionary, track_builde
 		if town_positions.has("Wellesley Center"):
 			lincoln_forward = (lincoln_square - Vector3(town_positions.get("Wellesley Center", lincoln_square))).normalized()
 		_add_historic_carhouse(root, "Worcester Car Barn", lincoln_square + Vector3(0.0, 0.2, 0.0), lincoln_forward, "worcester")
+	var wellesley_hills := _geo_landmark_point(-71.2766, 42.3101, 0.2)
+	if wellesley_hills != Vector3.ZERO:
+		var wellesley_forward := direction.normalized()
+		if town_positions.has("Wellesley Center"):
+			wellesley_forward = (Vector3(town_positions.get("Wellesley Center", wellesley_hills)) - wellesley_hills).normalized()
+		_add_historic_carhouse(root, "Wellesley Hills Car Barn", wellesley_hills, wellesley_forward, "wellesley_hills")
 	var forest_hills_points := _project_geo_points(orange_south_geo)
 	if forest_hills_points.size() >= 2:
 		var forest_hills_anchor := forest_hills_points[forest_hills_points.size() - 1] + Vector3(0.0, 0.2, 0.0)
@@ -1251,6 +1324,10 @@ func _historic_carhouse_spec(style_id: String) -> Dictionary:
 	match style_id:
 		"framingham":
 			return {"hall_x": 52.0, "hall_y": 8.0, "hall_z": 20.0, "bay_count": 3, "side_offset": 0.0, "lead_length": 28.0, "office_right": 17.0, "office_forward": 3.0, "label_scale": 0.95}
+		"framingham_center":
+			return {"hall_x": 46.0, "hall_y": 7.8, "hall_z": 19.0, "bay_count": 3, "side_offset": 0.0, "lead_length": 26.0, "office_right": 15.0, "office_forward": 3.0, "plaster_body": true, "label_scale": 0.84}
+		"wellesley_hills":
+			return {"hall_x": 40.0, "hall_y": 7.2, "hall_z": 17.0, "bay_count": 2, "side_offset": 0.0, "lead_length": 22.0, "office_right": 13.0, "office_forward": 2.5, "office_plaster": true, "label_scale": 0.82}
 		"watertown":
 			return {"hall_x": 58.0, "hall_y": 8.4, "hall_z": 24.0, "bay_count": 4, "side_offset": 22.0, "lead_length": 30.0, "office_right": 19.0, "office_forward": 4.0, "label_scale": 0.9}
 		"mattapan":
@@ -4805,7 +4882,7 @@ func _revenue_category_for_station(station_name: String) -> String:
 		return "Urban passenger"
 	if station_name in ["Norumbega Park", "White City"]:
 		return "Excursion traffic"
-	if station_name in ["Framingham Junction", "Framingham Center", "Natick Center", "Wellesley Center", "Lincoln Square"]:
+	if station_name in ["Framingham Junction", "Framingham Center", "Natick Junction", "Natick Center", "Natick Common", "Wellesley Center", "Lincoln Square"]:
 		return "Interurban passenger"
 	return "Passenger fares"
 

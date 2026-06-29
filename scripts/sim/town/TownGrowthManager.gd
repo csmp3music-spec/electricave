@@ -46,7 +46,9 @@ const STREETCAR_SUBURB_STOPS := [
 	"Chestnut Hill",
 	"Newton Centre",
 	"Wellesley Center",
+	"Natick Junction",
 	"Natick Center",
+	"Natick Common",
 	"Framingham Junction",
 	"Kenmore",
 	"Massachusetts Avenue",
@@ -62,6 +64,7 @@ const STREETCAR_SUBURB_STOPS := [
 const WESTERN_CENTERS := [
 	"Framingham Junction",
 	"Framingham Center",
+	"Natick Junction",
 	"Westborough Center",
 	"Grafton Center",
 	"Shrewsbury Center",
@@ -70,6 +73,7 @@ const WESTERN_CENTERS := [
 const INDUSTRIAL_STOPS := [
 	"Framingham Junction",
 	"Framingham Center",
+	"Natick Junction",
 	"South Framingham",
 	"Westborough Center",
 	"Grafton Center",
