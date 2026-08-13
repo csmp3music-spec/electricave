@@ -41,6 +41,10 @@ uniform float duff_variation_strength = 0.20;
 uniform float damp_stain_strength = 0.26;
 uniform float route_disturbance_strength = 0.42;
 uniform float urban_grit_strength = 0.36;
+uniform float meadow_tuft_strength = 0.26;
+uniform float trackside_rut_strength = 0.34;
+uniform float shoreline_sediment_strength = 0.24;
+uniform float seasonal_field_strength = 0.22;
 uniform float rain_wetness = 0.0;
 uniform float snow_cover = 0.0;
 uniform float humidity_amount = 0.0;
@@ -278,8 +282,23 @@ void fragment() {
 		albedo = mix(albedo, mix(vec3(0.48, 0.46, 0.39), vec3(0.74, 0.71, 0.62), grit_noise), grit_mask);
 		albedo = mix(albedo, compacted_earth, corridor_grit * (0.34 + rain_wetness * 0.16));
 		albedo = mix(albedo, ballast_dust, corridor_grit * station_grit * 0.26);
+		float tuft_noise = ridge_noise(v_world_xz * 0.0065 + vec2(81.0, 14.0));
+		float tuft_mask = grass_w * (1.0 - corridor_grit) * smoothstep(0.42, 0.78, tuft_noise) * meadow_tuft_strength;
+		vec3 tuft_color = mix(vec3(0.25, 0.34, 0.17), vec3(0.54, 0.50, 0.30), dry_mask * 0.55 + snow_cover * 0.14);
+		albedo = mix(albedo, tuft_color, tuft_mask);
+		float rut_noise = ridge_noise(v_world_xz * 0.0092 + vec2(6.0, 92.0));
+		float rut_mask = corridor_grit * smoothstep(0.44, 0.82, rut_noise) * trackside_rut_strength;
+		albedo = mix(albedo, compacted_earth * mix(0.78, 0.58, rain_wetness), rut_mask);
+		float sediment_noise = fbm(v_world_xz * 0.0051 + vec2(18.0, 73.0));
+		float sediment_mask = clamp((shoreline_mask * 0.74 + floodplain_mask * 0.34 + coast_mask * 0.28) * smoothstep(0.32, 0.74, sediment_noise) * shoreline_sediment_strength, 0.0, 1.0);
+		albedo = mix(albedo, mix(vec3(0.48, 0.45, 0.35), vec3(0.64, 0.60, 0.49), sediment_noise), sediment_mask);
+		float field_noise = fbm(v_world_xz * 0.00185 + vec2(52.0, 29.0));
+		float field_mask = grass_w * (1.0 - shoreline_mask) * (1.0 - station_grit) * smoothstep(0.34, 0.78, elevation) * smoothstep(0.48, 0.82, field_noise) * seasonal_field_strength;
+		albedo = mix(albedo, mix(vec3(0.37, 0.36, 0.20), vec3(0.62, 0.57, 0.36), dry_mask), field_mask);
 		roughness = clamp(roughness + litter_mask * leaf_litter_strength * 0.06 + grit_mask * 0.12, 0.18, 1.0);
 		roughness = clamp(mix(roughness, 0.86, corridor_grit * 0.24), 0.12, 1.0);
+		roughness = clamp(roughness + tuft_mask * 0.08 + sediment_mask * 0.05 + field_mask * 0.07, 0.12, 1.0);
+		roughness = mix(roughness, 0.46, rut_mask * (0.32 + rain_wetness * 0.42));
 
 		vec3 blended_normal = normalize(
 			grass_n * grass_w +

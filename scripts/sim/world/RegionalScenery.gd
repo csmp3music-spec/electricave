@@ -26,8 +26,11 @@ const PineTwigRoughnessPath := "res://assets/textures/tree_materials/pine_tree_0
 @export var grass_detail_density := 0.016
 @export var reed_detail_density := 0.010
 @export var rock_detail_density := 0.006
+@export var stubble_detail_density := 0.012
+@export var scrub_detail_density := 0.007
 @export var ground_detail_clearance_to_route_m := 8.0
 @export var ground_detail_clearance_to_stop_m := 30.0
+@export var max_scrub_instances := 900
 
 var _route9_backdrop: Node
 var _town_manager: Node
@@ -41,9 +44,13 @@ var _broadleaf_foliage_material_cache: StandardMaterial3D
 var _grass_detail_material_cache: StandardMaterial3D
 var _reed_detail_material_cache: StandardMaterial3D
 var _rock_detail_material_cache: StandardMaterial3D
+var _stubble_detail_material_cache: StandardMaterial3D
+var _scrub_detail_material_cache: StandardMaterial3D
 var _foliage_mesh_cache: Mesh
 var _broadleaf_foliage_mesh_cache: Mesh
 var _grass_detail_mesh_cache: Mesh
+var _stubble_detail_mesh_cache: Mesh
+var _scrub_detail_mesh_cache: Mesh
 
 func _ready() -> void:
 	_resolve_dependencies()
@@ -322,27 +329,35 @@ func _build_ground_detail_multimeshes(route_points: PackedVector3Array, stop_pos
 	var grass_positions := PackedVector3Array()
 	var reed_positions := PackedVector3Array()
 	var rock_positions := PackedVector3Array()
+	var stubble_positions := PackedVector3Array()
+	var scrub_positions := PackedVector3Array()
 	var water_markers: Array = _route9_backdrop.call("get_water_markers") if _route9_backdrop.has_method("get_water_markers") else []
 	for water_variant in water_markers:
-		_scatter_shore_detail(water_variant, grass_positions, reed_positions, route_points, stop_positions)
+		_scatter_shore_detail(water_variant, grass_positions, reed_positions, scrub_positions, route_points, stop_positions)
 	var hill_markers: Array = _route9_backdrop.call("get_hill_markers") if _route9_backdrop.has_method("get_hill_markers") else []
 	for hill_variant in hill_markers:
-		_scatter_upland_detail(hill_variant, grass_positions, rock_positions, route_points, stop_positions)
+		_scatter_upland_detail(hill_variant, grass_positions, rock_positions, stubble_positions, scrub_positions, route_points, stop_positions)
 	for stop_pos in stop_positions:
 		_scatter_corridor_detail(stop_pos, grass_positions, route_points, stop_positions)
+		_scatter_town_edge_detail(stop_pos, stubble_positions, scrub_positions, route_points, stop_positions)
 	_trim_detail_positions(grass_positions, max_ground_detail_instances)
 	_trim_detail_positions(reed_positions, int(max_ground_detail_instances * 0.38))
 	_trim_detail_positions(rock_positions, int(max_ground_detail_instances * 0.24))
+	_trim_detail_positions(stubble_positions, int(max_ground_detail_instances * 0.46))
+	_trim_detail_positions(scrub_positions, max_scrub_instances)
 	_build_grass_or_reed_detail(grass_positions, false)
 	_build_grass_or_reed_detail(reed_positions, true)
 	_build_rock_detail(rock_positions)
+	_build_stubble_detail(stubble_positions)
+	_build_scrub_detail(scrub_positions)
 
-func _scatter_shore_detail(water_variant: Dictionary, grass_positions: PackedVector3Array, reed_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+func _scatter_shore_detail(water_variant: Dictionary, grass_positions: PackedVector3Array, reed_positions: PackedVector3Array, scrub_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = abs(String(water_variant.get("name", "water_detail")).hash()) + 9091
 	var perimeter_hint := _water_perimeter_hint(water_variant)
 	var grass_count := clampi(int(perimeter_hint * grass_detail_density * 0.18), 10, 220)
 	var reed_count := clampi(int(perimeter_hint * reed_detail_density * 0.16), 8, 180)
+	var scrub_count := clampi(int(perimeter_hint * scrub_detail_density * 0.055), 4, 70)
 	for i in range(grass_count):
 		if grass_positions.size() >= max_ground_detail_instances:
 			break
@@ -355,14 +370,22 @@ func _scatter_shore_detail(water_variant: Dictionary, grass_positions: PackedVec
 		var pos := _random_water_edge_position(water_variant, rng, 4.0, 42.0)
 		if _can_place_ground_detail(pos, route_points, stop_positions):
 			reed_positions.append(_grounded(pos))
+	for i in range(scrub_count):
+		if scrub_positions.size() >= max_scrub_instances:
+			break
+		var pos := _random_water_edge_position(water_variant, rng, 58.0, 210.0)
+		if _can_place_scrub_detail(pos, route_points, stop_positions):
+			scrub_positions.append(_grounded(pos))
 
-func _scatter_upland_detail(hill_variant: Dictionary, grass_positions: PackedVector3Array, rock_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+func _scatter_upland_detail(hill_variant: Dictionary, grass_positions: PackedVector3Array, rock_positions: PackedVector3Array, stubble_positions: PackedVector3Array, scrub_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
 	var center := _hill_or_water_center(hill_variant)
 	var radius_m := maxf(260.0, float(hill_variant.get("radius_m", 950.0)))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = abs(String(hill_variant.get("name", "upland_detail")).hash()) + 5303
 	var grass_count := clampi(int(radius_m * grass_detail_density * 0.30), 8, 160)
 	var rock_count := clampi(int(radius_m * rock_detail_density * 0.26), 4, 90)
+	var stubble_count := clampi(int(radius_m * stubble_detail_density * 0.18), 4, 90)
+	var scrub_count := clampi(int(radius_m * scrub_detail_density * 0.13), 3, 58)
 	for i in range(grass_count):
 		if grass_positions.size() >= max_ground_detail_instances:
 			break
@@ -382,6 +405,25 @@ func _scatter_upland_detail(hill_variant: Dictionary, grass_positions: PackedVec
 			continue
 		if _can_place_ground_detail(pos, route_points, stop_positions):
 			rock_positions.append(_grounded(pos))
+	for i in range(stubble_count):
+		if stubble_positions.size() >= int(max_ground_detail_instances * 0.46):
+			break
+		var angle := rng.randf_range(0.0, TAU)
+		var radial := radius_m * sqrt(rng.randf_range(0.20, 0.86))
+		var pos := center + Vector3(cos(angle) * radial, 0.0, sin(angle) * radial)
+		var context := _terrain_context_at(pos)
+		if float(context.get("shore_factor", 0.0)) > 0.24:
+			continue
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			stubble_positions.append(_grounded(pos))
+	for i in range(scrub_count):
+		if scrub_positions.size() >= max_scrub_instances:
+			break
+		var angle := rng.randf_range(0.0, TAU)
+		var radial := radius_m * sqrt(rng.randf_range(0.34, 0.98))
+		var pos := center + Vector3(cos(angle) * radial, 0.0, sin(angle) * radial)
+		if _can_place_scrub_detail(pos, route_points, stop_positions):
+			scrub_positions.append(_grounded(pos))
 
 func _scatter_corridor_detail(stop_pos: Vector3, grass_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -394,6 +436,29 @@ func _scatter_corridor_detail(stop_pos: Vector3, grass_positions: PackedVector3A
 		var pos := stop_pos + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		if _can_place_ground_detail(pos, route_points, stop_positions):
 			grass_positions.append(_grounded(pos))
+
+func _scatter_town_edge_detail(stop_pos: Vector3, stubble_positions: PackedVector3Array, scrub_positions: PackedVector3Array, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(absf(stop_pos.x * 0.13 + stop_pos.z * 0.29)) + 1447
+	for i in range(10):
+		if stubble_positions.size() >= int(max_ground_detail_instances * 0.46):
+			break
+		var angle := rng.randf_range(0.0, TAU)
+		var radius := rng.randf_range(170.0, 420.0)
+		var pos := stop_pos + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		var context := _terrain_context_at(pos)
+		if float(context.get("water_factor", 0.0)) > 0.18 or float(context.get("shore_factor", 0.0)) > 0.32:
+			continue
+		if _can_place_ground_detail(pos, route_points, stop_positions):
+			stubble_positions.append(_grounded(pos))
+	for i in range(5):
+		if scrub_positions.size() >= max_scrub_instances:
+			break
+		var angle := rng.randf_range(0.0, TAU)
+		var radius := rng.randf_range(120.0, 360.0)
+		var pos := stop_pos + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		if _can_place_scrub_detail(pos, route_points, stop_positions):
+			scrub_positions.append(_grounded(pos))
 
 func _build_grass_or_reed_detail(positions: PackedVector3Array, reeds: bool) -> void:
 	if positions.is_empty():
@@ -448,6 +513,58 @@ func _build_rock_detail(positions: PackedVector3Array) -> void:
 	instance.name = "UplandStoneScatter"
 	instance.multimesh = mm
 	instance.material_override = _rock_detail_material()
+	add_child(instance)
+
+func _build_stubble_detail(positions: PackedVector3Array) -> void:
+	if positions.is_empty():
+		return
+	var mesh := _build_stubble_detail_mesh()
+	var material := _stubble_detail_material()
+	if mesh == null or material == null:
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = positions.size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 90377
+	for i in range(positions.size()):
+		var pos := positions[i]
+		var height := rng.randf_range(0.18, 0.48)
+		var width := rng.randf_range(0.45, 1.25)
+		var yaw := rng.randf_range(0.0, TAU)
+		var basis := Basis().rotated(Vector3.UP, yaw).scaled(Vector3(width, height, width))
+		mm.set_instance_transform(i, Transform3D(basis, pos))
+	var instance := MultiMeshInstance3D.new()
+	instance.name = "FieldStubble"
+	instance.multimesh = mm
+	instance.material_override = material
+	add_child(instance)
+
+func _build_scrub_detail(positions: PackedVector3Array) -> void:
+	if positions.is_empty():
+		return
+	var mesh := _build_scrub_detail_mesh()
+	var material := _scrub_detail_material()
+	if mesh == null or material == null:
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = positions.size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 72163
+	for i in range(positions.size()):
+		var pos := positions[i]
+		var height := rng.randf_range(0.72, 1.85)
+		var width := rng.randf_range(1.25, 3.4)
+		var yaw := rng.randf_range(0.0, TAU)
+		var basis := Basis().rotated(Vector3.UP, yaw).scaled(Vector3(width, height, width))
+		mm.set_instance_transform(i, Transform3D(basis, pos))
+	var instance := MultiMeshInstance3D.new()
+	instance.name = "TownEdgeScrub"
+	instance.multimesh = mm
+	instance.material_override = material
 	add_child(instance)
 
 func _tree_trunk_material() -> StandardMaterial3D:
@@ -536,6 +653,26 @@ func _rock_detail_material() -> StandardMaterial3D:
 	_rock_detail_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return _rock_detail_material_cache
 
+func _stubble_detail_material() -> StandardMaterial3D:
+	if _stubble_detail_material_cache != null:
+		return _stubble_detail_material_cache
+	_stubble_detail_material_cache = StandardMaterial3D.new()
+	_stubble_detail_material_cache.albedo_color = Color(0.60, 0.52, 0.31, 1.0)
+	_stubble_detail_material_cache.roughness = 0.98
+	_stubble_detail_material_cache.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_stubble_detail_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return _stubble_detail_material_cache
+
+func _scrub_detail_material() -> StandardMaterial3D:
+	if _scrub_detail_material_cache != null:
+		return _scrub_detail_material_cache
+	_scrub_detail_material_cache = StandardMaterial3D.new()
+	_scrub_detail_material_cache.albedo_color = Color(0.33, 0.38, 0.22, 1.0)
+	_scrub_detail_material_cache.roughness = 0.96
+	_scrub_detail_material_cache.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_scrub_detail_material_cache.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return _scrub_detail_material_cache
+
 func _build_foliage_card_mesh() -> Mesh:
 	if _foliage_mesh_cache != null:
 		return _foliage_mesh_cache
@@ -575,6 +712,31 @@ func _build_grass_detail_mesh() -> Mesh:
 	st.generate_normals()
 	_grass_detail_mesh_cache = st.commit()
 	return _grass_detail_mesh_cache
+
+func _build_stubble_detail_mesh() -> Mesh:
+	if _stubble_detail_mesh_cache != null:
+		return _stubble_detail_mesh_cache
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_append_ground_blade_card(st, 0.0, 0.11, 1.0, 0.02)
+	_append_ground_blade_card(st, PI * 0.25, 0.09, 0.76, -0.03)
+	_append_ground_blade_card(st, PI * 0.52, 0.08, 0.64, 0.01)
+	st.generate_normals()
+	_stubble_detail_mesh_cache = st.commit()
+	return _stubble_detail_mesh_cache
+
+func _build_scrub_detail_mesh() -> Mesh:
+	if _scrub_detail_mesh_cache != null:
+		return _scrub_detail_mesh_cache
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_append_tree_card(st, 0.0, 0.42, 0.82, 0.02)
+	_append_tree_card(st, PI * 0.28, 0.48, 0.74, 0.08)
+	_append_tree_card(st, PI * 0.58, 0.38, 0.68, 0.14)
+	_append_tree_card(st, PI * 0.82, 0.30, 0.56, 0.04)
+	st.generate_normals()
+	_scrub_detail_mesh_cache = st.commit()
+	return _scrub_detail_mesh_cache
 
 func _append_ground_blade_card(st: SurfaceTool, angle: float, half_width: float, height: float, lean: float) -> void:
 	var basis := Basis().rotated(Vector3.UP, angle)
@@ -716,6 +878,18 @@ func _apply_weather_to_materials() -> void:
 		rock_tint = rock_tint.lerp(Color(0.72, 0.74, 0.74, 1.0), snow_cover * 0.32 + ground_frost * 0.16)
 		_rock_detail_material_cache.albedo_color = rock_tint
 		_rock_detail_material_cache.roughness = lerpf(0.98, 0.48, wetness * 0.68 + storminess * 0.12)
+	if _stubble_detail_material_cache != null:
+		var stubble_tint := Color(0.60, 0.52, 0.31, 1.0)
+		stubble_tint = stubble_tint.lerp(Color(0.42, 0.38, 0.25, 1.0), wetness * 0.28 + storminess * 0.16)
+		stubble_tint = stubble_tint.lerp(Color(0.78, 0.78, 0.73, 1.0), snow_cover * 0.34 + ground_frost * 0.18)
+		_stubble_detail_material_cache.albedo_color = stubble_tint
+		_stubble_detail_material_cache.roughness = lerpf(0.98, 0.70, wetness * 0.48 + storminess * 0.12)
+	if _scrub_detail_material_cache != null:
+		var scrub_tint := Color(0.33, 0.38, 0.22, 1.0)
+		scrub_tint = scrub_tint.lerp(Color(0.25, 0.30, 0.20, 1.0), wetness * 0.32 + storminess * 0.16)
+		scrub_tint = scrub_tint.lerp(Color(0.72, 0.76, 0.74, 1.0), snow_cover * 0.40 + ground_frost * 0.20)
+		_scrub_detail_material_cache.albedo_color = scrub_tint
+		_scrub_detail_material_cache.roughness = lerpf(0.96, 0.64, wetness * 0.58 + storminess * 0.14)
 
 func _tree_density_score(pos: Vector3, stop_positions: PackedVector3Array) -> float:
 	var context := _terrain_context_at(pos)
@@ -802,6 +976,21 @@ func _can_place_ground_detail(pos: Vector3, route_points: PackedVector3Array, st
 	if _distance_to_route(pos, route_points) < ground_detail_clearance_to_route_m:
 		return false
 	if _position_roll(pos, 0.037) < 0.08:
+		return false
+	return true
+
+func _can_place_scrub_detail(pos: Vector3, route_points: PackedVector3Array, stop_positions: PackedVector3Array) -> bool:
+	if _route9_backdrop.has_method("is_water_at") and bool(_route9_backdrop.call("is_water_at", pos)):
+		return false
+	var context := _terrain_context_at(pos)
+	if float(context.get("water_factor", 0.0)) > 0.12:
+		return false
+	for stop_pos in stop_positions:
+		if pos.distance_to(stop_pos) < ground_detail_clearance_to_stop_m + 18.0:
+			return false
+	if _distance_to_route(pos, route_points) < ground_detail_clearance_to_route_m + 12.0:
+		return false
+	if _position_roll(pos, 0.043) < 0.14:
 		return false
 	return true
 

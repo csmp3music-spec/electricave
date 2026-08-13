@@ -35,6 +35,10 @@ const RockNormalPath := "res://assets/textures/terrain_materials/aerial_ground_r
 @export var station_grit_radius_m := 155.0
 @export var route_disturbance_strength := 0.42
 @export var urban_grit_strength := 0.36
+@export var meadow_tuft_strength := 0.28
+@export var trackside_rut_strength := 0.36
+@export var shoreline_sediment_strength := 0.26
+@export var seasonal_field_strength := 0.24
 
 var _route9_backdrop: Node
 var _weather: Node
@@ -164,6 +168,10 @@ func _apply_textures() -> void:
 	_shader_material.set_shader_parameter("damp_stain_strength", damp_stain_strength)
 	_shader_material.set_shader_parameter("route_disturbance_strength", route_disturbance_strength)
 	_shader_material.set_shader_parameter("urban_grit_strength", urban_grit_strength)
+	_shader_material.set_shader_parameter("meadow_tuft_strength", meadow_tuft_strength)
+	_shader_material.set_shader_parameter("trackside_rut_strength", trackside_rut_strength)
+	_shader_material.set_shader_parameter("shoreline_sediment_strength", shoreline_sediment_strength)
+	_shader_material.set_shader_parameter("seasonal_field_strength", seasonal_field_strength)
 	_shader_material.set_shader_parameter("macro_albedo_strength", terrain_texture_contrast * 1.03)
 	_shader_material.set_shader_parameter("wet_clearcoat_strength", 0.82)
 	_shader_material.set_shader_parameter("terrain_low_hint", terrain_height_range_m.x)
