@@ -103,6 +103,8 @@ signal town_updated(town)
 @export var platform_offset := 18.0
 @export var station_cluster_offset := 58.0
 @export var station_cluster_spacing := 42.0
+@export var station_infill_spacing := 56.0
+@export var station_infill_distance := 118.0
 @export var max_spawns_per_tick := 40
 @export var parcel_jitter := 6.0
 @export var min_parcel_spacing := 10.0
@@ -128,6 +130,10 @@ signal town_updated(town)
 @export var rural_wall_offset_m := 5.3
 @export var rural_wall_height_m := 0.86
 @export var rural_wall_width_m := 0.62
+@export var enable_street_furniture := true
+@export var street_furniture_spacing_m := 72.0
+@export var enable_building_details := true
+@export var building_detail_probability := 0.74
 @export var debug_spawn_on_ready := false
 @export var debug_stop_positions: Array[Vector3] = []
 @export var debug_stop_frequency := 6.0
@@ -333,7 +339,31 @@ func _spawn_station_cluster(stop) -> void:
 		var entry: Vector2 = cluster_offsets[i]
 		var category := String(categories[i % categories.size()])
 		_queue_spawn(_stop_side_anchor(stop, entry.x, station_cluster_offset, entry.y), category, stop.position)
+	_queue_station_infill(stop)
 	_queue_regional_landmarks(stop)
+
+func _queue_station_infill(stop) -> void:
+	var categories := _station_cluster_categories(stop)
+	var infill_count := _station_infill_count_for(stop)
+	if infill_count <= 0:
+		return
+	for i in range(infill_count):
+		var side_sign := -1.0 if i % 2 == 0 else 1.0
+		var lane := i / 2
+		var stagger := (float(lane) - float(infill_count) * 0.22) * station_infill_spacing
+		var lateral := station_infill_distance + float(lane % 3) * 22.0
+		var category := String(categories[(i + 2) % categories.size()])
+		_queue_spawn(_stop_side_anchor(stop, side_sign, lateral, stagger), category, stop.position)
+
+func _station_infill_count_for(stop) -> int:
+	var name := String(stop.town_name)
+	if name in BOSTON_CORE_STOPS:
+		return 8
+	if name in WESTERN_CENTERS or name in INDUSTRIAL_STOPS:
+		return 7
+	if name in STREETCAR_SUBURB_STOPS:
+		return 5
+	return 3
 
 func _spawn_growth_ring(stop, force: bool) -> int:
 	var spawned := 0
@@ -419,6 +449,8 @@ func _spawn_building_now(pos: Vector3, category: String, anchor: Vector3 = Vecto
 	if instance is Node3D:
 		instance.rotation.y = _rotation_for(placed_pos, anchor)
 		_apply_spawned_materials(instance, category)
+		_apply_building_material_variation(instance, category, placed_pos)
+		_add_building_details(instance, category, placed_pos)
 	_register_occupied(placed_pos)
 
 func _scene_for_category(category: String) -> PackedScene:
@@ -510,7 +542,7 @@ func _road_center_scale_for_style(style: String) -> float:
 		_:
 			return 1.0
 
-func _spawn_segment_box(center: Vector3, forward: Vector3, size: Vector3, material: Material) -> void:
+func _spawn_segment_box(center: Vector3, forward: Vector3, size: Vector3, material: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	var mesh_instance := MeshInstance3D.new()
@@ -520,6 +552,7 @@ func _spawn_segment_box(center: Vector3, forward: Vector3, size: Vector3, materi
 	mesh_instance.global_position = center
 	mesh_instance.look_at(mesh_instance.global_position + forward, Vector3.UP)
 	mesh_instance.rotate_y(PI)
+	return mesh_instance
 
 func _spawn_rural_stone_walls(a: Vector3, b: Vector3, forward: Vector3, side: Vector3, mid: Vector3, length: float, shoulder_offset: float) -> void:
 	if length < 18.0:
@@ -538,6 +571,141 @@ func _spawn_rural_stone_walls(a: Vector3, b: Vector3, forward: Vector3, side: Ve
 
 func _apply_spawned_materials(instance: Node3D, category: String) -> void:
 	_apply_materials_recursive(instance, category)
+
+func _apply_building_material_variation(instance: Node3D, category: String, placed_pos: Vector3) -> void:
+	var seed := _detail_seed(placed_pos, category)
+	var tint_shift := (float(seed % 100) / 100.0 - 0.5) * 0.12
+	_apply_material_variation_recursive(instance, tint_shift, seed)
+
+func _apply_material_variation_recursive(node: Node, tint_shift: float, seed: int) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		var material := mesh_instance.material_override as StandardMaterial3D
+		if material != null:
+			var varied := material.duplicate() as StandardMaterial3D
+			var color := varied.albedo_color
+			if seed % 2 == 0:
+				color = color.lightened(absf(tint_shift))
+			else:
+				color = color.darkened(absf(tint_shift))
+			varied.albedo_color = color
+			varied.roughness = clampf(varied.roughness + tint_shift * 0.32, 0.42, 1.0)
+			mesh_instance.material_override = varied
+	for child in node.get_children():
+		_apply_material_variation_recursive(child, tint_shift, seed + 17)
+
+func _add_building_details(instance: Node3D, category: String, placed_pos: Vector3) -> void:
+	if not enable_building_details:
+		return
+	var seed := _detail_seed(placed_pos, category)
+	var threshold := int(clampf(building_detail_probability, 0.0, 1.0) * 100.0)
+	if seed % 100 > threshold:
+		return
+	match category:
+		"commercial_high", "commercial_low":
+			_add_commercial_details(instance, seed)
+		"industrial":
+			_add_industrial_details(instance, seed)
+		"farms":
+			_add_farm_details(instance, seed)
+		"civic", "transit":
+			_add_civic_details(instance, seed)
+		"residential_high", "residential_medium", "residential_low":
+			_add_residential_details(instance, seed)
+		_:
+			_add_residential_details(instance, seed)
+
+func _add_commercial_details(instance: Node3D, seed: int) -> void:
+	var awning_mat := _solid_detail_material(Color(0.32, 0.24, 0.18, 1.0).lightened(float(seed % 4) * 0.05), 0.82)
+	var sign_mat := _solid_detail_material(Color(0.74, 0.61, 0.38, 1.0).darkened(float(seed % 3) * 0.05), 0.72)
+	var trim_mat := _material_for_style("building_storefront")
+	_add_box_detail(instance, "CanvasAwning", Vector3(0.0, 3.1, -6.0), Vector3(9.6, 0.32, 1.05), awning_mat)
+	_add_box_detail(instance, "ShopSign", Vector3(0.0, 4.35, -5.92), Vector3(7.2, 0.72, 0.18), sign_mat)
+	_add_box_detail(instance, "WindowBand", Vector3(0.0, 7.2, -5.82), Vector3(8.4, 1.0, 0.12), trim_mat)
+	if seed % 2 == 0:
+		_add_box_detail(instance, "SideStoop", Vector3(-4.8, 0.34, -6.2), Vector3(1.8, 0.32, 1.8), _material_for_style("station_cobble_crossing"))
+	_add_roof_chimney(instance, Vector3(3.2, 10.8, 2.6), seed)
+
+func _add_residential_details(instance: Node3D, seed: int) -> void:
+	var trim_mat := _material_for_style("building_wood_trim")
+	var roof_mat := _material_for_style("building_roof_slate")
+	_add_box_detail(instance, "FrontPorch", Vector3(0.0, 0.58, -5.7), Vector3(5.2, 0.44, 2.0), trim_mat)
+	_add_box_detail(instance, "PorchRoof", Vector3(0.0, 2.25, -5.78), Vector3(5.7, 0.28, 2.2), roof_mat)
+	if seed % 3 != 0:
+		_add_box_detail(instance, "BayWindow", Vector3(3.4, 3.3, -5.74), Vector3(1.55, 1.9, 0.56), _material_for_style("building_plaster_light"))
+	if seed % 2 == 0:
+		_add_low_fence(instance, seed)
+	_add_roof_chimney(instance, Vector3(-2.8, 9.9, 2.2), seed)
+
+func _add_industrial_details(instance: Node3D, seed: int) -> void:
+	_add_box_detail(instance, "LoadingDock", Vector3(0.0, 0.82, -7.4), Vector3(8.2, 0.72, 2.6), _material_for_style("building_wood_trim"))
+	_add_box_detail(instance, "FreightDoor", Vector3(-2.5, 2.4, -6.0), Vector3(2.1, 2.9, 0.16), _material_for_style("building_storefront"))
+	_add_cylinder_detail(instance, "BrickStack", Vector3(4.4, 8.8, 3.8), 0.42, 6.2, _material_for_style("building_industrial_brick"))
+	if seed % 2 == 1:
+		_add_box_detail(instance, "CoalBin", Vector3(4.6, 0.65, -6.4), Vector3(2.6, 0.9, 1.8), _material_for_style("road_grime"))
+
+func _add_farm_details(instance: Node3D, seed: int) -> void:
+	_add_box_detail(instance, "LeanToShed", Vector3(6.3, 1.35, 1.4), Vector3(3.6, 2.2, 4.8), _material_for_style("building_wood_trim"))
+	_add_box_detail(instance, "Trough", Vector3(-5.2, 0.34, -4.8), Vector3(2.5, 0.45, 0.72), _material_for_style("stone_wall"))
+	if seed % 2 == 0:
+		_add_low_fence(instance, seed)
+
+func _add_civic_details(instance: Node3D, seed: int) -> void:
+	_add_box_detail(instance, "StoneSteps", Vector3(0.0, 0.38, -6.5), Vector3(6.8, 0.36, 2.2), _material_for_style("station_cobble_crossing"))
+	_add_box_detail(instance, "EntryCanopy", Vector3(0.0, 3.1, -6.3), Vector3(4.6, 0.32, 1.55), _material_for_style("building_civic_stone"))
+	if seed % 2 == 0:
+		_add_box_detail(instance, "NoticeBoard", Vector3(-3.8, 1.7, -6.5), Vector3(1.0, 1.4, 0.12), _solid_detail_material(Color(0.18, 0.15, 0.11, 1.0), 0.86))
+
+func _add_low_fence(instance: Node3D, seed: int) -> void:
+	var material := _material_for_style("building_wood_trim")
+	var z := -7.2 - float(seed % 3) * 0.18
+	_add_box_detail(instance, "FrontFenceLeft", Vector3(-3.9, 0.72, z), Vector3(3.8, 0.26, 0.22), material)
+	_add_box_detail(instance, "FrontFenceRight", Vector3(3.9, 0.72, z), Vector3(3.8, 0.26, 0.22), material)
+	for x in [-5.8, -2.0, 2.0, 5.8]:
+		_add_box_detail(instance, "FencePost", Vector3(float(x), 0.58, z), Vector3(0.22, 1.05, 0.22), material)
+
+func _add_roof_chimney(instance: Node3D, local_pos: Vector3, seed: int) -> void:
+	var material := _material_for_style("building_industrial_brick" if seed % 3 == 0 else "building_commercial_masonry")
+	_add_box_detail(instance, "Chimney", local_pos, Vector3(0.72, 2.4 + float(seed % 3) * 0.32, 0.72), material)
+
+func _add_box_detail(parent: Node3D, detail_name: String, local_pos: Vector3, size: Vector3, material: Material) -> MeshInstance3D:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var detail := MeshInstance3D.new()
+	detail.name = detail_name
+	detail.mesh = mesh
+	detail.material_override = material
+	parent.add_child(detail)
+	detail.position = local_pos
+	return detail
+
+func _add_cylinder_detail(parent: Node3D, detail_name: String, local_pos: Vector3, radius: float, height: float, material: Material) -> MeshInstance3D:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius * 1.08
+	mesh.height = height
+	mesh.radial_segments = 10
+	var detail := MeshInstance3D.new()
+	detail.name = detail_name
+	detail.mesh = mesh
+	detail.material_override = material
+	parent.add_child(detail)
+	detail.position = local_pos
+	return detail
+
+func _solid_detail_material(color: Color, roughness: float) -> StandardMaterial3D:
+	var key := "solid_%s_%.2f" % [color.to_html(), roughness]
+	if _material_cache.has(key):
+		return _material_cache[key] as StandardMaterial3D
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = roughness
+	material.metallic = 0.0
+	_material_cache[key] = material
+	return material
+
+func _detail_seed(pos: Vector3, category: String) -> int:
+	return abs(int(pos.x * 0.37 + pos.z * 0.61) + category.hash())
 
 func _apply_materials_recursive(node: Node, category: String) -> void:
 	if node is MeshInstance3D:
@@ -825,6 +993,7 @@ func _spawn_street_segment(a: Vector3, b: Vector3, style: String = "suburban") -
 	_spawn_road_surface_detail(a, b, forward, side, mid, length, style, center_width, shoulder_offset)
 	if style == "rural":
 		_spawn_rural_stone_walls(a, b, forward, side, mid, length, shoulder_offset)
+	_spawn_street_furniture(a, b, forward, side, length, style, shoulder_offset)
 
 func _spawn_road_surface_detail(a: Vector3, b: Vector3, forward: Vector3, side: Vector3, mid: Vector3, length: float, style: String, center_width: float, shoulder_offset: float) -> void:
 	var seed := int(absf(a.x * 0.041 + a.z * 0.067 + b.x * 0.083 + b.z * 0.019))
@@ -862,6 +1031,85 @@ func _spawn_road_surface_detail(a: Vector3, b: Vector3, forward: Vector3, side: 
 		var crossing_len := station_crossing_width_m * rng.randf_range(0.82, 1.18)
 		var crossing_pos := mid + forward * rng.randf_range(-length * 0.18, length * 0.18) + Vector3(0.0, detail_y + 0.004, 0.0)
 		_spawn_segment_box(crossing_pos, forward, Vector3(crossing_width, 0.026, crossing_len), _material_for_style("station_cobble_crossing"))
+
+func _spawn_street_furniture(a: Vector3, b: Vector3, forward: Vector3, side: Vector3, length: float, style: String, shoulder_offset: float) -> void:
+	if not enable_street_furniture or length < 24.0:
+		return
+	var seed := int(absf(a.x * 0.053 + a.z * 0.097 + b.x * 0.029 + b.z * 0.071))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var count := clampi(int(length / maxf(28.0, street_furniture_spacing_m)), 1, 8)
+	for i in range(count):
+		var t := (float(i) + rng.randf_range(0.22, 0.78)) / float(count)
+		var along := (t - 0.5) * length
+		var side_sign := -1.0 if (seed + i) % 2 == 0 else 1.0
+		var base_pos := (a + b) * 0.5 + forward * along + side * side_sign * (shoulder_offset + rng.randf_range(1.2, 2.6))
+		base_pos = _with_ground_height(base_pos, 0.05)
+		if style == "urban":
+			if rng.randf() < 0.72:
+				_spawn_lamp_post(base_pos, forward, seed + i)
+			if rng.randf() < 0.45:
+				_spawn_bench(base_pos + forward * rng.randf_range(-2.2, 2.2), forward, seed + i)
+			if rng.randf() < 0.34:
+				_spawn_crates(base_pos - forward * rng.randf_range(2.2, 4.4), forward, seed + i)
+		elif style == "suburban":
+			if rng.randf() < 0.42:
+				_spawn_lamp_post(base_pos, forward, seed + i)
+			if rng.randf() < 0.36:
+				_spawn_bench(base_pos + forward * rng.randf_range(-1.8, 1.8), forward, seed + i)
+			if rng.randf() < 0.28:
+				_spawn_hitching_post(base_pos - forward * rng.randf_range(1.5, 3.5), forward)
+		else:
+			if rng.randf() < 0.58:
+				_spawn_hitching_post(base_pos, forward)
+			if rng.randf() < 0.30:
+				_spawn_crates(base_pos + forward * rng.randf_range(-2.8, 2.8), forward, seed + i)
+
+func _spawn_lamp_post(pos: Vector3, forward: Vector3, seed: int) -> void:
+	var metal := _solid_detail_material(Color(0.12, 0.11, 0.10, 1.0), 0.62)
+	var glass := _solid_detail_material(Color(0.95, 0.78, 0.44, 1.0), 0.38)
+	_spawn_furniture_cylinder("LampPost", pos + Vector3(0.0, 1.55, 0.0), 0.08, 3.1, metal, 8)
+	_spawn_segment_box(pos + Vector3(0.0, 3.16, 0.0), forward, Vector3(0.42, 0.20, 0.42), metal)
+	var lantern := _spawn_segment_box(pos + Vector3(0.0, 2.88, 0.0), forward, Vector3(0.30, 0.42, 0.30), glass)
+	lantern.name = "WarmLantern"
+	if seed % 3 == 0:
+		_spawn_segment_box(pos + Vector3(0.0, 0.16, 0.0), forward, Vector3(0.42, 0.12, 0.42), _material_for_style("stone_wall"))
+
+func _spawn_bench(pos: Vector3, forward: Vector3, seed: int) -> void:
+	var wood := _material_for_style("building_wood_trim")
+	var side := Vector3(-forward.z, 0.0, forward.x).normalized()
+	var bench_pos := pos + Vector3(0.0, 0.44, 0.0)
+	_spawn_segment_box(bench_pos, forward, Vector3(1.85, 0.18, 0.46), wood)
+	_spawn_segment_box(bench_pos - side * 0.18 + Vector3(0.0, 0.42, 0.0), forward, Vector3(1.85, 0.14, 0.16), wood)
+	if seed % 2 == 0:
+		_spawn_segment_box(pos + forward * 0.74 + Vector3(0.0, 0.23, 0.0), forward, Vector3(0.16, 0.46, 0.18), wood)
+		_spawn_segment_box(pos - forward * 0.74 + Vector3(0.0, 0.23, 0.0), forward, Vector3(0.16, 0.46, 0.18), wood)
+
+func _spawn_crates(pos: Vector3, forward: Vector3, seed: int) -> void:
+	var wood := _material_for_style("building_wood_trim")
+	var count := 1 + seed % 3
+	for i in range(count):
+		var offset := forward * (float(i) * 0.58 - 0.42) + Vector3(0.0, 0.26 + float(i % 2) * 0.12, 0.0)
+		_spawn_segment_box(pos + offset, forward, Vector3(0.54, 0.50 + float(i % 2) * 0.18, 0.54), wood)
+
+func _spawn_hitching_post(pos: Vector3, forward: Vector3) -> void:
+	var wood := _material_for_style("building_wood_trim")
+	_spawn_furniture_cylinder("HitchingPost", pos + Vector3(0.0, 0.55, 0.0), 0.11, 1.1, wood, 7)
+	_spawn_segment_box(pos + Vector3(0.0, 1.08, 0.0), forward, Vector3(1.45, 0.16, 0.16), wood)
+
+func _spawn_furniture_cylinder(detail_name: String, center: Vector3, radius: float, height: float, material: Material, radial_segments: int = 8) -> MeshInstance3D:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = height
+	mesh.radial_segments = radial_segments
+	var detail := MeshInstance3D.new()
+	detail.name = detail_name
+	detail.mesh = mesh
+	detail.material_override = material
+	_street_root.add_child(detail)
+	detail.global_position = center
+	return detail
 
 func _register_occupied(pos: Vector3) -> void:
 	_occupied.append(pos)

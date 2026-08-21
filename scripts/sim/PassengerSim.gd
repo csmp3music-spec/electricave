@@ -16,14 +16,17 @@ class PassengerAgent:
 @export var time_controller_path: NodePath
 @export var crowd_refresh_seconds := 1.2
 @export var crowd_regen_per_tick := 2
-@export var max_visuals_per_stop := 18
+@export var max_visuals_per_stop := 26
 @export var minimum_visuals_for_busy_stop := 2
 @export var crowd_row_spacing := 1.25
 @export var crowd_side_offset := 3.2
 @export var use_imported_passenger_models := true
-@export var max_imported_visuals_per_stop := 1
-@export var imported_model_activation_radius_m := 450.0
-@export var max_active_imported_visuals := 4
+@export var max_imported_visuals_per_stop := 2
+@export var imported_model_activation_radius_m := 620.0
+@export var max_active_imported_visuals := 8
+@export var ambient_pedestrians_per_stop := 3
+@export var peak_ambient_pedestrian_bonus := 3
+@export var downtown_ambient_pedestrian_bonus := 2
 @export var overcrowding_threshold := 14
 @export var severe_overcrowding_threshold := 24
 @export var service_memory_seconds := 90.0
@@ -593,7 +596,8 @@ func _sync_stop_visuals(stop, waiting_count: int, imported_budget: int = 0) -> v
 		_crowd_root.add_child(root)
 		_crowd_nodes[stop_id] = root
 	root.position = stop.position
-	var target_visuals := clampi(waiting_count, 0, max_visuals_per_stop)
+	var ambient_start := clampi(waiting_count, 0, max_visuals_per_stop)
+	var target_visuals := clampi(waiting_count + _ambient_pedestrian_visuals(stop, waiting_count), 0, max_visuals_per_stop)
 	var remove_count := maxi(0, root.get_child_count() - target_visuals)
 	for i in range(remove_count):
 		var child := root.get_child(root.get_child_count() - 1)
@@ -603,21 +607,42 @@ func _sync_stop_visuals(stop, waiting_count: int, imported_budget: int = 0) -> v
 		var passenger = PassengerCrowdActorScript.new()
 		var index := root.get_child_count()
 		root.add_child(passenger)
-		_configure_passenger_visual(passenger, stop_id, index, imported_budget)
+		_configure_passenger_visual(passenger, stop_id, index, imported_budget, true, 0.0, ambient_start)
 	var child_count := root.get_child_count()
 	var wait_stress := clampf(_crowding_pressure(waiting_count) * 0.68 + _waiting_uncertainty(stop, float(_last_service_age_s.get(stop_id, 0.0))) * 0.32, 0.0, 1.0)
 	for i in range(child_count):
 		var passenger := root.get_child(i)
 		if passenger == null or not is_instance_valid(passenger):
 			continue
-		_configure_passenger_visual(passenger, stop_id, i, imported_budget, false, wait_stress)
+		_configure_passenger_visual(passenger, stop_id, i, imported_budget, false, wait_stress, ambient_start)
 	root.visible = target_visuals > 0
+
+func _ambient_pedestrian_visuals(stop, waiting_count: int) -> int:
+	if stop == null:
+		return 0
+	var count := ambient_pedestrians_per_stop
+	if _is_peak_commute_hour():
+		count += peak_ambient_pedestrian_bonus
+	if _is_downtown_stop(String(stop.town_name)):
+		count += downtown_ambient_pedestrian_bonus
+	if String(stop.stop_kind) == "park":
+		count += 2
+	if waiting_count >= overcrowding_threshold:
+		count += 2
+	return clampi(count, 0, maxi(0, max_visuals_per_stop - waiting_count))
 
 func _crowd_seed(stop_id: String, index: int) -> int:
 	return abs(stop_id.hash() + index * 7919)
 
-func _crowd_offset_for(stop_id: String, index: int) -> Vector3:
+func _crowd_offset_for(stop_id: String, index: int, ambient_start: int = -1) -> Vector3:
 	var seed := _crowd_seed(stop_id, index)
+	if ambient_start >= 0 and index >= ambient_start:
+		var ambient_index := index - ambient_start
+		var walk_side := -1.0 if ambient_index % 2 == 0 else 1.0
+		var along_band := float((ambient_index / 2) % 7) - 3.0
+		var lateral := walk_side * (crowd_side_offset + 2.8 + float((seed / 19) % 3) * 0.74)
+		var longitudinal := along_band * 3.6 + (float(seed % 13) - 6.0) * 0.12
+		return Vector3(lateral, 0.0, longitudinal)
 	var side := -1.0 if index % 2 == 0 else 1.0
 	var row := index / 2
 	var lane := row % 3
@@ -632,7 +657,7 @@ func _crowd_rotation_for(stop_id: String, index: int) -> float:
 	var seed := _crowd_seed(stop_id, index)
 	return deg_to_rad(float(seed % 120) - 60.0)
 
-func _configure_passenger_visual(passenger: Node, stop_id: String, index: int, imported_budget: int, force_reconfigure: bool = true, wait_stress: float = 0.0) -> void:
+func _configure_passenger_visual(passenger: Node, stop_id: String, index: int, imported_budget: int, force_reconfigure: bool = true, wait_stress: float = 0.0, ambient_start: int = -1) -> void:
 	if passenger == null:
 		return
 	var use_imported := use_imported_passenger_models and index < imported_budget
@@ -641,10 +666,12 @@ func _configure_passenger_visual(passenger: Node, stop_id: String, index: int, i
 	else:
 		passenger.set("prefer_imported_models", use_imported)
 	if force_reconfigure:
-		passenger.call("configure", _crowd_seed(stop_id, index), index % 5 == 0)
+		var walk_style := index % 5 == 0 or (ambient_start >= 0 and index >= ambient_start)
+		passenger.call("configure", _crowd_seed(stop_id, index), walk_style)
 	if passenger.has_method("set_wait_stress"):
-		passenger.call("set_wait_stress", wait_stress)
-	passenger.position = _crowd_offset_for(stop_id, index)
+		var visual_stress := wait_stress if ambient_start < 0 or index < ambient_start else wait_stress * 0.35
+		passenger.call("set_wait_stress", visual_stress)
+	passenger.position = _crowd_offset_for(stop_id, index, ambient_start)
 	passenger.rotation.y = _crowd_rotation_for(stop_id, index)
 
 func _build_imported_visual_budgets(stops: Array) -> Dictionary:
