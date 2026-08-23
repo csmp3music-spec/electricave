@@ -77,12 +77,13 @@ func can_place_segment(points: PackedVector3Array) -> bool:
 			return false
 	return true
 
-func add_segment(points: PackedVector3Array) -> Curve3D:
+func add_segment(points: PackedVector3Array, player_built := false) -> Curve3D:
 	if not can_place_segment(points):
 		return null
 	var curve: Curve3D = Curve3D.new()
 	for p in points:
 		curve.add_point(p)
+	curve.set_meta("player_built", player_built)
 	segments.append(curve)
 	emit_signal("segment_added", curve)
 	if render_segments:
@@ -161,6 +162,33 @@ func get_total_track_length() -> float:
 func clear_network() -> void:
 	_clear_render_nodes()
 	segments.clear()
+
+func get_save_state() -> Dictionary:
+	var saved_segments: Array = []
+	for curve in segments:
+		if curve == null or not bool(curve.get_meta("player_built", false)):
+			continue
+		var points: Array = []
+		for point_index in range(curve.point_count):
+			var point := curve.get_point_position(point_index)
+			points.append([point.x, point.y, point.z])
+		saved_segments.append(points)
+	return {"player_segments": saved_segments}
+
+func apply_save_state(state: Dictionary) -> void:
+	for segment_index in range(segments.size() - 1, -1, -1):
+		var existing := segments[segment_index]
+		if existing != null and bool(existing.get_meta("player_built", false)):
+			segments.remove_at(segment_index)
+	for segment_variant in state.get("player_segments", []):
+		var points := PackedVector3Array()
+		for point_variant in segment_variant:
+			if point_variant is Array and point_variant.size() >= 3:
+				points.append(Vector3(float(point_variant[0]), float(point_variant[1]), float(point_variant[2])))
+		if points.size() >= 2:
+			add_segment(points, true)
+	if render_segments:
+		_rebuild_render_nodes()
 
 func remove_segment_near(world_pos: Vector3, max_distance: float = 24.0) -> Dictionary:
 	if segments.is_empty():

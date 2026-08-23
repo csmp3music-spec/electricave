@@ -262,6 +262,23 @@ func claim_recent_rescue_event(max_age_s: float = 8.0) -> Dictionary:
 	_last_rescue_event.clear()
 	return payload
 
+func get_save_state() -> Dictionary:
+	return {
+		"waiting_counts": _waiting_counts.duplicate(true),
+		"last_service_age_s": _last_service_age_s.duplicate(true),
+		"stop_service_ratings": _stop_service_ratings.duplicate(true),
+		"overcrowding_age_s": _overcrowding_age_s.duplicate(true),
+		"last_rescue_event": _last_rescue_event.duplicate(true)
+	}
+
+func apply_save_state(state: Dictionary) -> void:
+	_waiting_counts = Dictionary(state.get("waiting_counts", {})).duplicate(true)
+	_last_service_age_s = Dictionary(state.get("last_service_age_s", {})).duplicate(true)
+	_stop_service_ratings = Dictionary(state.get("stop_service_ratings", {})).duplicate(true)
+	_overcrowding_age_s = Dictionary(state.get("overcrowding_age_s", {})).duplicate(true)
+	_last_rescue_event = Dictionary(state.get("last_rescue_event", {})).duplicate(true)
+	_refresh_station_crowds()
+
 func _refresh_station_crowds() -> void:
 	if _town_manager == null or not is_instance_valid(_town_manager):
 		_resolve_dependencies()

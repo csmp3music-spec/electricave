@@ -2856,6 +2856,154 @@ func get_service_line_choices() -> Array:
 func get_active_service_line_id() -> String:
 	return _driver_line_id
 
+func is_world_seeded() -> bool:
+	return _seeded
+
+func get_save_state() -> Dictionary:
+	var line_states: Array = []
+	for line_id in _service_line_ids_sorted():
+		var entry := _service_line_entry(line_id)
+		var car_states: Array = []
+		for trolley_variant in _line_fleet(line_id):
+			var trolley := trolley_variant as TrolleyMover
+			if trolley == null or not is_instance_valid(trolley):
+				continue
+			car_states.append({
+				"progress": trolley.progress,
+				"speed_mps": trolley.speed_mps,
+				"target_speed_mps": trolley.target_speed_mps,
+				"power_notch": trolley.power_notch,
+				"travel_direction": trolley.travel_direction,
+				"failure": trolley.get_failure_payload() if trolley.has_method("get_failure_payload") else {}
+			})
+		var headways: Array = []
+		for segment_variant in entry.get("timetable_segments", []):
+			if segment_variant is Dictionary:
+				headways.append({
+					"id": String(segment_variant.get("id", "")),
+					"headway_min": float(segment_variant.get("headway_min", 0.0))
+				})
+		line_states.append({"line_id": line_id, "cars": car_states, "headways": headways})
+	var driver_fleet_index := maxi(0, _line_fleet(_driver_line_id).find(_driver_trolley))
+	return {
+		"active_line_id": _driver_line_id,
+		"driver_fleet_index": driver_fleet_index,
+		"manual_control": _driver_manual_control_enabled,
+		"driver_view_active": _driver_active,
+		"view_mode": _view_mode,
+		"player_trolley_scene_index": _player_trolley_scene_index,
+		"onboard_passengers": _driver_onboard_passengers,
+		"service_rating": _driver_service_rating,
+		"served_stop_count": _driver_served_stop_count,
+		"skipped_stop_count": _driver_skipped_stop_count,
+		"service_streak": _driver_service_streak,
+		"depot_inventory": _depot_inventory_save_state(),
+		"line_snow_cleared": _line_snow_cleared.duplicate(true),
+		"line_snow_depth": _line_snow_depth.duplicate(true),
+		"lines": line_states
+	}
+
+func apply_save_state(state: Dictionary) -> void:
+	if not _seeded:
+		return
+	for line_variant in state.get("lines", []):
+		if not (line_variant is Dictionary):
+			continue
+		var line_data: Dictionary = line_variant
+		var line_id := String(line_data.get("line_id", ""))
+		var entry := _service_line_entry(line_id)
+		if entry.is_empty():
+			continue
+		var headway_by_id := {}
+		for headway_variant in line_data.get("headways", []):
+			if headway_variant is Dictionary:
+				headway_by_id[String(headway_variant.get("id", ""))] = float(headway_variant.get("headway_min", 0.0))
+		var segments: Array = entry.get("timetable_segments", [])
+		for segment_index in range(segments.size()):
+			var segment: Dictionary = segments[segment_index]
+			var segment_id := String(segment.get("id", ""))
+			if headway_by_id.has(segment_id):
+				segment["headway_min"] = float(headway_by_id[segment_id])
+				segments[segment_index] = segment
+		entry["timetable_segments"] = segments
+		_service_lines[line_id] = entry
+		var fleet := _line_fleet(line_id)
+		var saved_cars: Array = line_data.get("cars", [])
+		for car_index in range(mini(fleet.size(), saved_cars.size())):
+			if not (saved_cars[car_index] is Dictionary):
+				continue
+			var trolley := fleet[car_index] as TrolleyMover
+			if trolley == null or not is_instance_valid(trolley):
+				continue
+			var car_data: Dictionary = saved_cars[car_index]
+			trolley.progress = float(car_data.get("progress", trolley.progress))
+			trolley.speed_mps = float(car_data.get("speed_mps", trolley.speed_mps))
+			trolley.target_speed_mps = float(car_data.get("target_speed_mps", trolley.target_speed_mps))
+			trolley.power_notch = int(car_data.get("power_notch", trolley.power_notch))
+			trolley.travel_direction = float(car_data.get("travel_direction", trolley.travel_direction))
+			if trolley.has_method("clear_incident"):
+				trolley.call("clear_incident")
+			var failure: Dictionary = car_data.get("failure", {})
+			if bool(failure.get("active", false)) and trolley.has_method("trigger_incident"):
+				trolley.call("trigger_incident", String(failure.get("state", "incident")), String(failure.get("message", "Service incident")))
+	_player_trolley_scene_index = maxi(0, int(state.get("player_trolley_scene_index", _player_trolley_scene_index)))
+	_driver_onboard_passengers = clampi(int(state.get("onboard_passengers", _driver_onboard_passengers)), 0, driver_passenger_capacity)
+	_driver_service_rating = clampf(float(state.get("service_rating", _driver_service_rating)), 0.0, 100.0)
+	_driver_served_stop_count = maxi(0, int(state.get("served_stop_count", _driver_served_stop_count)))
+	_driver_skipped_stop_count = maxi(0, int(state.get("skipped_stop_count", _driver_skipped_stop_count)))
+	_driver_service_streak = maxi(0, int(state.get("service_streak", _driver_service_streak)))
+	if state.get("depot_inventory", {}) is Dictionary:
+		_apply_depot_inventory_save_state(state.get("depot_inventory", {}))
+	if state.get("line_snow_cleared", {}) is Dictionary:
+		_line_snow_cleared = state.get("line_snow_cleared", {}).duplicate(true)
+	if state.get("line_snow_depth", {}) is Dictionary:
+		_line_snow_depth = state.get("line_snow_depth", {}).duplicate(true)
+	var active_line_id := String(state.get("active_line_id", _driver_line_id))
+	var active_fleet := _line_fleet(active_line_id)
+	if not active_fleet.is_empty():
+		var fleet_index := clampi(int(state.get("driver_fleet_index", 0)), 0, active_fleet.size() - 1)
+		_activate_service_line(active_line_id)
+		_set_driver_trolley(active_fleet[fleet_index] as TrolleyMover, fleet_index)
+	set_driver_manual_control(bool(state.get("manual_control", _driver_manual_control_enabled)))
+	_driver_active = bool(state.get("driver_view_active", _driver_active))
+	_view_mode = clampi(int(state.get("view_mode", _view_mode)), 0, 1)
+	_update_active_camera()
+	if _main_camera != null:
+		_main_camera.current = not _driver_active
+
+func _depot_inventory_save_state() -> Dictionary:
+	var saved := {}
+	for depot_id_variant in _depot_inventory.keys():
+		var depot_id := String(depot_id_variant)
+		var entry: Dictionary = _depot_inventory.get(depot_id, {})
+		var position: Vector3 = entry.get("position", Vector3.ZERO)
+		saved[depot_id] = {
+			"id": String(entry.get("id", depot_id)),
+			"name": String(entry.get("name", depot_id)),
+			"position": [position.x, position.y, position.z],
+			"stored": Dictionary(entry.get("stored", {})).duplicate(true)
+		}
+	return saved
+
+func _apply_depot_inventory_save_state(saved: Dictionary) -> void:
+	_depot_inventory.clear()
+	for depot_id_variant in saved.keys():
+		var depot_id := String(depot_id_variant)
+		var entry_variant: Variant = saved.get(depot_id, {})
+		if not (entry_variant is Dictionary):
+			continue
+		var entry: Dictionary = entry_variant
+		var position_data: Array = entry.get("position", [])
+		var position := Vector3.ZERO
+		if position_data.size() >= 3:
+			position = Vector3(float(position_data[0]), float(position_data[1]), float(position_data[2]))
+		_depot_inventory[depot_id] = {
+			"id": String(entry.get("id", depot_id)),
+			"name": String(entry.get("name", depot_id)),
+			"position": position,
+			"stored": Dictionary(entry.get("stored", {})).duplicate(true)
+		}
+
 func set_active_service_line(line_id: String) -> bool:
 	var entry := _service_line_entry(line_id)
 	if entry.is_empty():

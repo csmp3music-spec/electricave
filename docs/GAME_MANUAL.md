@@ -34,6 +34,14 @@ At the start of play:
 - The player-controlled service defaults to the main Boston-Worcester line.
 - Existing historical services are already present and can be selected from the line selector in the upper-left corner.
 
+### Saving And Continuing
+
+- Press `F5` or choose `Game > Save Campaign` to save immediately.
+- Press `F9` or choose `Game > Load Campaign` to rebuild the world and restore the latest campaign.
+- An autosave updates the same campaign every three minutes while the simulation is running.
+- Saves preserve company finances and goals, calendar time, passenger pressure, town progression, player-built track and facilities, line headways, trolley positions, active service, and manual driving state.
+- Loading deliberately rebuilds a clean historical world before applying the save, preventing duplicated procedural scenery or station districts.
+
 The screen has three user-facing control areas:
 
 - `Upper-left line selector`: choose the active line and switch between `Manual` and `Auto stops`.

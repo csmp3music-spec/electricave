@@ -79,6 +79,28 @@ func get_time_payload() -> Dictionary:
 func get_hud_time_text() -> String:
 	return String(get_time_payload().get("hud_text", ""))
 
+func get_save_state() -> Dictionary:
+	return {
+		"year": _current_year,
+		"month": _current_month,
+		"day": _current_day,
+		"minutes_into_day": _minutes_into_day,
+		"time_scale": Engine.time_scale
+	}
+
+func apply_save_state(state: Dictionary) -> void:
+	_current_year = maxi(1900, int(state.get("year", _current_year)))
+	_current_month = clampi(int(state.get("month", _current_month)), 1, 12)
+	_current_day = clampi(int(state.get("day", _current_day)), 1, _days_in_month(_current_month, _current_year))
+	_minutes_into_day = clampf(float(state.get("minutes_into_day", _minutes_into_day)), 0.0, 1439.99)
+	Engine.time_scale = clampf(float(state.get("time_scale", Engine.time_scale)), 0.25, 3.0)
+	if _historical_events != null and _has_property(_historical_events, "current_year"):
+		_historical_events.set("current_year", _current_year)
+	if _economy != null and _economy.has_method("set_reporting_period"):
+		_economy.call("set_reporting_period", _current_year, _current_month)
+	_apply_lighting()
+	emit_signal("calendar_changed", get_time_payload())
+
 func _advance_minutes(game_minutes: float) -> void:
 	_minutes_into_day += game_minutes
 	while _minutes_into_day >= 1440.0:

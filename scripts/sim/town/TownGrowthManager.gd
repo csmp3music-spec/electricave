@@ -196,15 +196,16 @@ func _process(delta: float) -> void:
 		_simulate_growth_tick()
 	_flush_pending_spawns()
 
-func AddTransitStop(position: Vector3, frequency: float, town_name: String = "", stop_kind: String = "regular"):
+func AddTransitStop(position: Vector3, frequency: float, town_name: String = "", stop_kind: String = "regular", player_built: bool = false, explicit_stop_id: String = ""):
 	var stop = TransitStopScript.new()
-	stop.stop_id = "stop_%d" % (stops.size() + 1)
+	stop.stop_id = explicit_stop_id if explicit_stop_id != "" else _next_stop_id()
 	stop.frequency = frequency
 	stop.position = position
 	if town_name == "":
 		town_name = _make_town_name(position)
 	stop.town_name = town_name
 	stop.stop_kind = stop_kind
+	stop.player_built = player_built
 	stops.append(stop)
 	if enable_streets:
 		_cache_streets_for_stop(stop)
@@ -217,6 +218,82 @@ func AddTransitStop(position: Vector3, frequency: float, town_name: String = "",
 	call_deferred("_spawn_station_cluster", stop)
 	call_deferred("_spawn_stop_marker", stop)
 	return stop
+
+func _next_stop_id() -> String:
+	var next_id := stops.size() + 1
+	while _stop_id_exists("stop_%d" % next_id):
+		next_id += 1
+	return "stop_%d" % next_id
+
+func _stop_id_exists(stop_id: String) -> bool:
+	for stop in stops:
+		if stop != null and String(stop.stop_id) == stop_id:
+			return true
+	return false
+
+func get_save_state() -> Dictionary:
+	var player_stops: Array = []
+	for stop in stops:
+		if stop == null or not bool(stop.player_built):
+			continue
+		player_stops.append({
+			"stop_id": String(stop.stop_id),
+			"town_name": String(stop.town_name),
+			"frequency": float(stop.frequency),
+			"connectivity": float(stop.connectivity),
+			"travel_time": float(stop.travel_time),
+			"land_value": float(stop.land_value),
+			"ridership_demand": float(stop.ridership_demand),
+			"stop_kind": String(stop.stop_kind),
+			"position": [stop.position.x, stop.position.y, stop.position.z]
+		})
+	var town_states: Array = []
+	for town in towns:
+		if town == null:
+			continue
+		town_states.append({
+			"stop_id": String(town.stop_id),
+			"name": String(town.name),
+			"population": int(town.population),
+			"land_value": float(town.land_value),
+			"growth_rate": float(town.growth_rate),
+			"last_growth_tick": int(town.last_growth_tick)
+		})
+	return {"player_stops": player_stops, "towns": town_states}
+
+func apply_save_state(state: Dictionary) -> void:
+	for stop_variant in state.get("player_stops", []):
+		if not (stop_variant is Dictionary):
+			continue
+		var stop_data: Dictionary = stop_variant
+		var position_data: Array = stop_data.get("position", [])
+		if position_data.size() < 3:
+			continue
+		var stop = AddTransitStop(
+			Vector3(float(position_data[0]), float(position_data[1]), float(position_data[2])),
+			float(stop_data.get("frequency", 6.0)),
+			String(stop_data.get("town_name", "")),
+			String(stop_data.get("stop_kind", "regular")),
+			true,
+			String(stop_data.get("stop_id", ""))
+		)
+		if stop != null:
+			stop.connectivity = float(stop_data.get("connectivity", stop.connectivity))
+			stop.travel_time = float(stop_data.get("travel_time", stop.travel_time))
+			stop.land_value = float(stop_data.get("land_value", stop.land_value))
+			stop.ridership_demand = float(stop_data.get("ridership_demand", stop.ridership_demand))
+	var town_state_by_stop := {}
+	for town_variant in state.get("towns", []):
+		if town_variant is Dictionary:
+			town_state_by_stop[String(town_variant.get("stop_id", ""))] = town_variant
+	for town in towns:
+		if town == null or not town_state_by_stop.has(String(town.stop_id)):
+			continue
+		var town_data: Dictionary = town_state_by_stop[String(town.stop_id)]
+		town.population = int(town_data.get("population", town.population))
+		town.land_value = float(town_data.get("land_value", town.land_value))
+		town.growth_rate = float(town_data.get("growth_rate", town.growth_rate))
+		town.last_growth_tick = int(town_data.get("last_growth_tick", town.last_growth_tick))
 
 func RemoveTransitStop(stop_id: String) -> void:
 	for i in range(stops.size() - 1, -1, -1):

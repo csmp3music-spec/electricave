@@ -17,3 +17,9 @@ func advance_year() -> void:
 	for entry in timeline:
 		if entry["year"] == current_year:
 			emit_signal("event_triggered", entry["id"])
+
+func get_save_state() -> Dictionary:
+	return {"current_year": current_year}
+
+func apply_save_state(state: Dictionary) -> void:
+	current_year = maxi(start_year, int(state.get("current_year", current_year)))

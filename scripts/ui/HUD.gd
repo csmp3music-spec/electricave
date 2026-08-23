@@ -80,7 +80,10 @@ const TOP_MENU_DEFINITIONS := [
 			{"id": 3, "label": "Normal Speed", "command": "speed_normal"},
 			{"id": 4, "label": "Fast Speed", "command": "speed_fast"},
 			{"separator": true},
-			{"id": 5, "label": "How To Play", "command": "help"}
+			{"id": 5, "label": "Save Campaign (F5)", "command": "save"},
+			{"id": 6, "label": "Load Campaign (F9)", "command": "load"},
+			{"separator": true},
+			{"id": 7, "label": "How To Play", "command": "help"}
 		]
 	},
 	{
@@ -202,6 +205,7 @@ func _resolve_main_scene() -> Node:
 @onready var _economy: Node = _main_scene.get_node_or_null("WorldRoot/Economy") if _main_scene != null else null
 @onready var _passenger_manager: Node = _main_scene.get_node_or_null("WorldRoot/PassengerManager") if _main_scene != null else null
 @onready var _time_controller: Node = _main_scene.get_node_or_null("WorldRoot/TimeOfDay") if _main_scene != null else null
+@onready var _game_state: Node = _main_scene.get_node_or_null("GameStateManager") if _main_scene != null else null
 var _current_tab := "Overview"
 var _system_map_panel: Control
 var _top_menu_bar: PanelContainer
@@ -244,8 +248,11 @@ var _help_close_button: Button
 var _help_body_label: Label
 var _build_restore_camera_mode := -1
 var _build_camera_forced := false
+var _save_status_text := ""
+var _save_status_age_s := 999.0
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	theme = ClassicThemeScript.build_theme()
 	_ensure_top_menu_bar()
 	_ensure_timetable_window()
@@ -255,12 +262,14 @@ func _ready() -> void:
 	_ensure_help_window()
 	_style_controls()
 	_bind_signals()
+	_bind_game_state_signals()
 	_setup_tool_actions()
 	_select_tab(_current_tab)
 	_apply_row_colors()
 	_update_status_panel()
 
 func _process(_delta: float) -> void:
+	_save_status_age_s += maxf(_delta, 0.0)
 	if finance_window.visible:
 		_refresh_finance_window()
 	if _timetable_window != null and _timetable_window.visible:
@@ -276,6 +285,15 @@ func _process(_delta: float) -> void:
 	_update_driver_dashboard()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F5:
+			_save_campaign()
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_F9:
+			_load_campaign()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("toggle_routes"):
 		_toggle_timetable_window()
 	if event.is_action_pressed("toggle_finances"):
@@ -414,6 +432,10 @@ func _is_menu_command_checked(command: String) -> bool:
 
 func _execute_menu_command(command: String) -> void:
 	match command:
+		"save":
+			_save_campaign()
+		"load":
+			_load_campaign()
 		"pause":
 			_toggle_pause()
 		"speed_slow":
@@ -685,6 +707,38 @@ func _bind_signals() -> void:
 		_manual_control_toggle.toggled.connect(_on_manual_control_toggled)
 	if _help_close_button != null:
 		_help_close_button.pressed.connect(func(): _toggle_help_window(false))
+
+func _bind_game_state_signals() -> void:
+	if _game_state == null:
+		return
+	if _game_state.has_signal("save_completed"):
+		var save_callable := Callable(self, "_on_save_completed")
+		if not _game_state.is_connected("save_completed", save_callable):
+			_game_state.connect("save_completed", save_callable)
+	if _game_state.has_signal("load_completed"):
+		var load_callable := Callable(self, "_on_load_completed")
+		if not _game_state.is_connected("load_completed", load_callable):
+			_game_state.connect("load_completed", load_callable)
+
+func _save_campaign() -> void:
+	if _game_state == null or not _game_state.has_method("save_game"):
+		_on_save_completed(false, "Save system unavailable.")
+		return
+	_game_state.call("save_game", false)
+
+func _load_campaign() -> void:
+	if _game_state == null or not _game_state.has_method("load_game"):
+		_on_load_completed(false, "Load system unavailable.")
+		return
+	_game_state.call("load_game")
+
+func _on_save_completed(success: bool, message: String) -> void:
+	_save_status_text = ("[SAVED] " if success else "[SAVE ERROR] ") + message
+	_save_status_age_s = 0.0
+
+func _on_load_completed(success: bool, message: String) -> void:
+	_save_status_text = ("[LOADED] " if success else "[LOAD ERROR] ") + message
+	_save_status_age_s = 0.0
 
 func _toggle_finance_window(force_state: Variant = null) -> void:
 	var target := finance_window.visible if force_state == null else bool(force_state)
@@ -1091,6 +1145,7 @@ func _help_window_text() -> String:
 		"",
 		"CAMERA AND WINDOWS",
 		"The top menus replace the old bottom buttons: Game, Build, Operations, View, Company, and Help.",
+		"Game > Save Campaign or F5 saves progress. Game > Load Campaign or F9 restores the last save. Autosave runs every three minutes.",
 		"M opens the map, F opens finance, R opens operations and timetables, O toggles the overlay.",
 		"C cycles camera mode. The line selector under the menus changes the active service line.",
 		"",
@@ -2114,6 +2169,10 @@ func _update_announcement_banner() -> void:
 	if announcement_strip == null or announcement_text_label == null:
 		return
 	announcement_strip.visible = false
+	if _save_status_text != "" and _save_status_age_s <= 4.5:
+		announcement_text_label.text = _hud_trim(_save_status_text, 112)
+		announcement_strip.visible = true
+		return
 	if _corridor != null and _corridor.has_method("get_driver_announcement_status"):
 		var payload: Dictionary = _corridor.call("get_driver_announcement_status")
 		var text := String(payload.get("text", ""))

@@ -320,6 +320,46 @@ func get_finance_history() -> Array[Dictionary]:
 func set_reporting_period(year: int, month: int) -> void:
 	_current_period_label = "%s %d" % [_month_name(month), year]
 
+func get_save_state() -> Dictionary:
+	return {
+		"cash": cash,
+		"monthly_revenue": monthly_revenue,
+		"monthly_expenses": monthly_expenses,
+		"bond_principal": bond_principal,
+		"income_categories": _monthly_income_categories.duplicate(true),
+		"expense_categories": _monthly_expense_categories.duplicate(true),
+		"last_month_report": _last_month_report.duplicate(true),
+		"finance_history": _finance_history.duplicate(true),
+		"current_period_label": _current_period_label,
+		"current_goal": _current_goal.duplicate(true),
+		"last_goal_result": _last_goal_result.duplicate(true),
+		"active_service_contract": _active_service_contract.duplicate(true),
+		"service_contract_cooldown_s": _service_contract_cooldown_remaining_s,
+		"earned_milestones": _earned_milestones.duplicate(true),
+		"baseline_metrics": _baseline_metrics.duplicate(true)
+	}
+
+func apply_save_state(state: Dictionary) -> void:
+	cash = float(state.get("cash", cash))
+	monthly_revenue = float(state.get("monthly_revenue", monthly_revenue))
+	monthly_expenses = float(state.get("monthly_expenses", monthly_expenses))
+	bond_principal = float(state.get("bond_principal", bond_principal))
+	_monthly_income_categories = Dictionary(state.get("income_categories", {})).duplicate(true)
+	_monthly_expense_categories = Dictionary(state.get("expense_categories", {})).duplicate(true)
+	_last_month_report = Dictionary(state.get("last_month_report", {})).duplicate(true)
+	_finance_history.clear()
+	for report_variant in state.get("finance_history", []):
+		if report_variant is Dictionary:
+			_finance_history.append(report_variant.duplicate(true))
+	_current_period_label = String(state.get("current_period_label", _current_period_label))
+	_current_goal = Dictionary(state.get("current_goal", {})).duplicate(true)
+	_last_goal_result = Dictionary(state.get("last_goal_result", {})).duplicate(true)
+	_active_service_contract = Dictionary(state.get("active_service_contract", {})).duplicate(true)
+	_service_contract_cooldown_remaining_s = float(state.get("service_contract_cooldown_s", _service_contract_cooldown_remaining_s))
+	_earned_milestones = Dictionary(state.get("earned_milestones", {})).duplicate(true)
+	_baseline_metrics = Dictionary(state.get("baseline_metrics", {})).duplicate(true)
+	_ensure_reporting_categories()
+
 func _resolve_world_nodes() -> void:
 	var world_root := get_parent()
 	if world_root == null:

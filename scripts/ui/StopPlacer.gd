@@ -396,6 +396,85 @@ func get_manual_depots() -> Array[Dictionary]:
 		})
 	return depots
 
+func get_save_state() -> Dictionary:
+	var placements: Array = []
+	if _placed_root != null and is_instance_valid(_placed_root):
+		for child in _placed_root.get_children():
+			if not (child is Node3D):
+				continue
+			var node := child as Node3D
+			var pos := node.global_position
+			placements.append({
+				"name": String(node.name),
+				"kind": String(node.get_meta("build_kind", "")),
+				"cost": float(node.get_meta("build_cost", 0.0)),
+				"stop_id": String(node.get_meta("stop_id", "")),
+				"position": [pos.x, pos.y, pos.z],
+				"rotation_y": node.global_rotation.y,
+				"station_length_tiles": int(node.get_meta("station_length_tiles", station_platform_length_tiles)),
+				"station_track_count": int(node.get_meta("station_track_count", station_track_count))
+			})
+	return {
+		"placements": placements,
+		"frequency": frequency,
+		"autorail_enabled": autorail_enabled,
+		"asset_rotation_deg": asset_rotation_deg,
+		"station_length_tiles": station_platform_length_tiles,
+		"station_track_count": station_track_count,
+		"signal_run_spacing_m": signal_run_spacing_m
+	}
+
+func apply_save_state(state: Dictionary) -> void:
+	if _placed_root == null or not is_instance_valid(_placed_root):
+		_create_preview_nodes()
+	if _placed_root == null:
+		return
+	for child in _placed_root.get_children():
+		child.queue_free()
+	var restored_frequency := float(state.get("frequency", frequency))
+	var restored_autorail := bool(state.get("autorail_enabled", autorail_enabled))
+	var restored_rotation := float(state.get("asset_rotation_deg", asset_rotation_deg))
+	var restored_station_length := int(state.get("station_length_tiles", station_platform_length_tiles))
+	var restored_track_count := int(state.get("station_track_count", station_track_count))
+	var restored_signal_spacing := float(state.get("signal_run_spacing_m", signal_run_spacing_m))
+	for placement_variant in state.get("placements", []):
+		if not (placement_variant is Dictionary):
+			continue
+		var placement: Dictionary = placement_variant
+		var position_data: Array = placement.get("position", [])
+		if position_data.size() < 3:
+			continue
+		var pos := Vector3(float(position_data[0]), float(position_data[1]), float(position_data[2]))
+		var rotation_y := float(placement.get("rotation_y", 0.0))
+		var forward := Vector3(sin(rotation_y), 0.0, cos(rotation_y))
+		var kind := String(placement.get("kind", ""))
+		var restored: Node3D
+		match kind:
+			"station_asset":
+				station_platform_length_tiles = clampi(int(placement.get("station_length_tiles", restored_station_length)), 2, 8)
+				station_track_count = clampi(int(placement.get("station_track_count", restored_track_count)), 1, 4)
+				restored = _build_station_node(pos, forward, String(placement.get("stop_id", "")), float(placement.get("cost", station_cost)))
+			"depot":
+				restored = _build_depot_node(pos, forward)
+			"signal":
+				restored = _build_signal_node(pos, forward)
+			_:
+				continue
+		if restored != null:
+			var saved_name := String(placement.get("name", ""))
+			if saved_name != "":
+				restored.name = saved_name
+			restored.set_meta("build_cost", float(placement.get("cost", restored.get_meta("build_cost", 0.0))))
+			_placed_root.add_child(restored)
+	frequency = clampf(restored_frequency, min_frequency, max_frequency)
+	autorail_enabled = restored_autorail
+	asset_rotation_deg = restored_rotation
+	station_platform_length_tiles = clampi(restored_station_length, 2, 8)
+	station_track_count = clampi(restored_track_count, 1, 4)
+	signal_run_spacing_m = clampf(restored_signal_spacing, 24.0, 160.0)
+	_update_preview()
+	_emit_tool_state()
+
 func _handle_track_click(screen_pos: Vector2) -> void:
 	if _track_builder == null:
 		_set_build_result("Track builder unavailable.")
@@ -427,7 +506,7 @@ func _handle_track_click(screen_pos: Vector2) -> void:
 		_set_build_result(_funds_block_reason(cost))
 		_update_preview()
 		return
-	var curve = _track_builder.add_segment(points)
+	var curve = _track_builder.add_segment(points, true)
 	if curve != null:
 		_anchor_point = snapped
 		_set_build_result("Built %.0fm of track. Click again to continue from the endpoint." % length)
@@ -455,7 +534,7 @@ func _place_station_at_mouse(screen_pos: Vector2) -> void:
 		_update_preview()
 		return
 	var forward := _placement_forward(pos)
-	var stop = _town_manager.call("AddTransitStop", pos, frequency, "", "station")
+	var stop = _town_manager.call("AddTransitStop", pos, frequency, "", "station", true)
 	var stop_id := ""
 	if stop != null and _has_property(stop, "stop_id"):
 		stop_id = String(stop.get("stop_id"))
@@ -1225,6 +1304,8 @@ func _build_station_node(pos: Vector3, forward: Vector3, stop_id: String, build_
 	root.rotation.y = atan2(forward.x, forward.z)
 	root.set_meta("build_kind", "station_asset")
 	root.set_meta("build_cost", build_cost)
+	root.set_meta("station_length_tiles", station_platform_length_tiles)
+	root.set_meta("station_track_count", station_track_count)
 	if stop_id != "":
 		root.set_meta("stop_id", stop_id)
 

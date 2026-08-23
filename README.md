@@ -1,6 +1,6 @@
 # Electric Avenue
 
-Electric Avenue is a 1913 Massachusetts electric street railway management sim. This repo is the MVP scaffold built in Godot 4 (GDScript) with hooks for GIS import, historic overlays, seamless zoom camera, track building, economy, passengers, and events.
+Electric Avenue is a playable 1913 Massachusetts electric street railway management and driving sim built in Godot 4. It combines a seeded historical network, manual trolley operation, automated service, construction, passengers, company finances, town growth, weather, incidents, progression contracts, and persistent campaigns.
 
 ## Player Manual
 
@@ -8,9 +8,10 @@ For a full end-user guide covering controls, operations, building, growth, and t
 
 ## Quick Start (Godot 4)
 1. Open this folder in Godot 4.
-2. Run the project; you should see a blank scene with camera controls.
+2. Run the project; the historical network and operating fleet seed automatically.
 3. Press `C` to cycle camera modes, scroll to zoom, `O` to toggle the historic overlay.
 4. Press `T` to toggle stop placement tool. Click to place a stop. Use `]` / `[` or `+` / `-` to adjust frequency.
+5. Press `F5` to save the campaign and `F9` to restore the latest save. The game also autosaves every three minutes.
 
 ## Map & GIS Pipeline
 The GIS importer is a stub ready for real assets:
@@ -33,9 +34,6 @@ Massachusetts bounds are in `data/ma_bounds.tres` and can be refined if needed.
 - `scripts/viewers/*` – Street-level view scaffolding
 - `assets/maps/*` – Overlay and map assets
 
-## Next Steps
-- Drop the historic overlay into `assets/maps/historic_overlay.jpg`.
-- Implement GIS import (GDAL/OSM pre-processing or pre-baked data).
-- Generate terrain + tile streaming.
-- Build track placement tool UI and route editor.
-- Add real building prefabs to `BuildingDatabase` and wire era-based swaps.
+## Release Development
+
+The current build is a complete sandbox loop with persistence. Future release work is focused on content depth: pre-baked GIS terrain tiles, more historically specific rolling stock and architecture, scenario campaigns, accessibility settings, and performance tuning for dense districts.

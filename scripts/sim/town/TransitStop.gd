@@ -9,6 +9,7 @@ class_name TransitStop
 @export var town_name := ""
 @export var position := Vector3.ZERO
 @export var stop_kind := "regular"
+@export var player_built := false
 
 var ridership_demand := 0.0
 

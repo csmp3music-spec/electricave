@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/SeamlessCamera.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/builders/TrackBuilder.gd" id="2"]
@@ -22,6 +22,7 @@
 [ext_resource type="Script" path="res://scripts/sim/world/RegionalScenery.gd" id="20"]
 [ext_resource type="Script" path="res://scripts/sim/world/WeatherController.gd" id="21"]
 [ext_resource type="Script" path="res://scripts/sim/world/PhotorealSkyController.gd" id="22"]
+[ext_resource type="Script" path="res://scripts/sim/GameStateManager.gd" id="23"]
 
 [sub_resource type="PlaneMesh" id="1"]
 size = Vector2(350000, 240000)
@@ -147,3 +148,7 @@ layer = 2
 
 [node name="GISImporter" type="Node" parent="."]
 script = ExtResource("9")
+
+[node name="GameStateManager" type="Node" parent="."]
+process_mode = 3
+script = ExtResource("23")
