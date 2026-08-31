@@ -444,6 +444,10 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var depot_initial_type5_stock := 1
 @export var depot_initial_pcc_stock := 1
 @export var depot_operation_radius_m := 120.0
+@export var depot_service_base_cost := 450.0
+@export var depot_service_cost_per_condition_point := 38.0
+@export var roadside_repair_cost := 2400.0
+@export var mechanical_failure_service_penalty := 4.0
 @export var timetable_subway_headway_min := 4.0
 @export var timetable_inner_headway_min := 7.0
 @export var timetable_outer_headway_min := 10.0
@@ -2527,6 +2531,7 @@ func _spawn_line_fleet(path: Path3D, line_id: String, car_count: int, scene_path
 		trolley.progress = spacing * float(i)
 		trolley.loop_path = false
 		trolley.ping_pong = true
+		trolley.condition_percent = _initial_fleet_condition(line_id, i)
 		trolley.set_meta("service_line_id", line_id)
 		if scene_path_override != "":
 			trolley.set_meta("scene_path_override", scene_path_override)
@@ -2537,6 +2542,10 @@ func _spawn_line_fleet(path: Path3D, line_id: String, car_count: int, scene_path
 		fleet.append(trolley)
 		_attach_trolley_body(trolley, i)
 	return fleet
+
+func _initial_fleet_condition(line_id: String, car_index: int) -> float:
+	var condition_seed := posmod(hash("%s:%d" % [line_id, car_index]), 2400)
+	return 76.0 + float(condition_seed) / 100.0
 
 func _driver_start_offset(curve: Curve3D) -> float:
 	if curve == null:
@@ -2874,6 +2883,7 @@ func get_save_state() -> Dictionary:
 				"target_speed_mps": trolley.target_speed_mps,
 				"power_notch": trolley.power_notch,
 				"travel_direction": trolley.travel_direction,
+				"maintenance": trolley.get_maintenance_state() if trolley.has_method("get_maintenance_state") else {},
 				"failure": trolley.get_failure_payload() if trolley.has_method("get_failure_payload") else {}
 			})
 		var headways: Array = []
@@ -2941,6 +2951,8 @@ func apply_save_state(state: Dictionary) -> void:
 			trolley.target_speed_mps = float(car_data.get("target_speed_mps", trolley.target_speed_mps))
 			trolley.power_notch = int(car_data.get("power_notch", trolley.power_notch))
 			trolley.travel_direction = float(car_data.get("travel_direction", trolley.travel_direction))
+			if car_data.get("maintenance", {}) is Dictionary and trolley.has_method("apply_maintenance_state"):
+				trolley.call("apply_maintenance_state", car_data.get("maintenance", {}))
 			if trolley.has_method("clear_incident"):
 				trolley.call("clear_incident")
 			var failure: Dictionary = car_data.get("failure", {})
@@ -3165,7 +3177,24 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 		var entry := _service_line_entry(line_id)
 		if entry.is_empty():
 			continue
-		var fleet_count := _line_fleet(line_id).size()
+		var line_fleet := _line_fleet(line_id)
+		var fleet_count := line_fleet.size()
+		var available_cars := 0
+		var maintenance_due_cars := 0
+		var failed_cars := 0
+		var condition_total := 0.0
+		for trolley_variant in line_fleet:
+			var trolley := trolley_variant as TrolleyMover
+			if trolley == null or not is_instance_valid(trolley):
+				continue
+			var maintenance: Dictionary = trolley.call("get_maintenance_payload") if trolley.has_method("get_maintenance_payload") else {"condition_percent": 100.0}
+			condition_total += float(maintenance.get("condition_percent", 100.0))
+			if bool(maintenance.get("maintenance_due", false)):
+				maintenance_due_cars += 1
+			if trolley.has_method("has_incident") and bool(trolley.call("has_incident")):
+				failed_cars += 1
+			else:
+				available_cars += 1
 		var route_stops: Array = entry.get("route_stops", [])
 		var segments: Array = entry.get("timetable_segments", [])
 		var route_length_m := _service_line_route_length_m(entry)
@@ -3194,23 +3223,32 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 			average_headway_min = 0.0
 			suggested_cars = maxi(1, int(ceil(route_length_m / maxf(1.0, _average_service_speed_mps() * 8.0 * 60.0))))
 		var target_cars := maxi(1, suggested_cars)
-		var capacity_ratio := clampf(float(fleet_count) / float(target_cars), 0.0, 1.4)
-		var capacity_pressure := clampf(float(maxi(0, target_cars - fleet_count)) / float(target_cars), 0.0, 1.0)
+		var capacity_ratio := clampf(float(available_cars) / float(target_cars), 0.0, 1.4)
+		var capacity_pressure := clampf(float(maxi(0, target_cars - available_cars)) / float(target_cars), 0.0, 1.0)
 		var recommendation := "Service stable"
-		if fleet_count <= 0:
+		if failed_cars > 0:
+			recommendation = "Recover %d failed car%s" % [failed_cars, "" if failed_cars == 1 else "s"]
+			capacity_pressure = maxf(capacity_pressure, 0.72)
+		elif available_cars <= 0:
 			recommendation = "Launch a car"
 			capacity_pressure = 1.0
 		elif capacity_pressure >= 0.34:
-			recommendation = "Add %d car%s" % [maxi(1, target_cars - fleet_count), "" if maxi(1, target_cars - fleet_count) == 1 else "s"]
+			recommendation = "Add %d car%s" % [maxi(1, target_cars - available_cars), "" if maxi(1, target_cars - available_cars) == 1 else "s"]
 		elif average_headway_min > 10.5:
 			recommendation = "Tighten headway"
 			capacity_pressure = maxf(capacity_pressure, 0.28)
 		elif worst_segment_pressure >= 0.18:
 			recommendation = "Rebalance %s" % worst_segment_name
+		elif maintenance_due_cars > 0:
+			recommendation = "Service %d car%s" % [maintenance_due_cars, "" if maintenance_due_cars == 1 else "s"]
 		payload.append({
 			"line_id": line_id,
 			"name": String(entry.get("name", line_id)),
 			"fleet_count": fleet_count,
+			"available_cars": available_cars,
+			"failed_cars": failed_cars,
+			"maintenance_due_cars": maintenance_due_cars,
+			"average_condition_percent": condition_total / maxf(1.0, float(fleet_count)),
 			"stop_count": route_stops.size(),
 			"route_length_m": route_length_m,
 			"average_headway_min": average_headway_min,
@@ -3258,6 +3296,10 @@ func adjust_timetable_segment_headway(segment_id: String, delta_minutes: float) 
 func get_depot_operations_snapshot() -> Array[Dictionary]:
 	_sync_depot_inventory()
 	var payload: Array[Dictionary] = []
+	var maintenance := get_driver_maintenance_status()
+	var current_condition := float(maintenance.get("condition_percent", 100.0))
+	var service_cost := _maintenance_service_cost(current_condition)
+	var driver_incident := get_driver_incident_status()
 	var depot_ids := _depot_inventory.keys()
 	depot_ids.sort()
 	for depot_id_variant in depot_ids:
@@ -3272,8 +3314,12 @@ func get_depot_operations_snapshot() -> Array[Dictionary]:
 			"type5": int(stored.get(Type5CarScenePath, 0)),
 			"pcc": int(stored.get(PCCCarScenePath, 0)),
 			"distance_to_driver_m": distance_to_driver,
+			"current_condition_percent": current_condition,
+			"maintenance_status": String(maintenance.get("status", "GOOD")),
+			"service_cost": service_cost,
 			"launch_ready": _depot_total_stock(stored) > 0 or (_economy != null and _economy.has_method("can_afford") and bool(_economy.call("can_afford", depot_purchase_cost))),
-			"store_ready": _fleet.size() > 1 and _driver_trolley != null and is_instance_valid(_driver_trolley) and distance_to_driver <= maxf(40.0, depot_operation_radius_m)
+			"store_ready": _fleet.size() > 1 and _driver_trolley != null and is_instance_valid(_driver_trolley) and distance_to_driver <= maxf(40.0, depot_operation_radius_m),
+			"service_ready": current_condition < 99.5 and _driver_trolley != null and is_instance_valid(_driver_trolley) and distance_to_driver <= maxf(40.0, depot_operation_radius_m) and (not bool(driver_incident.get("active", false)) or String(driver_incident.get("state", "")) == "MECHANICAL")
 		})
 	return payload
 
@@ -3299,6 +3345,7 @@ func launch_trolley_from_depot(depot_id: String) -> Dictionary:
 	trolley.loop_path = false
 	trolley.ping_pong = true
 	trolley.target_speed_mps = 0.0
+	trolley.condition_percent = 100.0
 	trolley.set_meta("scene_path_override", scene_path)
 	trolley.set_meta("service_line_id", _driver_line_id)
 	var depot_position: Vector3 = entry.get("position", Vector3.ZERO)
@@ -3339,6 +3386,70 @@ func store_controlled_trolley_at_depot(depot_id: String) -> Dictionary:
 	_refresh_fleet_visuals()
 	_sync_current_line_state()
 	return {"ok": true, "message": "Stored current car at %s." % String(_depot_inventory[depot_id].get("name", depot_id))}
+
+func service_controlled_trolley_at_depot(depot_id: String) -> Dictionary:
+	_sync_depot_inventory()
+	if not _depot_inventory.has(depot_id):
+		return {"ok": false, "message": "Depot not found."}
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley) or not _driver_trolley.has_method("get_maintenance_payload"):
+		return {"ok": false, "message": "No controlled trolley is available for service."}
+	var entry: Dictionary = _depot_inventory.get(depot_id, {})
+	if _driver_distance_to_depot(entry) > maxf(40.0, depot_operation_radius_m):
+		return {"ok": false, "message": "Bring the controlled car onto the depot lead for service."}
+	var incident := get_driver_incident_status()
+	if bool(incident.get("active", false)) and String(incident.get("state", "")) != "MECHANICAL":
+		return {"ok": false, "message": "Clear collision or derailment damage before depot service."}
+	var maintenance: Dictionary = _driver_trolley.call("get_maintenance_payload")
+	var condition := float(maintenance.get("condition_percent", 100.0))
+	if condition >= 99.5:
+		return {"ok": false, "message": "Current car is already fully serviced."}
+	var cost := _maintenance_service_cost(condition)
+	if _economy != null and _economy.has_method("can_afford") and not bool(_economy.call("can_afford", cost)):
+		return {"ok": false, "message": "Not enough cash for the $%.0f depot service." % cost}
+	if _economy != null and _economy.has_method("apply_expense"):
+		_economy.call("apply_expense", cost, "Car maintenance")
+	_driver_trolley.call("service_vehicle")
+	_driver_trolley.set_meta("mechanical_failure_recorded", false)
+	_apply_driver_service_rating_delta(0.8, "Depot service completed")
+	return {
+		"ok": true,
+		"message": "Serviced current car at %s for $%.0f." % [String(entry.get("name", depot_id)), cost]
+	}
+
+func dispatch_roadside_repair() -> Dictionary:
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley):
+		return {"ok": false, "message": "No controlled trolley needs assistance."}
+	var incident := get_driver_incident_status()
+	if not bool(incident.get("active", false)) or String(incident.get("state", "")) != "MECHANICAL":
+		return {"ok": false, "message": "Road crews are only required for mechanical failures."}
+	if _economy != null and _economy.has_method("can_afford") and not bool(_economy.call("can_afford", roadside_repair_cost)):
+		return {"ok": false, "message": "Not enough cash to dispatch the road crew."}
+	if _economy != null and _economy.has_method("apply_expense"):
+		_economy.call("apply_expense", roadside_repair_cost, "Service claims")
+	if not _driver_trolley.has_method("perform_roadside_repair") or not bool(_driver_trolley.call("perform_roadside_repair")):
+		return {"ok": false, "message": "The road crew could not repair this incident."}
+	_driver_trolley.set_meta("mechanical_failure_recorded", false)
+	_apply_driver_service_rating_delta(-0.8, "Roadside repair completed")
+	return {"ok": true, "message": "Road crew restored the car to limited condition for $%.0f; schedule depot service." % roadside_repair_cost}
+
+func get_driver_maintenance_status() -> Dictionary:
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley) or not _driver_trolley.has_method("get_maintenance_payload"):
+		return {
+			"condition_percent": 100.0,
+			"status": "UNKNOWN",
+			"guidance": "No controlled trolley."
+		}
+	var payload: Dictionary = _driver_trolley.call("get_maintenance_payload")
+	var incident := get_driver_incident_status()
+	payload["depot_service_cost"] = _maintenance_service_cost(float(payload.get("condition_percent", 100.0)))
+	payload["roadside_repair_cost"] = roadside_repair_cost
+	payload["incident_active"] = bool(incident.get("active", false))
+	payload["mechanical_failure"] = bool(incident.get("active", false)) and String(incident.get("state", "")) == "MECHANICAL"
+	return payload
+
+func _maintenance_service_cost(condition: float) -> float:
+	var missing_condition := clampf(100.0 - condition, 0.0, 100.0)
+	return ceil(depot_service_base_cost + missing_condition * depot_service_cost_per_condition_point)
 
 func _build_timetable_segments() -> void:
 	if _driver_line_id != MainLineServiceId:
@@ -4086,6 +4197,7 @@ func get_driver_service_status() -> Dictionary:
 		"headway_behind_m": _driver_last_headway_behind_m,
 		"fare_multiplier": _fare_multiplier_from_service_rating(),
 		"manual_control_enabled": _driver_manual_control_enabled,
+		"maintenance": get_driver_maintenance_status(),
 		"drive": drive_status
 	}
 
@@ -4822,8 +4934,13 @@ func _update_driver_incident_gameplay() -> void:
 		_driver_curve_overspeed_s = 0.0
 		return
 	if _driver_trolley.has_method("has_incident") and bool(_driver_trolley.call("has_incident")):
+		var incident: Dictionary = _driver_trolley.call("get_failure_payload") if _driver_trolley.has_method("get_failure_payload") else {}
+		if String(incident.get("state", "")) == "MECHANICAL" and not bool(_driver_trolley.get_meta("mechanical_failure_recorded", false)):
+			_driver_trolley.set_meta("mechanical_failure_recorded", true)
+			_apply_driver_service_rating_delta(-mechanical_failure_service_penalty, String(incident.get("message", "Mechanical failure")))
 		_driver_curve_overspeed_s = 0.0
 		return
+	_driver_trolley.set_meta("mechanical_failure_recorded", false)
 	_check_driver_curve_derailment(get_process_delta_time())
 	if _driver_trolley.has_method("has_incident") and bool(_driver_trolley.call("has_incident")):
 		return
@@ -4897,6 +5014,10 @@ func _recover_driver_incident() -> void:
 	if _driver_trolley == null or not is_instance_valid(_driver_trolley):
 		return
 	if not _driver_trolley.has_method("has_incident") or not bool(_driver_trolley.call("has_incident")):
+		return
+	var failure: Dictionary = _driver_trolley.call("get_failure_payload") if _driver_trolley.has_method("get_failure_payload") else {}
+	if String(failure.get("state", "")) == "MECHANICAL":
+		dispatch_roadside_repair()
 		return
 	_driver_trolley.call("clear_incident")
 	_apply_driver_service_rating_delta(-0.5, "Incident cleared")

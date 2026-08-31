@@ -121,7 +121,9 @@ const TOP_MENU_DEFINITIONS := [
 			{"id": 37, "label": "Tighter Headways", "command": "headway_tighter"},
 			{"id": 38, "label": "Looser Headways", "command": "headway_looser"},
 			{"id": 39, "label": "Launch Car From Depot", "command": "depot_launch"},
-			{"id": 40, "label": "Store Current Car", "command": "depot_store"}
+			{"id": 40, "label": "Store Current Car", "command": "depot_store"},
+			{"id": 41, "label": "Service Current Car", "command": "depot_service"},
+			{"id": 42, "label": "Dispatch Road Crew", "command": "roadside_repair"}
 		]
 	},
 	{
@@ -490,6 +492,10 @@ func _execute_menu_command(command: String) -> void:
 			_launch_first_ready_depot()
 		"depot_store":
 			_store_first_ready_depot()
+		"depot_service":
+			_service_first_ready_depot()
+		"roadside_repair":
+			_dispatch_roadside_repair()
 		"map":
 			_toggle_system_map_view(true)
 		"overlay":
@@ -1346,10 +1352,11 @@ func _line_operations_summary_text() -> String:
 	var display_line: Dictionary = active_line if not active_line.is_empty() else worst_line
 	if display_line.is_empty():
 		return ""
-	return "Line stats: %s | %d/%d cars | %.1f min avg headway | %s" % [
+	return "Line stats: %s | %d/%d cars | %.0f%% condition | %.1f min headway | %s" % [
 		String(display_line.get("name", "")),
-		int(display_line.get("fleet_count", 0)),
+		int(display_line.get("available_cars", display_line.get("fleet_count", 0))),
 		int(display_line.get("suggested_cars", 1)),
+		float(display_line.get("average_condition_percent", 100.0)),
 		float(display_line.get("average_headway_min", 0.0)),
 		String(display_line.get("recommendation", "Service stable"))
 	]
@@ -1424,12 +1431,16 @@ func _add_depot_row(depot_variant: Variant) -> void:
 	var metrics := Label.new()
 	var distance_m := float(depot.get("distance_to_driver_m", INF))
 	var distance_text := "%.0fm away" % distance_m if is_finite(distance_m) else "no controlled car"
-	metrics.text = "Stock %d | Type 5 %d | PCC %d | %s" % [
+	metrics.text = "Stock %d | Type 5 %d | PCC %d | Car %.0f%% %s | Service $%.0f | %s" % [
 		int(depot.get("stored_total", 0)),
 		int(depot.get("type5", 0)),
 		int(depot.get("pcc", 0)),
+		float(depot.get("current_condition_percent", 100.0)),
+		String(depot.get("maintenance_status", "GOOD")),
+		float(depot.get("service_cost", 0.0)),
 		distance_text
 	]
+	metrics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(metrics)
 	var action_row := HBoxContainer.new()
 	action_row.add_theme_constant_override("separation", 6)
@@ -1446,9 +1457,16 @@ func _add_depot_row(depot_variant: Variant) -> void:
 	store_button.disabled = not bool(depot.get("store_ready", false))
 	_apply_button_style(store_button, Color("6f4a2e"), Color("caa76a"), Color("a88563"))
 	action_row.add_child(store_button)
+	var service_button := Button.new()
+	service_button.text = "Service"
+	service_button.focus_mode = Control.FOCUS_NONE
+	service_button.disabled = not bool(depot.get("service_ready", false))
+	_apply_button_style(service_button, Color("6f4a2e"), Color("caa76a"), Color("a88563"))
+	action_row.add_child(service_button)
 	var depot_id := String(depot.get("id", ""))
 	launch_button.pressed.connect(func(): _launch_depot_trolley(depot_id))
 	store_button.pressed.connect(func(): _store_depot_trolley(depot_id))
+	service_button.pressed.connect(func(): _service_depot_trolley(depot_id))
 
 func _add_empty_window_row(container: VBoxContainer, text: String) -> void:
 	var label := Label.new()
@@ -1476,6 +1494,21 @@ func _store_depot_trolley(depot_id: String) -> void:
 	var result: Dictionary = _corridor.call("store_controlled_trolley_at_depot", depot_id)
 	_timetable_message = String(result.get("message", ""))
 	_refresh_timetable_window()
+
+func _service_depot_trolley(depot_id: String) -> void:
+	if _corridor == null or not _corridor.has_method("service_controlled_trolley_at_depot"):
+		return
+	var result: Dictionary = _corridor.call("service_controlled_trolley_at_depot", depot_id)
+	_timetable_message = String(result.get("message", ""))
+	_refresh_timetable_window()
+
+func _dispatch_roadside_repair() -> void:
+	if _corridor == null or not _corridor.has_method("dispatch_roadside_repair"):
+		return
+	var result: Dictionary = _corridor.call("dispatch_roadside_repair")
+	_timetable_message = String(result.get("message", ""))
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
 
 func _toggle_manual_control_from_ui() -> void:
 	if _corridor == null or not _corridor.has_method("is_driver_manual_control_enabled"):
@@ -1570,6 +1603,26 @@ func _store_first_ready_depot() -> void:
 		_store_depot_trolley(best_id)
 		return
 	_timetable_message = "Bring the controlled trolley onto a depot lead before storing it."
+	if _timetable_window != null and _timetable_window.visible:
+		_refresh_timetable_window()
+
+func _service_first_ready_depot() -> void:
+	if _corridor == null or not _corridor.has_method("get_depot_operations_snapshot"):
+		return
+	var best_id := ""
+	var best_distance := INF
+	for depot_variant in _corridor.call("get_depot_operations_snapshot"):
+		var depot: Dictionary = depot_variant
+		if not bool(depot.get("service_ready", false)):
+			continue
+		var distance := float(depot.get("distance_to_driver_m", INF))
+		if distance < best_distance:
+			best_distance = distance
+			best_id = String(depot.get("id", ""))
+	if best_id != "":
+		_service_depot_trolley(best_id)
+		return
+	_timetable_message = "Bring a car needing maintenance onto a depot lead."
 	if _timetable_window != null and _timetable_window.visible:
 		_refresh_timetable_window()
 
@@ -1937,7 +1990,13 @@ func _update_status_panel() -> void:
 			var incident_speed_mps := float(incident_payload.get("speed_mps", 0.0))
 			status_title_label.text = "Incident: %s" % incident_state.capitalize()
 			status_line_label.text = incident_message
-			service_line_label.text = "Emergency stop | Impact %.0f mph | Press K to recover" % (incident_speed_mps * 2.23694)
+			if incident_state == "MECHANICAL":
+				var repair_cost := 0.0
+				if _corridor.has_method("get_driver_maintenance_status"):
+					repair_cost = float(_corridor.call("get_driver_maintenance_status").get("roadside_repair_cost", 0.0))
+				service_line_label.text = "Mechanical failure | Press K to dispatch road crew ($%.0f)" % repair_cost
+			else:
+				service_line_label.text = "Emergency stop | Impact %.0f mph | Press K to recover" % (incident_speed_mps * 2.23694)
 			_apply_signal_head("RED")
 			signal_line_label.text = "Signal: RED - Service blocked"
 			signal_line_label.modulate = Color("b34a3f")
@@ -1991,6 +2050,9 @@ func _update_status_panel() -> void:
 		var headway_ahead := float(service_payload.get("headway_ahead_m", -1.0))
 		var fare_multiplier := float(service_payload.get("fare_multiplier", 1.0))
 		var manual_enabled := bool(service_payload.get("manual_control_enabled", true))
+		var maintenance: Dictionary = service_payload.get("maintenance", {})
+		var condition := float(maintenance.get("condition_percent", 100.0))
+		var condition_status := String(maintenance.get("status", "GOOD"))
 		var drive_payload: Dictionary = service_payload.get("drive", {})
 		var power_notch := int(drive_payload.get("power_notch", 0))
 		var braking := bool(drive_payload.get("braking", false))
@@ -2003,11 +2065,11 @@ func _update_status_panel() -> void:
 		elif power_notch < 0:
 			drive_text = "Reverse N%d" % abs(power_notch)
 		if event_age_s <= 8.0 and last_event != "":
-			service_line_label.text = "%s | Service: %.0f | %s | %s | %s | Fare x%.2f" % [line_name, rating, control_text, drive_text, last_event, fare_multiplier]
+			service_line_label.text = "%s | Service %.0f | Car %.0f%% %s | %s | %s | Fare x%.2f" % [line_name, rating, condition, condition_status, control_text, drive_text, last_event, fare_multiplier]
 		elif headway_target > 0.0 and headway_ahead >= 0.0:
-			service_line_label.text = "%s | Service: %.0f | %s | %s | Headway %.0f/%.0fm | Fare x%.2f" % [line_name, rating, control_text, drive_text, headway_ahead, headway_target, fare_multiplier]
+			service_line_label.text = "%s | Service %.0f | Car %.0f%% %s | %s | %s | Headway %.0f/%.0fm | Fare x%.2f" % [line_name, rating, condition, condition_status, control_text, drive_text, headway_ahead, headway_target, fare_multiplier]
 		else:
-			service_line_label.text = "%s | Service: %.0f | %s | %s | Fare x%.2f" % [line_name, rating, control_text, drive_text, fare_multiplier]
+			service_line_label.text = "%s | Service %.0f | Car %.0f%% %s | %s | %s | Fare x%.2f" % [line_name, rating, condition, condition_status, control_text, drive_text, fare_multiplier]
 	var signal_aspect := "GREEN"
 	var signal_text := "Signal: GREEN - Proceed"
 	var signal_color := Color("6f8b52")

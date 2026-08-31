@@ -3,6 +3,7 @@ extends SceneTree
 const GameStateManagerScript := preload("res://scripts/sim/GameStateManager.gd")
 const TrackBuilderScript := preload("res://scripts/builders/TrackBuilder.gd")
 const EconomyScript := preload("res://scripts/sim/Economy.gd")
+const TrolleyMoverScript := preload("res://scripts/sim/transit/TrolleyMover.gd")
 const CorridorSeedScript := preload("res://scripts/sim/transit/CorridorSeed.gd")
 
 const TEST_SAVE_PATH := "user://saves/electric_avenue_validation.json"
@@ -101,6 +102,36 @@ func _run() -> void:
 	var restored_position: Vector3 = restored_inventory.get("validation_depot", {}).get("position", Vector3.ZERO)
 	if restored_position != Vector3(12.0, 3.0, 48.0):
 		_finish(false, "Depot world position did not round-trip through JSON.")
+		return
+
+	var trolley = TrolleyMoverScript.new()
+	_transient_nodes.append(trolley)
+	trolley.wear_percent_per_km = 10.0
+	trolley.wear_percent_per_operating_hour = 2.0
+	trolley.maintenance_due_percent = 80.0
+	trolley.advance_maintenance(2500.0, 3600.0, false)
+	if not is_equal_approx(trolley.condition_percent, 73.0):
+		_finish(false, "Mileage and operating time did not reduce car condition.")
+		return
+	var maintenance_json := JSON.stringify(trolley.get_maintenance_state())
+	var restored_trolley = TrolleyMoverScript.new()
+	_transient_nodes.append(restored_trolley)
+	restored_trolley.maintenance_due_percent = 80.0
+	restored_trolley.apply_maintenance_state(JSON.parse_string(maintenance_json))
+	if not is_equal_approx(restored_trolley.condition_percent, 73.0):
+		_finish(false, "Car condition did not round-trip through JSON.")
+		return
+	if String(restored_trolley.get_maintenance_payload().get("status", "")) != "DUE":
+		_finish(false, "Maintenance-due state was not exposed to gameplay.")
+		return
+	restored_trolley.condition_percent = 18.0
+	restored_trolley.trigger_incident("MECHANICAL", "Validation failure", 0.0, 0.0, 0.0, 0.0)
+	if not restored_trolley.perform_roadside_repair() or restored_trolley.has_incident() or restored_trolley.condition_percent < restored_trolley.roadside_repair_condition_percent:
+		_finish(false, "Roadside repair did not recover a failed car to limited condition.")
+		return
+	restored_trolley.service_vehicle()
+	if not is_equal_approx(restored_trolley.condition_percent, 100.0):
+		_finish(false, "Depot service did not restore car condition.")
 		return
 	_finish(true, "Versioned JSON and core campaign state round-tripped successfully.")
 

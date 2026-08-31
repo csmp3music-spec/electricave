@@ -69,7 +69,7 @@ The screen has three user-facing control areas:
 | Open finances window | `F` | Shows revenue, costs, cash, and monthly trend |
 | Cycle active service line | `L` | Jumps the player to the next line with an available fleet |
 | Cycle player trolley body | `N` | Changes the player car body when multiple car scenes are available |
-| Recover after an incident | `K` | Clears the current incident state |
+| Recover after an incident | `K` | Clears collision incidents or dispatches a paid road crew for a mechanical failure |
 
 ### Manual Driving
 
@@ -124,6 +124,7 @@ What a good first trip should teach you:
 - Boarding is not automatic at full speed. You must actually work the stop.
 - Signal spacing matters. Running up on the next car will show yellow or red aspects.
 - Service quality affects revenue. Better operation improves service rating and fare multiplier.
+- Car condition falls with mileage and operating time. Depot service is cheaper than an emergency road crew.
 
 ## 5. Understanding The Interface
 
@@ -173,6 +174,7 @@ This window shows:
 - Current target headway for each segment
 - Active cars versus suggested cars
 - Segment length
+- Average fleet condition and failed cars
 - Depot inventory and actions
 
 From this window you can:
@@ -180,6 +182,9 @@ From this window you can:
 - tighten or loosen headways with `-1` and `+1`
 - launch cars from depots
 - store the currently controlled car at a depot
+- service the controlled car when it is on a depot lead
+
+The status panel shows the controlled car's condition as `GOOD`, `DUE`, or `CRITICAL`. Cars below critical condition can suffer a traction-equipment failure. A failed car stops contributing to effective line capacity until you take control of it and press `K` to dispatch a road crew. Roadside work restores only limited condition, so the car should still be routed to a depot for full service.
 
 For the main line, the game breaks operations into:
 
@@ -290,6 +295,8 @@ Recurring costs include:
 - depot upkeep
 - signal upkeep
 - debt interest
+
+Depot service is charged to `Car maintenance` based on how much condition must be restored. Emergency road crews are substantially more expensive and appear under `Service claims`.
 
 ### Calendar, Lighting, And Weather
 
@@ -404,6 +411,8 @@ Once built, depots appear in the `Routes` window where you can:
 - launch additional cars
 - store the current car
 - read depot inventory counts
+- inspect current car condition and the quoted service cost
+- service a car positioned on the depot lead
 
 If you want a new district to become a true operating base, build a depot there.
 

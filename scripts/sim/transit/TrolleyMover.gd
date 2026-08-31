@@ -19,6 +19,15 @@ class_name TrolleyMover
 @export var ping_pong := false
 @export var curve_sample_spacing_m := 8.0
 @export var curve_safe_lateral_accel_mps2 := 1.25
+@export_range(0.0, 100.0, 0.1) var condition_percent := 100.0
+@export var wear_percent_per_km := 2.4
+@export var wear_percent_per_operating_hour := 1.5
+@export_range(0.0, 100.0, 0.1) var maintenance_due_percent := 55.0
+@export_range(0.0, 100.0, 0.1) var critical_condition_percent := 28.0
+@export_range(0.0, 100.0, 0.1) var roadside_repair_condition_percent := 42.0
+@export var breakdown_check_interval_s := 5.0
+@export_range(0.0, 1.0, 0.001) var breakdown_chance_at_critical := 0.008
+@export_range(0.0, 1.0, 0.001) var breakdown_chance_at_zero := 0.12
 
 var travel_direction := 1.0
 var _attachment_root: Node3D
@@ -35,6 +44,10 @@ var _incident_vertical_drop_m := 0.0
 var _manual_drive_initialized := false
 var _throttle_up_repeat_s := 0.0
 var _throttle_down_repeat_s := 0.0
+var _distance_since_service_m := 0.0
+var _operating_time_since_service_s := 0.0
+var _breakdown_check_accum_s := 0.0
+var _maintenance_rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	loop = loop_path
@@ -43,6 +56,7 @@ func _ready() -> void:
 	_sync_power_notch_from_speed(target_speed_mps)
 	_ensure_attachment_root()
 	_sync_attachment_direction()
+	_maintenance_rng.seed = int(Time.get_ticks_usec()) ^ int(get_instance_id())
 
 func get_attachment_root() -> Node3D:
 	return _ensure_attachment_root()
@@ -58,6 +72,85 @@ func get_failure_payload() -> Dictionary:
 		"age_s": failure_age_s,
 		"speed_mps": failure_speed_mps
 	}
+
+func get_maintenance_state() -> Dictionary:
+	return {
+		"condition_percent": condition_percent,
+		"distance_since_service_m": _distance_since_service_m,
+		"operating_time_since_service_s": _operating_time_since_service_s
+	}
+
+func apply_maintenance_state(state: Dictionary) -> void:
+	condition_percent = clampf(float(state.get("condition_percent", condition_percent)), 0.0, 100.0)
+	_distance_since_service_m = maxf(0.0, float(state.get("distance_since_service_m", _distance_since_service_m)))
+	_operating_time_since_service_s = maxf(0.0, float(state.get("operating_time_since_service_s", _operating_time_since_service_s)))
+	_breakdown_check_accum_s = 0.0
+
+func get_maintenance_payload() -> Dictionary:
+	var status := "GOOD"
+	var guidance := "Car condition is fit for service."
+	if condition_percent <= critical_condition_percent:
+		status = "CRITICAL"
+		guidance = "Withdraw this car for depot service before it fails."
+	elif condition_percent <= maintenance_due_percent:
+		status = "DUE"
+		guidance = "Schedule depot service on the next convenient trip."
+	return {
+		"condition_percent": condition_percent,
+		"status": status,
+		"guidance": guidance,
+		"maintenance_due": condition_percent <= maintenance_due_percent,
+		"critical": condition_percent <= critical_condition_percent,
+		"distance_since_service_km": _distance_since_service_m / 1000.0,
+		"operating_hours_since_service": _operating_time_since_service_s / 3600.0
+	}
+
+func service_vehicle() -> float:
+	var previous_condition := condition_percent
+	condition_percent = 100.0
+	_distance_since_service_m = 0.0
+	_operating_time_since_service_s = 0.0
+	_breakdown_check_accum_s = 0.0
+	if failure_state == "MECHANICAL":
+		clear_incident()
+	return previous_condition
+
+func perform_roadside_repair() -> bool:
+	if failure_state != "MECHANICAL":
+		return false
+	clear_incident()
+	condition_percent = maxf(condition_percent, roadside_repair_condition_percent)
+	_breakdown_check_accum_s = 0.0
+	return true
+
+func advance_maintenance(distance_m: float, operating_time_s: float, allow_breakdown := true) -> void:
+	if distance_m <= 0.0 and operating_time_s <= 0.0:
+		return
+	_distance_since_service_m += maxf(0.0, distance_m)
+	_operating_time_since_service_s += maxf(0.0, operating_time_s)
+	var distance_wear := maxf(0.0, distance_m) / 1000.0 * maxf(0.0, wear_percent_per_km)
+	var time_wear := maxf(0.0, operating_time_s) / 3600.0 * maxf(0.0, wear_percent_per_operating_hour)
+	condition_percent = clampf(condition_percent - distance_wear - time_wear, 0.0, 100.0)
+	_breakdown_check_accum_s += maxf(0.0, operating_time_s)
+	if allow_breakdown and _breakdown_check_accum_s >= maxf(0.5, breakdown_check_interval_s):
+		_breakdown_check_accum_s = fmod(_breakdown_check_accum_s, maxf(0.5, breakdown_check_interval_s))
+		_check_for_mechanical_breakdown()
+
+func _check_for_mechanical_breakdown() -> void:
+	if has_incident() or condition_percent > critical_condition_percent:
+		return
+	var risk_ratio := 1.0 - clampf(condition_percent / maxf(1.0, critical_condition_percent), 0.0, 1.0)
+	var failure_chance := lerpf(breakdown_chance_at_critical, breakdown_chance_at_zero, risk_ratio)
+	if _maintenance_rng.randf() > failure_chance:
+		return
+	trigger_incident(
+		"MECHANICAL",
+		"Traction equipment failure at %.0f%% condition." % condition_percent,
+		0.0,
+		0.0,
+		0.0,
+		0.0
+	)
 
 func trigger_incident(state: String, message: String, roll_deg: float = 12.0, pitch_deg: float = 0.0, lateral_offset_m: float = 0.6, vertical_drop_m: float = -0.22) -> void:
 	if has_incident():
@@ -156,6 +249,10 @@ func _process(delta: float) -> void:
 		_throttle_up_repeat_s = 0.0
 		_throttle_down_repeat_s = 0.0
 	var step := speed_mps * delta
+	if absf(step) > 0.001:
+		advance_maintenance(absf(step), delta)
+		if has_incident():
+			return
 	if absf(step) > 0.001:
 		travel_direction = 1.0 if step >= 0.0 else -1.0
 		_sync_attachment_direction()

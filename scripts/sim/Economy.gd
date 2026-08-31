@@ -189,7 +189,6 @@ func get_advisor_payload() -> Dictionary:
 	var stop_count := int(metrics.get("stop_count", 0))
 	var fleet_count := int(metrics.get("fleet_count", 0))
 	var depot_count := int(metrics.get("depot_count", 0))
-	var track_miles := float(metrics.get("track_length_m", 0.0)) / 1609.344
 	var average_rating := float(snapshot.get("average_rating", 75.0))
 	var overcrowded_stop_count := int(snapshot.get("overcrowded_stop_count", 0))
 	var severe_stop_count := int(snapshot.get("severe_stop_count", 0))
@@ -197,6 +196,11 @@ func get_advisor_payload() -> Dictionary:
 	var line_pressure := _line_capacity_pressure_payload()
 	var station_pressure := _station_pressure_payload()
 	var rescue := _crowding_rescue_payload()
+	var maintenance := {}
+	if _corridor != null and _corridor.has_method("get_driver_maintenance_status"):
+		maintenance = _corridor.call("get_driver_maintenance_status")
+	var car_condition := float(maintenance.get("condition_percent", 100.0))
+	var maintenance_status := String(maintenance.get("status", "GOOD"))
 	var recommendation := "Expand toward new riders or tighten headways on the busiest line."
 	var short_recommendation := "Expand or tighten service"
 	var headline := "Network in good order"
@@ -211,6 +215,16 @@ func get_advisor_payload() -> Dictionary:
 		headline = "No depot in service"
 		recommendation = "Build a depot so you can launch, store, and recover trolleys without hunting around the map."
 		short_recommendation = "Build a depot"
+	elif bool(maintenance.get("mechanical_failure", false)):
+		severity = "urgent"
+		headline = "Controlled car has failed"
+		recommendation = "Press K or use Operations > Dispatch Road Crew, then bring the car to a depot for full service."
+		short_recommendation = "Dispatch road crew"
+	elif maintenance_status == "CRITICAL":
+		severity = "urgent"
+		headline = "Car condition is critical"
+		recommendation = "Withdraw the controlled car at the nearest depot. Condition is %.0f%% and a traction failure is increasingly likely." % car_condition
+		short_recommendation = "Service car now"
 	elif not rescue.is_empty():
 		severity = "urgent"
 		headline = "Crowding rescue active"
@@ -229,6 +243,11 @@ func get_advisor_payload() -> Dictionary:
 		headline = "Crowding is building"
 		recommendation = "Use Routes to lower headways on the busiest segments before the queues spill over."
 		short_recommendation = "Tighten headways"
+	elif maintenance_status == "DUE":
+		severity = "watch"
+		headline = "Depot service is due"
+		recommendation = "The controlled car is at %.0f%% condition. Route it onto a depot lead and use Service before condition becomes critical." % car_condition
+		short_recommendation = "Schedule depot service"
 	elif average_rating < 72.0:
 		severity = "watch"
 		headline = "Service feels unreliable"
@@ -288,7 +307,7 @@ func get_advisor_payload() -> Dictionary:
 	return {
 		"severity": severity,
 		"headline": headline,
-		"summary_text": "%d stops | %d cars | %d depots | %.1f mi | %.0f avg stop rating" % [stop_count, fleet_count, depot_count, track_miles, average_rating],
+		"summary_text": "%d stops | %d cars | %d depots | Car %.0f%% | %.0f avg stop rating" % [stop_count, fleet_count, depot_count, car_condition, average_rating],
 		"recommendation_text": recommendation,
 		"short_recommendation": short_recommendation,
 		"goal_text": goal_text,
