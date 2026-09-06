@@ -10,6 +10,7 @@ class_name TrolleyMover
 @export var max_reverse_speed_mps := 10.0
 @export var friction_mps2 := 2.0
 @export var brake_mps2 := 12.0
+@export var emergency_brake_mps2 := 18.0
 @export var throttle_step_mps := 4.0
 @export var throttle_notch_count := 6
 @export var reverse_notch_count := 3
@@ -44,6 +45,7 @@ var _incident_vertical_drop_m := 0.0
 var _manual_drive_initialized := false
 var _throttle_up_repeat_s := 0.0
 var _throttle_down_repeat_s := 0.0
+var _safety_brake_remaining_s := 0.0
 var _distance_since_service_m := 0.0
 var _operating_time_since_service_s := 0.0
 var _breakdown_check_accum_s := 0.0
@@ -230,6 +232,7 @@ func _check_for_mechanical_breakdown() -> void:
 func trigger_incident(state: String, message: String, roll_deg: float = 12.0, pitch_deg: float = 0.0, lateral_offset_m: float = 0.6, vertical_drop_m: float = -0.22) -> void:
 	if has_incident():
 		return
+	_safety_brake_remaining_s = 0.0
 	failure_state = state
 	failure_message = message
 	failure_age_s = 0.0
@@ -296,6 +299,7 @@ func get_curve_dynamics() -> Dictionary:
 	}
 
 func get_manual_drive_status() -> Dictionary:
+	var safety_brake_active := is_safety_brake_active()
 	return {
 		"manual_control_enabled": manual_control_enabled,
 		"power_notch": power_notch,
@@ -303,8 +307,28 @@ func get_manual_drive_status() -> Dictionary:
 		"reverse_notches": reverse_notch_count,
 		"command_mps": target_speed_mps,
 		"command_mph": absf(target_speed_mps) * 2.23694,
-		"braking": controlled and Input.is_action_pressed("drive_service_brake")
+		"braking": safety_brake_active or (controlled and Input.is_action_pressed("drive_service_brake")),
+		"safety_brake": safety_brake_active,
+		"safety_brake_remaining_s": _safety_brake_remaining_s
 	}
+
+func engage_safety_brake(duration_s: float = 2.5) -> void:
+	_safety_brake_remaining_s = maxf(_safety_brake_remaining_s, maxf(0.1, duration_s))
+	target_speed_mps = 0.0
+	power_notch = 0
+	_throttle_up_repeat_s = 0.0
+	_throttle_down_repeat_s = 0.0
+
+func is_safety_brake_active() -> bool:
+	return _safety_brake_remaining_s > 0.0
+
+func advance_safety_brake(delta: float) -> void:
+	if _safety_brake_remaining_s <= 0.0:
+		return
+	_safety_brake_remaining_s = maxf(0.0, _safety_brake_remaining_s - maxf(0.0, delta))
+	target_speed_mps = 0.0
+	power_notch = 0
+	speed_mps = move_toward(speed_mps, 0.0, maxf(brake_mps2, emergency_brake_mps2) * maxf(0.0, delta))
 
 func _process(delta: float) -> void:
 	if has_incident():
@@ -312,7 +336,9 @@ func _process(delta: float) -> void:
 		speed_mps = 0.0
 		target_speed_mps = 0.0
 		return
-	if controlled:
+	if is_safety_brake_active():
+		advance_safety_brake(delta)
+	elif controlled:
 		if manual_control_enabled:
 			_update_manual_drive(delta)
 		else:
@@ -429,6 +455,7 @@ func _sync_power_notch_from_speed(command_speed_mps: float) -> void:
 func set_manual_control_enabled(enabled: bool) -> void:
 	manual_control_enabled = enabled
 	if not manual_control_enabled:
+		_safety_brake_remaining_s = 0.0
 		_manual_drive_initialized = false
 		_throttle_up_repeat_s = 0.0
 		_throttle_down_repeat_s = 0.0

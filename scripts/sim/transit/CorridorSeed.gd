@@ -379,6 +379,14 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var signal_caution_distance_m := 140.0
 @export var signal_stop_distance_m := 60.0
 @export var collision_distance_m := 9.0
+@export var signal_trip_stop_min_distance_m := 28.0
+@export var signal_trip_stop_reaction_seconds := 0.35
+@export var signal_trip_stop_min_speed_mps := 2.5
+@export var signal_trip_stop_min_closing_speed_mps := 0.75
+@export var signal_trip_stop_service_penalty := 6.0
+@export var signal_trip_stop_claim_cost := 750.0
+@export var signal_trip_stop_brake_duration_s := 2.5
+@export var signal_trip_stop_reset_distance_m := 90.0
 @export var derail_curve_radius_threshold_m := 72.0
 @export var derail_speed_margin_mps := 4.8
 @export var derail_overspeed_hold_seconds := 1.25
@@ -592,6 +600,8 @@ var _snow_plows := {}
 var _line_snow_cleared := {}
 var _line_snow_depth := {}
 var _driver_curve_overspeed_s := 0.0
+var _driver_signal_violation_latched := false
+var _driver_signal_violation_count := 0
 var _startup_fleet_budget_active := false
 var _startup_car_budget_remaining := -1
 
@@ -623,6 +633,7 @@ func _process(delta: float) -> void:
 	if _signal_refresh_accum >= signal_refresh_seconds:
 		_signal_refresh_accum = 0.0
 		_update_signal_posts()
+	_update_driver_signal_safety()
 	_update_driver_incident_gameplay()
 	_update_driver_station_gameplay(delta)
 	_update_driver_station_announcements()
@@ -2909,6 +2920,7 @@ func get_save_state() -> Dictionary:
 		"served_stop_count": _driver_served_stop_count,
 		"skipped_stop_count": _driver_skipped_stop_count,
 		"service_streak": _driver_service_streak,
+		"signal_violations": _driver_signal_violation_count,
 		"depot_inventory": _depot_inventory_save_state(),
 		"line_snow_cleared": _line_snow_cleared.duplicate(true),
 		"line_snow_depth": _line_snow_depth.duplicate(true),
@@ -2968,6 +2980,8 @@ func apply_save_state(state: Dictionary) -> void:
 	_driver_served_stop_count = maxi(0, int(state.get("served_stop_count", _driver_served_stop_count)))
 	_driver_skipped_stop_count = maxi(0, int(state.get("skipped_stop_count", _driver_skipped_stop_count)))
 	_driver_service_streak = maxi(0, int(state.get("service_streak", _driver_service_streak)))
+	_driver_signal_violation_count = maxi(0, int(state.get("signal_violations", _driver_signal_violation_count)))
+	_driver_signal_violation_latched = false
 	if state.get("depot_inventory", {}) is Dictionary:
 		_apply_depot_inventory_save_state(state.get("depot_inventory", {}))
 	if state.get("line_snow_cleared", {}) is Dictionary:
@@ -4217,6 +4231,7 @@ func get_driver_service_status() -> Dictionary:
 		"served_stops": _driver_served_stop_count,
 		"skipped_stops": _driver_skipped_stop_count,
 		"streak": _driver_service_streak,
+		"signal_violations": _driver_signal_violation_count,
 		"last_delta": _driver_last_service_delta,
 		"last_event": _driver_last_service_event,
 		"last_event_age_s": _driver_last_service_event_age_s,
@@ -4270,11 +4285,12 @@ func get_driver_hud_status() -> Dictionary:
 	var stop_advisory_payload := _driver_stop_advisory_payload(station_payload, speed_mps)
 	var dispatch_payload := _driver_dispatch_advisory_payload(station_payload, service_payload)
 	var braking := bool(drive_payload.get("braking", false))
+	var safety_brake := bool(drive_payload.get("safety_brake", false))
 	var stop_distance_m := float(station_payload.get("distance_m", -1.0))
-	var brake_ratio := 0.88 if braking else 0.18
+	var brake_ratio := 1.0 if safety_brake else (0.88 if braking else 0.18)
 	var control_text := "%s | %s" % [
 		"Manual controller" if _driver_manual_control_enabled else "Automatic block control",
-		"Brake applied" if braking else _driver_dashboard_notch_text(drive_payload)
+		"Trip-stop brake applied" if safety_brake else ("Brake applied" if braking else _driver_dashboard_notch_text(drive_payload))
 	]
 	return {
 		"active": _driver_active,
@@ -4294,6 +4310,7 @@ func get_driver_hud_status() -> Dictionary:
 		"power_notch": int(drive_payload.get("power_notch", 0)),
 		"controller_ratio": _driver_dashboard_controller_ratio(drive_payload),
 		"brake_ratio": brake_ratio,
+		"safety_brake_active": safety_brake,
 		"service_rating": _driver_service_rating,
 		"curve_lamp": String(curve_payload.get("lamp", "OFF")),
 		"curve_text": String(curve_payload.get("text", "Track steady")),
@@ -4595,8 +4612,71 @@ func _nearest_trolley_from_progress(progress: float, motion_dir: float, exclude:
 		return {}
 	return {
 		"gap_m": best_gap,
-		"car_index": best_index
+		"car_index": best_index,
+		"trolley": fleet[best_index],
+		"speed_mps": (fleet[best_index] as TrolleyMover).speed_mps
 	}
+
+func _signal_safety_decision(gap_m: float, driver_speed_mps: float, lead_speed_mps: float, motion_dir: float = 1.0) -> Dictionary:
+	var direction := 1.0 if motion_dir >= 0.0 else -1.0
+	var approach_speed_mps := maxf(0.0, driver_speed_mps * direction)
+	var lead_forward_speed_mps := maxf(0.0, lead_speed_mps * direction)
+	var closing_speed_mps := maxf(0.0, approach_speed_mps - lead_forward_speed_mps)
+	var emergency_deceleration_mps2 := 18.0
+	if _driver_trolley != null and is_instance_valid(_driver_trolley):
+		emergency_deceleration_mps2 = maxf(_driver_trolley.brake_mps2, _driver_trolley.emergency_brake_mps2)
+	var stopping_distance_m := collision_distance_m + 6.0
+	stopping_distance_m += closing_speed_mps * maxf(0.0, signal_trip_stop_reaction_seconds)
+	stopping_distance_m += closing_speed_mps * closing_speed_mps / maxf(1.0, 2.0 * emergency_deceleration_mps2 * 0.88)
+	var trip_distance_m := maxf(signal_trip_stop_min_distance_m, stopping_distance_m)
+	var should_trip := gap_m <= trip_distance_m
+	should_trip = should_trip and approach_speed_mps >= signal_trip_stop_min_speed_mps
+	should_trip = should_trip and (closing_speed_mps >= signal_trip_stop_min_closing_speed_mps or gap_m <= collision_distance_m + 6.0)
+	return {
+		"should_trip": should_trip,
+		"approach_speed_mps": approach_speed_mps,
+		"closing_speed_mps": closing_speed_mps,
+		"stopping_distance_m": stopping_distance_m,
+		"trip_distance_m": trip_distance_m
+	}
+
+func _update_driver_signal_safety() -> void:
+	if _driver_trolley == null or not is_instance_valid(_driver_trolley) or not _driver_manual_control_enabled:
+		_driver_signal_violation_latched = false
+		return
+	if _driver_trolley.has_method("has_incident") and bool(_driver_trolley.call("has_incident")):
+		return
+	var ahead := _nearest_trolley_ahead()
+	if ahead.is_empty():
+		_driver_signal_violation_latched = false
+		return
+	var gap_m := float(ahead.get("gap_m", INF))
+	if gap_m > maxf(signal_trip_stop_reset_distance_m, signal_trip_stop_min_distance_m + 5.0):
+		_driver_signal_violation_latched = false
+	var signal_payload := get_driver_signal_status()
+	if String(signal_payload.get("aspect", "GREEN")) != "RED":
+		_driver_signal_violation_latched = false
+		return
+	var decision := _signal_safety_decision(
+		gap_m,
+		_driver_trolley.speed_mps,
+		float(ahead.get("speed_mps", 0.0)),
+		_driver_motion_direction()
+	)
+	if not bool(decision.get("should_trip", false)):
+		return
+	if _driver_trolley.has_method("engage_safety_brake"):
+		_driver_trolley.call("engage_safety_brake", signal_trip_stop_brake_duration_s)
+	if _driver_signal_violation_latched:
+		return
+	_driver_signal_violation_latched = true
+	_driver_signal_violation_count += 1
+	var closing_mph := float(decision.get("closing_speed_mps", 0.0)) * 2.23694
+	_apply_driver_service_rating_delta(-signal_trip_stop_service_penalty, "Trip-stop intervention at %.0f mph closing speed" % closing_mph)
+	if _economy == null or not is_instance_valid(_economy):
+		_resolve_gameplay_dependencies()
+	if _economy != null and _economy.has_method("apply_expense"):
+		_economy.call("apply_expense", signal_trip_stop_claim_cost, "Service claims")
 
 func _signal_status_for_progress(progress: float, motion_dir: float, line_id: String = "") -> Dictionary:
 	var ahead := _nearest_trolley_from_progress(progress, motion_dir, null, line_id)
@@ -5086,9 +5166,7 @@ func _check_driver_collisions() -> void:
 		return
 	var gap_m := float(ahead.get("gap_m", INF))
 	var car_index := int(ahead.get("car_index", -1))
-	if car_index < 0 or car_index >= _fleet.size():
-		return
-	var other := _fleet[car_index]
+	var other := ahead.get("trolley") as TrolleyMover
 	if other == null or not is_instance_valid(other):
 		return
 	var relative_speed_mps := absf(_driver_trolley.speed_mps - other.speed_mps)

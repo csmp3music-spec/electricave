@@ -2057,9 +2057,12 @@ func _update_status_panel() -> void:
 		var drive_payload: Dictionary = service_payload.get("drive", {})
 		var power_notch := int(drive_payload.get("power_notch", 0))
 		var braking := bool(drive_payload.get("braking", false))
+		var safety_brake := bool(drive_payload.get("safety_brake", false))
 		var control_text := "Manual" if manual_enabled else "Auto"
 		var drive_text := "Coast"
-		if braking:
+		if safety_brake:
+			drive_text = "TRIP STOP"
+		elif braking:
 			drive_text = "Brake"
 		elif power_notch > 0:
 			drive_text = "Power N%d" % power_notch

@@ -152,6 +152,15 @@ func _run() -> void:
 	if passenger_trolley.get_passenger_count() != 9 or passenger_trolley.alight_passengers_at("Park Street") != 9:
 		_finish(false, "Passenger manifests did not round-trip through JSON.")
 		return
+	passenger_trolley.speed_mps = 14.0
+	passenger_trolley.target_speed_mps = 18.0
+	passenger_trolley.power_notch = 4
+	passenger_trolley.engage_safety_brake(2.5)
+	passenger_trolley.advance_safety_brake(0.5)
+	var safety_status := passenger_trolley.get_manual_drive_status()
+	if not bool(safety_status.get("safety_brake", false)) or passenger_trolley.speed_mps >= 14.0 or passenger_trolley.target_speed_mps != 0.0 or passenger_trolley.power_notch != 0:
+		_finish(false, "Trip-stop braking did not override traction and reduce speed.")
+		return
 	passenger_trolley.set_meta("service_line_id", "validation_line")
 	passenger_trolley.travel_direction = 1.0
 	var route_stops := [
@@ -165,6 +174,12 @@ func _run() -> void:
 		destination_total += int(count_variant)
 	if destination_total != 20 or destinations.has("Origin") or destinations.has("__unassigned__"):
 		_finish(false, "Route-aware boarding did not assign valid downstream destinations.")
+		return
+	var unsafe_approach: Dictionary = operations.call("_signal_safety_decision", 24.0, 14.0, 0.0, 1.0)
+	var safe_approach: Dictionary = operations.call("_signal_safety_decision", 120.0, 14.0, 0.0, 1.0)
+	var matched_speed: Dictionary = operations.call("_signal_safety_decision", 24.0, 14.0, 14.0, 1.0)
+	if not bool(unsafe_approach.get("should_trip", false)) or bool(safe_approach.get("should_trip", true)) or bool(matched_speed.get("should_trip", true)):
+		_finish(false, "Trip-stop safety decision did not distinguish unsafe closing speed.")
 		return
 	_finish(true, "Versioned JSON and core campaign state round-tripped successfully.")
 

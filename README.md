@@ -14,6 +14,7 @@ For a full end-user guide covering controls, operations, building, growth, and t
 5. Press `F5` to save the campaign and `F9` to restore the latest save. The game also autosaves every three minutes.
 6. Press `R` to watch car condition, service cars on depot leads, and manage failures before they disrupt the line.
 7. Watch line load in Routes: full cars leave riders behind, so shorten headways or launch another car when crowding rises.
+8. Respect red signals in manual service. An unsafe closing approach trips the emergency brake, lowers service rating, and records a service claim.
 
 ## Map & GIS Pipeline
 The GIS importer is a stub ready for real assets:

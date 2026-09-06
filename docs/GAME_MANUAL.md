@@ -123,6 +123,7 @@ What a good first trip should teach you:
 - Demand is visible and local. Stations with crowds matter.
 - Boarding is not automatic at full speed. You must actually work the stop.
 - Signal spacing matters. Running up on the next car will show yellow or red aspects.
+- A red signal is enforced by trip-stop protection when your closing speed leaves too little stopping room. The emergency brake cuts power, and the resulting violation lowers service rating and adds a service claim expense.
 - Service quality affects revenue. Better operation improves service rating and fare multiplier.
 - Car condition falls with mileage and operating time. Depot service is cheaper than an emergency road crew.
 
@@ -269,9 +270,11 @@ The fare multiplier scales with service quality from roughly `0.85x` to `1.15x`.
 
 Signals are block-based. The active signal display reflects the distance to the next car ahead on the same line:
 
-- `Green`: proceed
-- `Yellow`: caution
-- `Red`: stop, car too close ahead
+- `Green`: the block ahead has comfortable spacing.
+- `Yellow`: another car is close enough to require an attentive approach.
+- `Red`: the occupied block requires you to stop or match the leading car safely.
+
+In manual mode, the train-stop system compares closing speed with the emergency stopping distance. An unsafe red approach automatically drops the controller to coast and applies the emergency brake. Each distinct intervention costs service rating and appears under `Service claims`; the protection resets only after safe spacing is restored.
 
 If you build your own signal runs, they become part of the playable management layer. If you ignore spacing, the HUD and line-side signals will tell you immediately.
 
