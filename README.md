@@ -1,6 +1,6 @@
 # Electric Avenue
 
-Electric Avenue is a playable 1913 Massachusetts electric street railway management and driving sim built in Godot 4. It combines a seeded historical network, manual trolley operation, automated service, construction, passengers, fleet maintenance, company finances, town growth, weather, incidents, progression contracts, and persistent campaigns.
+Electric Avenue is a playable 1913 Massachusetts electric street railway management and driving sim built in Godot 4. It combines a seeded historical network, manual trolley operation, automated service, destination-based passenger loads, construction, fleet maintenance, company finances, town growth, weather, incidents, progression contracts, and persistent campaigns.
 
 ## Player Manual
 
@@ -13,6 +13,7 @@ For a full end-user guide covering controls, operations, building, growth, and t
 4. Press `T` to toggle stop placement tool. Click to place a stop. Use `]` / `[` or `+` / `-` to adjust frequency.
 5. Press `F5` to save the campaign and `F9` to restore the latest save. The game also autosaves every three minutes.
 6. Press `R` to watch car condition, service cars on depot leads, and manage failures before they disrupt the line.
+7. Watch line load in Routes: full cars leave riders behind, so shorten headways or launch another car when crowding rises.
 
 ## Map & GIS Pipeline
 The GIS importer is a stub ready for real assets:

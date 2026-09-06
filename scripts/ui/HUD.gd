@@ -1352,10 +1352,11 @@ func _line_operations_summary_text() -> String:
 	var display_line: Dictionary = active_line if not active_line.is_empty() else worst_line
 	if display_line.is_empty():
 		return ""
-	return "Line stats: %s | %d/%d cars | %.0f%% condition | %.1f min headway | %s" % [
+	return "Line stats: %s | %d/%d cars | %.0f%% load | %.0f%% condition | %.1f min headway | %s" % [
 		String(display_line.get("name", "")),
 		int(display_line.get("available_cars", display_line.get("fleet_count", 0))),
 		int(display_line.get("suggested_cars", 1)),
+		float(display_line.get("average_load_ratio", 0.0)) * 100.0,
 		float(display_line.get("average_condition_percent", 100.0)),
 		float(display_line.get("average_headway_min", 0.0)),
 		String(display_line.get("recommendation", "Service stable"))

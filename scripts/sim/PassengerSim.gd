@@ -227,15 +227,18 @@ func service_stop_by_name(stop_name: String, capacity_hint: int = 12) -> Diction
 	var rescue_candidate := _is_rescue_candidate(stop_id, current_waiting)
 	var rescue_age_s := float(_overcrowding_age_s.get(stop_id, 0.0))
 	var boarded := 0
+	var service_age_s := float(_last_service_age_s.get(stop_id, service_memory_seconds * 0.35))
 	if capacity_hint > 0:
 		boarded = mini(current_waiting, capacity_hint)
 	_waiting_counts[stop_id] = maxi(0, current_waiting - boarded)
-	_last_service_age_s[stop_id] = 0.0
+	if capacity_hint > 0:
+		service_age_s = 0.0
+		_last_service_age_s[stop_id] = service_age_s
 	if int(_waiting_counts[stop_id]) < overcrowding_threshold:
 		_overcrowding_age_s.erase(stop_id)
 	elif current_waiting != int(_waiting_counts[stop_id]):
 		_update_overcrowding_timer(stop, int(_waiting_counts[stop_id]), 0.0)
-	_stop_service_ratings[stop_id] = _service_rating_for_stop(stop, int(_waiting_counts[stop_id]), 0.0)
+	_stop_service_ratings[stop_id] = _service_rating_for_stop(stop, int(_waiting_counts[stop_id]), service_age_s)
 	if rescue_candidate and boarded > 0 and int(_waiting_counts[stop_id]) < overcrowding_threshold:
 		_last_rescue_event = {
 			"stop_id": stop_id,

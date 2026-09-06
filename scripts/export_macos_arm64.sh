@@ -40,9 +40,15 @@ if [ ! -f "$APP_PLIST" ]; then
   plutil -insert NSHighResolutionCapable -bool true "$APP_PLIST"
 fi
 
-# On very full developer volumes, the exported app plus import cache can leave
-# too little space for lipo's temporary output. The cache is generated.
-rm -rf .godot/imported
+# On critically full developer volumes, the exported app plus import cache can
+# leave too little space for lipo's temporary output. Keep the cache during
+# normal builds so launching the source project after export does not produce
+# missing-import errors.
+available_kb="$(df -Pk . | awk 'NR == 2 { print $4 }')"
+if [ "${available_kb:-0}" -lt 1048576 ]; then
+  echo "Less than 1 GiB free; clearing the generated Godot import cache."
+  rm -rf .godot/imported
+fi
 
 if lipo -info "$APP_BIN" 2>&1 | grep -q "Architectures in the fat file"; then
   lipo "$APP_BIN" -extract arm64 -output "$APP_REAL_BIN"

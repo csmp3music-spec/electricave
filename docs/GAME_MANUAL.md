@@ -174,6 +174,7 @@ This window shows:
 - Current target headway for each segment
 - Active cars versus suggested cars
 - Segment length
+- Average passenger load and crowded-car pressure
 - Average fleet condition and failed cars
 - Depot inventory and actions
 
@@ -237,11 +238,16 @@ Busy places like `Park Street`, `Boylston`, `Arlington`, `Copley`, `Kenmore`, an
 
 When you service a stop correctly:
 
-- some riders board
-- some riders alight
+- riders board only when the car has free capacity
+- each boarding rider chooses a destination ahead on the route
+- riders alight when the car reaches that destination, freeing seats for later stops
 - you earn fare revenue
 - the visible crowd shrinks
 - your service rating can improve
+
+Automatic cars use the same capacity and destination rules. A car that is already full cannot repeatedly collect another full platform load, and its boarding/alighting exchange affects dwell time. Passenger manifests belong to individual cars, so switching the controlled trolley does not move its riders to another vehicle. Loads and destinations are also preserved in campaign saves.
+
+The Routes window reports each line's average load. When cars run near capacity, line pressure rises and the dispatcher recommends adding capacity even if scheduled headways otherwise look adequate.
 
 If you run too fast through a station:
 

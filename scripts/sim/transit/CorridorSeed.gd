@@ -393,7 +393,7 @@ const AsphaltNormalPath := "res://assets/textures/period_boston/asphalt_02/aspha
 @export var automated_station_stop_radius_m := 16.0
 @export var automated_station_slow_speed_mps := 4.8
 @export var automated_station_dwell_seconds := 3.4
-@export var automated_passenger_capacity := 36
+@export var automated_passenger_capacity := 42
 @export var automated_crowding_dwell_bonus_seconds := 1.2
 @export var automated_headway_hold_max_seconds := 5.0
 @export var automated_headway_hold_trigger_ratio := 0.72
@@ -2869,6 +2869,7 @@ func is_world_seeded() -> bool:
 	return _seeded
 
 func get_save_state() -> Dictionary:
+	_sync_driver_passenger_count()
 	var line_states: Array = []
 	for line_id in _service_line_ids_sorted():
 		var entry := _service_line_entry(line_id)
@@ -2883,6 +2884,7 @@ func get_save_state() -> Dictionary:
 				"target_speed_mps": trolley.target_speed_mps,
 				"power_notch": trolley.power_notch,
 				"travel_direction": trolley.travel_direction,
+				"passengers": trolley.get_passenger_state() if trolley.has_method("get_passenger_state") else {},
 				"maintenance": trolley.get_maintenance_state() if trolley.has_method("get_maintenance_state") else {},
 				"failure": trolley.get_failure_payload() if trolley.has_method("get_failure_payload") else {}
 			})
@@ -2951,6 +2953,8 @@ func apply_save_state(state: Dictionary) -> void:
 			trolley.target_speed_mps = float(car_data.get("target_speed_mps", trolley.target_speed_mps))
 			trolley.power_notch = int(car_data.get("power_notch", trolley.power_notch))
 			trolley.travel_direction = float(car_data.get("travel_direction", trolley.travel_direction))
+			if car_data.get("passengers", {}) is Dictionary and trolley.has_method("apply_passenger_state"):
+				trolley.call("apply_passenger_state", car_data.get("passengers", {}))
 			if car_data.get("maintenance", {}) is Dictionary and trolley.has_method("apply_maintenance_state"):
 				trolley.call("apply_maintenance_state", car_data.get("maintenance", {}))
 			if trolley.has_method("clear_incident"):
@@ -2976,6 +2980,12 @@ func apply_save_state(state: Dictionary) -> void:
 		var fleet_index := clampi(int(state.get("driver_fleet_index", 0)), 0, active_fleet.size() - 1)
 		_activate_service_line(active_line_id)
 		_set_driver_trolley(active_fleet[fleet_index] as TrolleyMover, fleet_index)
+		if _driver_trolley != null and _driver_trolley.has_method("get_passenger_count"):
+			var restored_onboard := int(_driver_trolley.call("get_passenger_count"))
+			var legacy_onboard := clampi(int(state.get("onboard_passengers", 0)), 0, driver_passenger_capacity)
+			if restored_onboard <= 0 and legacy_onboard > 0 and _driver_trolley.has_method("set_unassigned_passenger_count"):
+				_driver_trolley.call("set_unassigned_passenger_count", legacy_onboard)
+			_driver_onboard_passengers = int(_driver_trolley.call("get_passenger_count"))
 	set_driver_manual_control(bool(state.get("manual_control", _driver_manual_control_enabled)))
 	_driver_active = bool(state.get("driver_view_active", _driver_active))
 	_view_mode = clampi(int(state.get("view_mode", _view_mode)), 0, 1)
@@ -3183,6 +3193,9 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 		var maintenance_due_cars := 0
 		var failed_cars := 0
 		var condition_total := 0.0
+		var onboard_total := 0
+		var passenger_capacity_total := 0
+		var crowded_cars := 0
 		for trolley_variant in line_fleet:
 			var trolley := trolley_variant as TrolleyMover
 			if trolley == null or not is_instance_valid(trolley):
@@ -3195,6 +3208,12 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 				failed_cars += 1
 			else:
 				available_cars += 1
+			var car_capacity := driver_passenger_capacity if trolley == _driver_trolley else automated_passenger_capacity
+			var onboard := int(trolley.call("get_passenger_count")) if trolley.has_method("get_passenger_count") else 0
+			onboard_total += onboard
+			passenger_capacity_total += car_capacity
+			if float(onboard) / maxf(1.0, float(car_capacity)) >= 0.85:
+				crowded_cars += 1
 		var route_stops: Array = entry.get("route_stops", [])
 		var segments: Array = entry.get("timetable_segments", [])
 		var route_length_m := _service_line_route_length_m(entry)
@@ -3225,6 +3244,8 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 		var target_cars := maxi(1, suggested_cars)
 		var capacity_ratio := clampf(float(available_cars) / float(target_cars), 0.0, 1.4)
 		var capacity_pressure := clampf(float(maxi(0, target_cars - available_cars)) / float(target_cars), 0.0, 1.0)
+		var average_load_ratio := float(onboard_total) / maxf(1.0, float(passenger_capacity_total))
+		capacity_pressure = maxf(capacity_pressure, clampf((average_load_ratio - 0.68) / 0.32, 0.0, 1.0))
 		var recommendation := "Service stable"
 		if failed_cars > 0:
 			recommendation = "Recover %d failed car%s" % [failed_cars, "" if failed_cars == 1 else "s"]
@@ -3232,6 +3253,8 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 		elif available_cars <= 0:
 			recommendation = "Launch a car"
 			capacity_pressure = 1.0
+		elif crowded_cars > 0 or average_load_ratio >= 0.82:
+			recommendation = "Add capacity for crowded cars"
 		elif capacity_pressure >= 0.34:
 			recommendation = "Add %d car%s" % [maxi(1, target_cars - available_cars), "" if maxi(1, target_cars - available_cars) == 1 else "s"]
 		elif average_headway_min > 10.5:
@@ -3249,6 +3272,10 @@ func get_line_operations_snapshot() -> Array[Dictionary]:
 			"failed_cars": failed_cars,
 			"maintenance_due_cars": maintenance_due_cars,
 			"average_condition_percent": condition_total / maxf(1.0, float(fleet_count)),
+			"onboard_passengers": onboard_total,
+			"passenger_capacity": passenger_capacity_total,
+			"average_load_ratio": average_load_ratio,
+			"crowded_cars": crowded_cars,
 			"stop_count": route_stops.size(),
 			"route_length_m": route_length_m,
 			"average_headway_min": average_headway_min,
@@ -3857,6 +3884,7 @@ func _set_driver_trolley(trolley: TrolleyMover, fleet_index: int) -> void:
 			_attach_trolley_body(previous, previous_index)
 	_driver_trolley = trolley
 	driver_trolley_index = fleet_index
+	_sync_driver_passenger_count()
 	_driver_trolley.controlled = true
 	if _driver_trolley.has_method("set_manual_control_enabled"):
 		_driver_trolley.call("set_manual_control_enabled", _driver_manual_control_enabled)
@@ -4836,10 +4864,13 @@ func _update_automated_trolley(trolley: TrolleyMover, route_stops: Array, delta:
 		trolley.set_meta("auto_last_stop", "")
 	if gap_m <= automated_station_stop_radius_m and absf(trolley.speed_mps) <= automated_station_slow_speed_mps + 0.75:
 		if stop_name == "" or last_auto_stop != stop_name:
-			var boarded := _service_automated_station(trolley, stop_name)
+			var exchange := _service_automated_station(trolley, stop_name, route_stops)
+			var boarded := int(exchange.get("boarded", 0))
+			var alighted := int(exchange.get("alighted", 0))
 			trolley.set_meta("auto_last_boarded", boarded)
+			trolley.set_meta("auto_last_alighted", alighted)
 			trolley.set_meta("auto_last_stop", stop_name)
-			trolley.set_meta("auto_dwell_s", _automated_station_dwell_seconds(trolley, next_stop, boarded))
+			trolley.set_meta("auto_dwell_s", _automated_station_dwell_seconds(trolley, next_stop, boarded, alighted))
 			trolley.speed_mps = 0.0
 			trolley.target_speed_mps = 0.0
 			return
@@ -4858,13 +4889,14 @@ func _update_automated_trolley(trolley: TrolleyMover, route_stops: Array, delta:
 	if speed_limit < INF:
 		_enforce_trolley_speed_limit(trolley, speed_limit, delta)
 
-func _automated_station_dwell_seconds(trolley: TrolleyMover, stop_entry: Dictionary, boarded: int) -> float:
+func _automated_station_dwell_seconds(trolley: TrolleyMover, stop_entry: Dictionary, boarded: int, alighted: int) -> float:
 	var stop_name := String(stop_entry.get("name", ""))
 	var dwell := automated_station_dwell_seconds
 	var snapshot := _stop_service_snapshot_for_map(stop_name)
 	var waiting := int(snapshot.get("waiting", 0))
 	var crowding_pressure := clampf(float(snapshot.get("crowding_pressure", 0.0)), 0.0, 1.0)
-	dwell += maxf(crowding_pressure, clampf(float(boarded + waiting) / maxf(1.0, float(automated_passenger_capacity)), 0.0, 1.0)) * automated_crowding_dwell_bonus_seconds
+	var passenger_exchange := boarded + alighted
+	dwell += maxf(crowding_pressure, clampf(float(passenger_exchange + waiting) / maxf(1.0, float(automated_passenger_capacity)), 0.0, 1.0)) * automated_crowding_dwell_bonus_seconds
 	if not bool(snapshot.get("crowding_urgent", false)):
 		var line_id := _line_id_for_trolley(trolley)
 		var target := _line_headway_target_m(line_id)
@@ -4875,18 +4907,85 @@ func _automated_station_dwell_seconds(trolley: TrolleyMover, stop_entry: Diction
 			dwell += automated_headway_hold_max_seconds * bunch_ratio
 	return clampf(dwell, automated_station_dwell_seconds, automated_station_dwell_seconds + automated_crowding_dwell_bonus_seconds + automated_headway_hold_max_seconds)
 
-func _service_automated_station(trolley: TrolleyMover, stop_name: String) -> int:
+func _service_automated_station(trolley: TrolleyMover, stop_name: String, route_stops: Array) -> Dictionary:
 	if stop_name == "":
-		return 0
+		return {"boarded": 0, "alighted": 0, "onboard": 0}
+	var alighted := _alight_passengers_for_trolley(trolley, stop_name)
+	var onboard := _passenger_count_for_trolley(trolley)
 	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
 		_resolve_gameplay_dependencies()
 	if _passenger_manager == null or not _passenger_manager.has_method("service_stop_by_name"):
-		return 0
-	var result: Dictionary = _passenger_manager.call("service_stop_by_name", stop_name, automated_passenger_capacity)
-	var boarded := int(result.get("boarded", 0))
+		return {"boarded": 0, "alighted": alighted, "onboard": onboard}
+	var free_capacity := maxi(0, automated_passenger_capacity - onboard)
+	var result: Dictionary = _passenger_manager.call("service_stop_by_name", stop_name, free_capacity)
+	var requested_boarding := int(result.get("boarded", 0))
+	var destinations := _passenger_destinations_for_boarding(trolley, stop_name, route_stops, requested_boarding)
+	var boarded := int(trolley.call("board_passengers", destinations, automated_passenger_capacity)) if trolley.has_method("board_passengers") else requested_boarding
+	onboard = _passenger_count_for_trolley(trolley)
+	if trolley == _driver_trolley:
+		_driver_onboard_passengers = onboard
 	if boarded > 0 and _economy != null and _economy.has_method("apply_revenue"):
 		_economy.call("apply_revenue", float(boarded) * average_fare_per_passenger * 0.96, _revenue_category_for_station(stop_name))
-	return boarded
+	return {"boarded": boarded, "alighted": alighted, "onboard": onboard}
+
+func _passenger_count_for_trolley(trolley: TrolleyMover) -> int:
+	if trolley == null or not is_instance_valid(trolley) or not trolley.has_method("get_passenger_count"):
+		return 0
+	return maxi(0, int(trolley.call("get_passenger_count")))
+
+func _sync_driver_passenger_count() -> void:
+	_driver_onboard_passengers = _passenger_count_for_trolley(_driver_trolley)
+
+func _alight_passengers_for_trolley(trolley: TrolleyMover, stop_name: String) -> int:
+	if trolley == null or not is_instance_valid(trolley):
+		return 0
+	var alighted := int(trolley.call("alight_passengers_at", stop_name)) if trolley.has_method("alight_passengers_at") else 0
+	if trolley.has_method("alight_unassigned_passengers"):
+		var fallback_ratio := 0.16 + float(posmod(stop_name.hash(), 18)) / 100.0
+		if stop_name in ["Park Street", "North Station", "Lechmere", "Brookline", "Lincoln Square"]:
+			fallback_ratio += 0.10
+		alighted += int(trolley.call("alight_unassigned_passengers", fallback_ratio))
+	return alighted
+
+func _passenger_destinations_for_boarding(trolley: TrolleyMover, stop_name: String, route_stops: Array, passenger_count: int) -> Dictionary:
+	var manifest := {}
+	if passenger_count <= 0:
+		return manifest
+	var stop_index := -1
+	for i in range(route_stops.size()):
+		if String(route_stops[i].get("name", "")) == stop_name:
+			stop_index = i
+			break
+	var candidates: Array[String] = []
+	var motion_sign := _trolley_motion_direction(trolley)
+	if stop_index >= 0:
+		if motion_sign >= 0.0:
+			for i in range(stop_index + 1, route_stops.size()):
+				candidates.append(String(route_stops[i].get("name", "")))
+		else:
+			for i in range(stop_index - 1, -1, -1):
+				candidates.append(String(route_stops[i].get("name", "")))
+		if candidates.is_empty():
+			if motion_sign >= 0.0:
+				for i in range(stop_index - 1, -1, -1):
+					candidates.append(String(route_stops[i].get("name", "")))
+			else:
+				for i in range(stop_index + 1, route_stops.size()):
+					candidates.append(String(route_stops[i].get("name", "")))
+	for candidate_index in range(candidates.size() - 1, -1, -1):
+		if candidates[candidate_index] == "" or candidates[candidate_index] == stop_name:
+			candidates.remove_at(candidate_index)
+	if candidates.is_empty():
+		manifest["__unassigned__"] = passenger_count
+		return manifest
+	var first_serial := int(trolley.call("allocate_passenger_trip_serial", passenger_count)) if trolley.has_method("allocate_passenger_trip_serial") else 0
+	for passenger_index in range(passenger_count):
+		var key := "%s:%s:%d" % [_line_id_for_trolley(trolley), stop_name, first_serial + passenger_index]
+		var ratio := float(posmod(key.hash(), 10000)) / 9999.0
+		var destination_index := clampi(int(floor(pow(ratio, 1.65) * float(candidates.size()))), 0, candidates.size() - 1)
+		var destination := candidates[destination_index]
+		manifest[destination] = int(manifest.get(destination, 0)) + 1
+	return manifest
 
 func _line_headway_target_m(line_id: String) -> float:
 	var fleet := _line_fleet(line_id)
@@ -5065,17 +5164,19 @@ func _service_driver_station(station_name: String) -> void:
 	if _passenger_manager == null or not is_instance_valid(_passenger_manager):
 		_resolve_gameplay_dependencies()
 	var station_snapshot_before := _stop_service_snapshot_for_map(station_name)
-	var alighted := _estimate_driver_alighting(station_name)
-	_driver_onboard_passengers = maxi(0, _driver_onboard_passengers - alighted)
+	var alighted := _alight_passengers_for_trolley(_driver_trolley, station_name)
+	_sync_driver_passenger_count()
 	var headway_score := _score_driver_headway()
 	var boarded := 0
 	var waiting_after := 0
 	if _passenger_manager != null and _passenger_manager.has_method("service_stop_by_name"):
 		var free_capacity := maxi(0, driver_passenger_capacity - _driver_onboard_passengers)
 		var result: Dictionary = _passenger_manager.call("service_stop_by_name", station_name, free_capacity)
-		boarded = int(result.get("boarded", 0))
+		var requested_boarding := int(result.get("boarded", 0))
+		var destinations := _passenger_destinations_for_boarding(_driver_trolley, station_name, _driver_route_stops, requested_boarding)
+		boarded = int(_driver_trolley.call("board_passengers", destinations, driver_passenger_capacity)) if _driver_trolley.has_method("board_passengers") else requested_boarding
 		waiting_after = int(result.get("waiting", 0))
-	_driver_onboard_passengers = clampi(_driver_onboard_passengers + boarded, 0, driver_passenger_capacity)
+	_sync_driver_passenger_count()
 	var revenue := float(boarded) * average_fare_per_passenger * _fare_multiplier_from_service_rating()
 	if boarded > 0 and _economy != null and _economy.has_method("apply_revenue"):
 		_economy.call("apply_revenue", revenue, _revenue_category_for_station(station_name))
@@ -5096,14 +5197,6 @@ func _service_driver_station(station_name: String) -> void:
 	_driver_service_streak += 1
 	_driver_last_announced_arrival = station_name
 	_announce_station("Now arriving: %s" % station_name, "Now arriving at %s." % station_name, true)
-
-func _estimate_driver_alighting(station_name: String) -> int:
-	if _driver_onboard_passengers <= 0:
-		return 0
-	var ratio := 0.16 + float(abs(station_name.hash()) % 18) / 100.0
-	if station_name in ["Park Street", "North Station", "Lechmere", "Brookline", "Lincoln Square"]:
-		ratio += 0.10
-	return clampi(int(round(float(_driver_onboard_passengers) * ratio)), 0, _driver_onboard_passengers)
 
 func _handle_driver_station_departure(station_name: String) -> void:
 	if station_name == "":

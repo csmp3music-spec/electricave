@@ -54,7 +54,11 @@ func _run() -> void:
 	manager.autosave_enabled = false
 	main.add_child(manager)
 
-	if not manager.save_game(false):
+	var save_succeeded := manager.save_game(false)
+	if not save_succeeded:
+		await process_frame
+		save_succeeded = manager.save_game(false)
+	if not save_succeeded:
 		_finish(false, "Temporary save failed.")
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TEST_SAVE_PATH))
@@ -132,6 +136,35 @@ func _run() -> void:
 	restored_trolley.service_vehicle()
 	if not is_equal_approx(restored_trolley.condition_percent, 100.0):
 		_finish(false, "Depot service did not restore car condition.")
+		return
+	var boarded := restored_trolley.board_passengers({"Park Street": 9}, 12)
+	boarded += restored_trolley.board_passengers({"Copley": 7}, 12)
+	if boarded != 12 or restored_trolley.get_passenger_count() != 12:
+		_finish(false, "Passenger boarding did not respect vehicle capacity.")
+		return
+	if restored_trolley.alight_passengers_at("Copley") != 3 or restored_trolley.get_passenger_count() != 9:
+		_finish(false, "Destination passengers did not alight at their stop.")
+		return
+	var passenger_json := JSON.stringify(restored_trolley.get_passenger_state())
+	var passenger_trolley = TrolleyMoverScript.new()
+	_transient_nodes.append(passenger_trolley)
+	passenger_trolley.apply_passenger_state(JSON.parse_string(passenger_json))
+	if passenger_trolley.get_passenger_count() != 9 or passenger_trolley.alight_passengers_at("Park Street") != 9:
+		_finish(false, "Passenger manifests did not round-trip through JSON.")
+		return
+	passenger_trolley.set_meta("service_line_id", "validation_line")
+	passenger_trolley.travel_direction = 1.0
+	var route_stops := [
+		{"name": "Origin", "offset": 0.0},
+		{"name": "Near", "offset": 100.0},
+		{"name": "Terminal", "offset": 200.0}
+	]
+	var destinations: Dictionary = operations.call("_passenger_destinations_for_boarding", passenger_trolley, "Origin", route_stops, 20)
+	var destination_total := 0
+	for count_variant in destinations.values():
+		destination_total += int(count_variant)
+	if destination_total != 20 or destinations.has("Origin") or destinations.has("__unassigned__"):
+		_finish(false, "Route-aware boarding did not assign valid downstream destinations.")
 		return
 	_finish(true, "Versioned JSON and core campaign state round-tripped successfully.")
 

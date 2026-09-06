@@ -48,6 +48,8 @@ var _distance_since_service_m := 0.0
 var _operating_time_since_service_s := 0.0
 var _breakdown_check_accum_s := 0.0
 var _maintenance_rng := RandomNumberGenerator.new()
+var _passenger_manifest := {}
+var _passenger_trip_serial := 0
 
 func _ready() -> void:
 	loop = loop_path
@@ -79,6 +81,79 @@ func get_maintenance_state() -> Dictionary:
 		"distance_since_service_m": _distance_since_service_m,
 		"operating_time_since_service_s": _operating_time_since_service_s
 	}
+
+func get_passenger_count() -> int:
+	var total := 0
+	for count_variant in _passenger_manifest.values():
+		total += maxi(0, int(count_variant))
+	return total
+
+func get_passenger_state() -> Dictionary:
+	return {
+		"manifest": _passenger_manifest.duplicate(true),
+		"trip_serial": _passenger_trip_serial
+	}
+
+func apply_passenger_state(state: Dictionary) -> void:
+	_passenger_manifest.clear()
+	var saved_manifest: Variant = state.get("manifest", {})
+	if saved_manifest is Dictionary:
+		for destination_variant in saved_manifest.keys():
+			var count := maxi(0, int(saved_manifest[destination_variant]))
+			if count > 0:
+				_passenger_manifest[String(destination_variant)] = count
+	_passenger_trip_serial = maxi(0, int(state.get("trip_serial", _passenger_trip_serial)))
+
+func board_passengers(destination_counts: Dictionary, capacity: int) -> int:
+	var remaining_space := maxi(0, capacity - get_passenger_count())
+	var boarded := 0
+	var destinations := destination_counts.keys()
+	destinations.sort()
+	for destination_variant in destinations:
+		if remaining_space <= 0:
+			break
+		var destination := String(destination_variant)
+		if destination == "":
+			continue
+		var requested := maxi(0, int(destination_counts.get(destination_variant, 0)))
+		var accepted := mini(requested, remaining_space)
+		if accepted <= 0:
+			continue
+		_passenger_manifest[destination] = int(_passenger_manifest.get(destination, 0)) + accepted
+		boarded += accepted
+		remaining_space -= accepted
+	return boarded
+
+func alight_passengers_at(stop_name: String) -> int:
+	if stop_name == "" or not _passenger_manifest.has(stop_name):
+		return 0
+	var alighted := maxi(0, int(_passenger_manifest.get(stop_name, 0)))
+	_passenger_manifest.erase(stop_name)
+	return alighted
+
+func set_unassigned_passenger_count(count: int) -> void:
+	var safe_count := maxi(0, count)
+	if safe_count <= 0:
+		_passenger_manifest.erase("__unassigned__")
+	else:
+		_passenger_manifest["__unassigned__"] = safe_count
+
+func alight_unassigned_passengers(ratio: float) -> int:
+	var unassigned := maxi(0, int(_passenger_manifest.get("__unassigned__", 0)))
+	if unassigned <= 0:
+		return 0
+	var alighted := clampi(int(round(float(unassigned) * clampf(ratio, 0.0, 1.0))), 1, unassigned)
+	var remaining := unassigned - alighted
+	if remaining <= 0:
+		_passenger_manifest.erase("__unassigned__")
+	else:
+		_passenger_manifest["__unassigned__"] = remaining
+	return alighted
+
+func allocate_passenger_trip_serial(count: int) -> int:
+	var first_serial := _passenger_trip_serial
+	_passenger_trip_serial += maxi(0, count)
+	return first_serial
 
 func apply_maintenance_state(state: Dictionary) -> void:
 	condition_percent = clampf(float(state.get("condition_percent", condition_percent)), 0.0, 100.0)
